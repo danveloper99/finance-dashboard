@@ -792,7 +792,7 @@ createApp({
           if (!s) s = (parsed.holdings||[]).find(x => String(x.code).includes(h.code));
           return s || {};
         };
-        const mergedHoldings = holdings.map(h => { const s=findHolding(h); return {...h,action:s.action||'—',actionEn:s.actionEn||'hold',reason:s.reason||}; });
+        const mergedHoldings = holdings.map(h => { const s=findHolding(h); return {...h,action:s.action||'—',actionEn:s.actionEn||'hold',reason:s.reason||''}; });
         analysisResult.value = { ts:new Date().toLocaleString('zh-TW'), marketSummary:parsed.marketSummary||'（摘要解析失敗）', marketSignal:parsed.marketSignal||'中性', holdings:mergedHoldings, suggestions:parsed.suggestions||[] };
         const saveRes = await callGAS('api_saveAnalysis',[GeminiRes.text]);
         if (saveRes.ok) analysisHistory.value = [{ts:saveRes.ts,text:GeminiRes.text},...analysisHistory.value].slice(0,30);
