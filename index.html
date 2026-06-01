@@ -1211,10 +1211,10 @@ createApp({
           ]},
           options:{ responsive:true, maintainAspectRatio:false,
             // ★ 修正：padding-top 加大到 52
-            layout:{ padding:{top:52, bottom:4} },
+            layout:{ padding:{top:24, bottom:4} },
             interaction:{mode:'index', intersect:false},
             plugins:{
-              legend:{ display:true, position:'top', align:'end',
+              legend:{ display:true, position:'bottom', align:'center',
                 labels:{usePointStyle:true, pointStyle:'circle', boxWidth:8, padding:14, color:'#588157', font:{size:11,weight:'bold'}} },
               tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmtInt(c.parsed.y)+' 元'}},
               datalabels:{}
