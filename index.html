@@ -67,7 +67,8 @@
     .bottom-nav-item.active{color:var(--primary)}
     .bottom-nav-item.active i{transform:scale(1.1)}
     .bottom-nav-item.active::after{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:28px;height:3px;background:var(--primary);border-radius:0 0 4px 4px}
-    .bottom-nav-item i{font-size:22px;transition:transform .18s}
+    .bottom-nav-item i{font-size:20px;transition:transform .18s}
+    .bottom-nav-item{font-size:9px}
     .summary-flat{display:flex;flex-wrap:wrap;background:white;border-radius:1.5rem;border:1px solid rgba(0,0,0,.04);box-shadow:var(--shadow-card);overflow:hidden}
     .summary-item{flex:1 1 50%;padding:18px 20px;border-right:1px solid rgba(240,240,235,.9);border-bottom:1px solid rgba(240,240,235,.9);min-width:0;position:relative;overflow:hidden;transition:background .2s}
     .summary-item:hover{background:#fbfdf9}
@@ -798,6 +799,7 @@ createApp({
     const bottomTabs = [
       { id:'dashboard', shortName:'總覽',  icon:'ph-squares-four',     iconFill:'ph-fill ph-squares-four' },
       { id:'holdings',  shortName:'庫存',  icon:'ph-chart-pie-slice',  iconFill:'ph-fill ph-chart-pie-slice' },
+      { id:'realized',  shortName:'損益',  icon:'ph-coins',             iconFill:'ph-fill ph-coins' },
       { id:'pending',   shortName:'待確認', icon:'ph-clock-countdown',  iconFill:'ph-fill ph-clock-countdown' },
       { id:'wealth',    shortName:'資產',  icon:'ph-piggy-bank',        iconFill:'ph-fill ph-piggy-bank' },
       { id:'settings',  shortName:'設定',  icon:'ph-gear',              iconFill:'ph-fill ph-gear' },
