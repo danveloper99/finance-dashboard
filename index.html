@@ -165,7 +165,11 @@
 <!-- GAS URL 設定的 JS（需在 Vue 之前執行） -->
 <script>
   const GAS_URL_KEY = 'gas_webapp_url';
-  function getGasUrl() { return localStorage.getItem(GAS_URL_KEY) || ''; }
+  // ★ 預設 GAS URL：直接寫在這裡，不需要每次填寫
+  const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbzrFTtWxBH1aisKKkXWihYFittWQwUGldnjJTo3YE-jXonP_RoRhuoFsTKznW1Qtumw/exec';
+  function getGasUrl() {
+    return localStorage.getItem(GAS_URL_KEY) || DEFAULT_GAS_URL;
+  }
   function saveGasUrl() {
     const v = document.getElementById('gas-url-input').value.trim();
     if (!v || !v.startsWith('https://script.google.com')) { alert('請輸入正確的 GAS Web App 網址（https://script.google.com/...）'); return; }
