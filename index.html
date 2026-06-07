@@ -1502,8 +1502,11 @@ createApp({
   props: ['modelValue'],
   emits: ['update:modelValue'],
   setup(props, { emit }) {
-    const { ref, computed } = Vue;
+    const { ref, computed, onMounted, onBeforeUnmount } = Vue;
     const showCalendar = ref(false);
+    const calTop = ref(0);
+    const calLeft = ref(0);
+    const triggerEl = ref(null);
     const today = new Date();
     const viewYear = ref(today.getFullYear());
     const viewMonth = ref(today.getMonth());
@@ -1533,8 +1536,13 @@ createApp({
       if (!selectedDate.value) return false;
       return selectedDate.value.getFullYear()===viewYear.value && selectedDate.value.getMonth()===viewMonth.value && selectedDate.value.getDate()===day;
     };
-    const toggleCalendar = () => {
-      if (!showCalendar.value) { const d=selectedDate.value||today; viewYear.value=d.getFullYear(); viewMonth.value=d.getMonth(); }
+    const toggleCalendar = (e) => {
+      if (!showCalendar.value) {
+        const d=selectedDate.value||today; viewYear.value=d.getFullYear(); viewMonth.value=d.getMonth();
+        const rect = e.currentTarget.getBoundingClientRect();
+        calTop.value = rect.bottom + 4;
+        calLeft.value = rect.left;
+      }
       showCalendar.value = !showCalendar.value;
     };
     const selectDay = (day) => {
@@ -1542,7 +1550,12 @@ createApp({
       emit('update:modelValue', `${viewYear.value}/${mo}/${d}`);
       showCalendar.value = false;
     };
-    return { showCalendar, viewYear, viewMonth, monthLabel, calendarDays, prevMonth, nextMonth, isSelected, toggleCalendar, selectDay, displayValue };
+    const onClickOutside = (e) => {
+      if (showCalendar.value && !e.target.closest('.dp-cal')) showCalendar.value = false;
+    };
+    onMounted(() => document.addEventListener('click', onClickOutside, true));
+    onBeforeUnmount(() => document.removeEventListener('click', onClickOutside, true));
+    return { showCalendar, calTop, calLeft, viewYear, viewMonth, monthLabel, calendarDays, prevMonth, nextMonth, isSelected, toggleCalendar, selectDay, displayValue };
   },
   template: `
     <div style="position:relative;width:100%">
@@ -1550,22 +1563,24 @@ createApp({
         <span :style="displayValue?'color:#344e41':'color:#aaa;font-size:12px'">{{ displayValue || 'YYYY/MM/DD' }}</span>
         <i class="ph ph-calendar-blank" style="color:#588157;flex-shrink:0;font-size:15px"></i>
       </div>
-      <div v-if="showCalendar" style="position:absolute;top:calc(100% + 4px);left:0;z-index:9999;background:white;border:1px solid #e8e6e1;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:14px;min-width:252px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <button @click.stop="prevMonth" style="border:none;background:#f4f1ec;cursor:pointer;color:#588157;font-size:16px;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700">‹</button>
-          <span style="font-weight:700;color:#344e41;font-size:13px">{{ monthLabel }}</span>
-          <button @click.stop="nextMonth" style="border:none;background:#f4f1ec;cursor:pointer;color:#588157;font-size:16px;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700">›</button>
+      <Teleport to="body">
+        <div v-if="showCalendar" class="dp-cal" :style="{position:'fixed',top:calTop+'px',left:calLeft+'px',zIndex:99999,background:'white',border:'1px solid #e8e6e1',borderRadius:'12px',boxShadow:'0 8px 24px rgba(0,0,0,.14)',padding:'14px',minWidth:'252px'}">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <button @click.stop="prevMonth" style="border:none;background:#f4f1ec;cursor:pointer;color:#588157;font-size:16px;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700">‹</button>
+            <span style="font-weight:700;color:#344e41;font-size:13px">{{ monthLabel }}</span>
+            <button @click.stop="nextMonth" style="border:none;background:#f4f1ec;cursor:pointer;color:#588157;font-size:16px;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700">›</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);text-align:center;margin-bottom:4px">
+            <div v-for="d in ['日','一','二','三','四','五','六']" :key="d" style="font-size:10px;font-weight:700;color:#aaa;padding:4px 0">{{ d }}</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);text-align:center;gap:2px">
+            <template v-for="(day,i) in calendarDays" :key="i">
+              <button v-if="day" @click.stop="selectDay(day)" :style="isSelected(day)?'background:#588157;color:white;':'background:none;color:#344e41;'" style="border:none;cursor:pointer;width:32px;height:32px;border-radius:50%;font-size:12px;font-weight:500;margin:1px auto;display:block;transition:background .15s">{{ day }}</button>
+              <div v-else style="width:32px;height:32px"></div>
+            </template>
+          </div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(7,1fr);text-align:center;margin-bottom:4px">
-          <div v-for="d in ['日','一','二','三','四','五','六']" :key="d" style="font-size:10px;font-weight:700;color:#aaa;padding:4px 0">{{ d }}</div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(7,1fr);text-align:center;gap:2px">
-          <template v-for="(day,i) in calendarDays" :key="i">
-            <button v-if="day" @click.stop="selectDay(day)" :style="isSelected(day)?'background:#588157;color:white;':'background:none;color:#344e41;'" style="border:none;cursor:pointer;width:32px;height:32px;border-radius:50%;font-size:12px;font-weight:500;margin:1px auto;display:block;transition:background .15s">{{ day }}</button>
-            <div v-else style="width:32px;height:32px"></div>
-          </template>
-        </div>
-      </div>
+      </Teleport>
     </div>
   `
 })
