@@ -813,6 +813,7 @@ createApp({
       { key:'rebuildAll_B_SAFE',              label:'更新庫存', icon:'ph-database' },
       { key:'runDividendsFullCycle_SAFE',     label:'更新股利', icon:'ph-plant' },
       { key:'appendDCAFromHoldings_SAFE',     label:'更新定期', icon:'ph-calendar-check' },
+      { key:'rebuildDCADividends_SAFE',       label:'重算股息', icon:'ph-arrow-clockwise' },
       { key:'rebuildRealizedPnL_FIFO_SAFE',   label:'計算損益', icon:'ph-coins' },
     ];
     const functionRunning = ref(false);
@@ -1128,7 +1129,7 @@ createApp({
       alert(res.msg);
     };
 
-    const fnNames={'ingestFromGmail_Plaintext_SAFE':'擷取信件','rebuildAll_B_SAFE':'更新庫存紀錄','runDividendsFullCycle_SAFE':'更新股利','appendDCAFromHoldings_SAFE':'更新定期定額','rebuildRealizedPnL_FIFO_SAFE':'計算已實現損益'};
+    const fnNames={'ingestFromGmail_Plaintext_SAFE':'擷取信件','rebuildAll_B_SAFE':'更新庫存紀錄','runDividendsFullCycle_SAFE':'更新股利','appendDCAFromHoldings_SAFE':'更新定期定額','rebuildDCADividends_SAFE':'重算DCA股息','rebuildRealizedPnL_FIFO_SAFE':'計算已實現損益'};
     const runFunction = async funcName => {
       if(functionRunning.value) return;
       functionRunning.value=funcName; functionMsg.value=`正在執行：${fnNames[funcName]}...`; functionError.value=false;
