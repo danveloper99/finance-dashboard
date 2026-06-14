@@ -20,31 +20,26 @@
       --shadow-card:0 2px 16px rgba(58,90,64,.10),0 1px 4px rgba(0,0,0,.05);
       --shadow-hover:0 6px 28px rgba(58,90,64,.16),0 2px 8px rgba(0,0,0,.07);
     }
-    /* ── Keyframes ── */
     @keyframes spin{to{transform:rotate(360deg)}}
     @keyframes loadBar{0%,100%{transform:scaleY(.45);opacity:.5}50%{transform:scaleY(1);opacity:1}}
     @keyframes fadeInUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-    /* ── Page-section stagger ── */
     .space-y-6>*,.space-y-5>*,.space-y-4>*{animation:fadeInUp .48s cubic-bezier(.16,1,.3,1) both}
     .space-y-6>*:nth-child(1),.space-y-5>*:nth-child(1),.space-y-4>*:nth-child(1){animation-delay:.03s}
     .space-y-6>*:nth-child(2),.space-y-5>*:nth-child(2),.space-y-4>*:nth-child(2){animation-delay:.09s}
     .space-y-6>*:nth-child(3),.space-y-5>*:nth-child(3),.space-y-4>*:nth-child(3){animation-delay:.15s}
     .space-y-6>*:nth-child(4),.space-y-5>*:nth-child(4),.space-y-4>*:nth-child(4){animation-delay:.21s}
     .space-y-6>*:nth-child(n+5),.space-y-5>*:nth-child(n+5),.space-y-4>*:nth-child(n+5){animation-delay:.25s}
-    /* ── Base ── */
     *{-webkit-tap-highlight-color:transparent;box-sizing:border-box}
     html{height:-webkit-fill-available}
     body{background:var(--bg);background-image:radial-gradient(ellipse 80% 60% at 50% -10%,rgba(88,129,87,.18),transparent),radial-gradient(ellipse 60% 40% at 90% 90%,rgba(221,161,94,.1),transparent);font-family:'Noto Serif TC',serif;color:var(--primary-dark);min-height:100vh;min-height:-webkit-fill-available;overscroll-behavior:none}
     .num-font{font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-feature-settings:"tnum";font-variant-numeric:tabular-nums}
     .mono-font{font-family:'DM Mono',monospace}
-    /* ── Loading ── */
-    #loading-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center}
-    /* ── Cards ── */
+    /* GAS URL 設定頁 */
+    #setup-page{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+    #loading-screen{position:fixed;inset:0;background:var(--bg);z-index:9998;display:flex;flex-direction:column;align-items:center;justify-content:center}
     .card{background:white;border-radius:1.5rem;box-shadow:var(--shadow-card);border:1px solid rgba(255,255,255,.8);padding:1.25rem;transition:box-shadow .25s}
     .card:hover{box-shadow:var(--shadow-hover)}
     @media(min-width:768px){.card{padding:1.5rem}}
-    /* ── Buttons ── */
     .btn{padding:.625rem 1.25rem;border-radius:1rem;font-weight:700;transition:all .18s;cursor:pointer;border:none}
     .btn:active{transform:scale(.95)}
     .btn:disabled{opacity:.5;cursor:not-allowed}
@@ -52,46 +47,34 @@
     .btn-primary:hover:not(:disabled){background:linear-gradient(140deg,#2d4a33 0%,#3a5a40 100%);box-shadow:0 6px 22px rgba(58,90,64,.42);transform:translateY(-1px)}
     .btn-outline{background:white;border:1.5px solid var(--secondary);color:var(--secondary)}
     .btn-outline:hover{background:var(--bg);border-color:var(--primary);color:var(--primary)}
-    /* ── Inputs ── */
     .input-custom{background:var(--bg);color:var(--primary-dark);border:none;border-radius:.625rem;padding:.5rem 1rem;width:100%;outline:none;transition:box-shadow .2s,background .2s;font-family:'Noto Serif TC',serif;font-size:14px}
     .input-custom:focus{box-shadow:0 0 0 2.5px var(--secondary);background:#e8e6e1}
     .input-custom::placeholder{color:rgba(58,90,64,.4)}
-    /* ── Tables ── */
     .table-th{text-align:left;font-weight:700;color:var(--secondary);background:linear-gradient(to bottom,#f7f9f4,#f0f3ee);padding:11px 16px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;position:sticky;top:0;z-index:10;border-bottom:2px solid rgba(88,129,87,.15)}
     .table-td{color:var(--primary-dark);border-bottom:1px solid rgba(240,240,235,.9);padding:11px 16px;font-size:14px;white-space:nowrap;transition:background .12s}
     @media(min-width:768px){.table-th{padding:12px 20px;font-size:11px}.table-td{padding:12px 20px;font-size:15px}}
     tr:hover .table-td{background:#f8fbf6}
-    /* ── Scrollbars ── */
     .no-scrollbar::-webkit-scrollbar{display:none}
     .no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
-    /* ── Transitions ── */
     .fade-enter-active,.fade-leave-active{transition:opacity .25s}
     .fade-enter-from,.fade-leave-to{opacity:0}
     .slide-enter-active,.slide-leave-active{transition:transform .28s cubic-bezier(.4,0,.2,1)}
     .slide-enter-from,.slide-leave-to{transform:translateX(-100%)}
     .modal-enter-active,.modal-leave-active{transition:opacity .2s,transform .2s}
     .modal-enter-from,.modal-leave-to{opacity:0;transform:scale(.95) translateY(10px)}
-    /* ── Bottom Nav ── */
     .bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:40;background:rgba(255,255,255,.97);border-top:1px solid rgba(218,215,205,.5);display:flex;align-items:center;justify-content:space-around;padding-bottom:max(var(--safe-bottom),4px);box-shadow:0 -4px 24px rgba(58,90,64,.10);backdrop-filter:blur(12px)}
     .bottom-nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 4px;cursor:pointer;transition:color .18s,transform .18s;color:#bbb;font-size:10px;font-weight:700;letter-spacing:.03em;min-width:0;position:relative}
     .bottom-nav-item.active{color:var(--primary)}
     .bottom-nav-item.active i{transform:scale(1.1)}
     .bottom-nav-item.active::after{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:28px;height:3px;background:var(--primary);border-radius:0 0 4px 4px}
-    .bottom-nav-item i{font-size:22px;transition:transform .18s}
-    /* ── Summary Cards ── */
+    .bottom-nav-item i{font-size:20px;transition:transform .18s}
+    .bottom-nav-item{font-size:9px}
     .summary-flat{display:flex;flex-wrap:wrap;background:white;border-radius:1.5rem;border:1px solid rgba(0,0,0,.04);box-shadow:var(--shadow-card);overflow:hidden}
     .summary-item{flex:1 1 50%;padding:18px 20px;border-right:1px solid rgba(240,240,235,.9);border-bottom:1px solid rgba(240,240,235,.9);min-width:0;position:relative;overflow:hidden;transition:background .2s}
-    .summary-item::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;opacity:0;transition:opacity .25s;transform-origin:left}
     .summary-item:hover{background:#fbfdf9}
-    .summary-item:hover::after{opacity:1}
-    .summary-item:nth-child(1)::after{background:linear-gradient(90deg,var(--primary),var(--secondary))}
-    .summary-item:nth-child(2)::after{background:linear-gradient(90deg,var(--secondary),#a7c4a5)}
-    .summary-item:nth-child(3)::after{background:linear-gradient(90deg,var(--warm),#e8c170)}
-    .summary-item:nth-child(4)::after{background:linear-gradient(90deg,var(--accent),#d4894a)}
     .summary-item:nth-child(2n){border-right:none}
     .summary-item:nth-last-child(-n+2){border-bottom:none}
     @media(min-width:640px){.summary-item{flex:1 1 25%;border-bottom:none}.summary-item:nth-child(2n){border-right:1px solid rgba(240,240,235,.9)}.summary-item:last-child{border-right:none}}
-    /* ── Layout helpers ── */
     .total-return-wrap{display:flex;flex-direction:column;gap:16px;padding-top:20px}
     @media(min-width:768px){.total-return-wrap{flex-direction:row;align-items:flex-start;gap:32px}}
     .checkbox-list{display:flex;flex-direction:column;gap:8px}
@@ -99,14 +82,12 @@
     @media(min-width:768px){.checkbox-list{flex-direction:column}}
     .action-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
     @media(min-width:480px){.action-grid{grid-template-columns:repeat(5,1fr)}}
-    /* ── Modal ── */
     .modal-backdrop{position:fixed;inset:0;background:rgba(52,78,65,.55);z-index:50;display:flex;align-items:flex-end;justify-content:center;padding:0;backdrop-filter:blur(6px)}
     @media(min-width:640px){.modal-backdrop{align-items:center;padding:1rem}}
     .modal-sheet{background:white;width:100%;border-radius:1.5rem 1.5rem 0 0;max-height:85vh;display:flex;flex-direction:column;padding-bottom:var(--safe-bottom)}
     @media(min-width:640px){.modal-sheet{border-radius:1.5rem;max-width:680px;max-height:80vh;padding-bottom:0}}
     .modal-handle{width:40px;height:4px;background:#e0ddd8;border-radius:2px;margin:12px auto 0}
     @media(min-width:640px){.modal-handle{display:none}}
-    /* ── Page layout ── */
     .page-wrap{padding:80px 12px 80px}
     @media(min-width:768px){.page-wrap{padding:84px 24px 24px}}
     @media(min-width:1024px){.page-wrap{padding:84px 40px 40px}}
@@ -118,24 +99,19 @@
     @media(min-width:1024px){.chart-area{height:400px}}
     .table-wrap{background:white;border-radius:1.5rem;border:1px solid rgba(240,240,235,.9);box-shadow:var(--shadow-card);overflow:hidden;display:flex;flex-direction:column;max-height:62vh}
     .table-scroll{overflow:auto;flex:1;-webkit-overflow-scrolling:touch}
-    /* ── Settings ── */
     .settings-group{background:rgba(255,255,255,.88);border-radius:1.5rem;padding:20px;border:1px solid rgba(255,255,255,.95);box-shadow:0 2px 12px rgba(58,90,64,.07);transition:all .22s}
     .settings-group:hover{background:white;box-shadow:var(--shadow-hover)}
     .settings-grid{display:grid;grid-template-columns:1fr;gap:16px}
     @media(min-width:640px){.settings-grid{grid-template-columns:1fr 1fr}}
     .save-fab{position:fixed;bottom:calc(64px + var(--safe-bottom) + 12px);right:16px;z-index:40}
     @media(min-width:768px){.save-fab{bottom:32px;right:32px}}
-    /* ── Typography ── */
     .page-title{font-size:20px;font-weight:700;color:var(--primary-dark);letter-spacing:-.01em}
     @media(min-width:768px){.page-title{font-size:24px}}
     .section-title{font-size:16px;font-weight:700;color:var(--primary);letter-spacing:-.01em}
     @media(min-width:768px){.section-title{font-size:18px}}
-    /* ── Value colors ── */
     .val-pos{color:var(--accent)}
     .val-neg{color:var(--secondary)}
-    /* ── Spinner ── */
     .spin{display:inline-block;animation:spin .8s linear infinite}
-    /* ── 市場分析 ── */
     .signal-badge{padding:6px 16px;border-radius:20px;font-weight:700;font-size:13px;border:1.5px solid}
     .signal-bull{background:rgba(52,211,153,.15);border-color:rgba(52,211,153,.4);color:#34d399}
     .signal-bear{background:rgba(248,113,113,.15);border-color:rgba(248,113,113,.4);color:#f87171}
@@ -150,12 +126,27 @@
     .analysis-card-hdr{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;user-select:none;transition:background .15s}
     .analysis-card-hdr:hover{background:#f8fbf6}
     .analysis-card-body{padding:16px 20px 20px;font-size:13px;color:#444;line-height:1.9;white-space:pre-wrap;border-top:1px solid rgba(240,240,235,.9);background:#f9fcf7}
-    /* ── 說明頁 ── */
-    .note{padding:10px 14px;background:rgba(255,255,255,.7);border-radius:8px;border:1px solid rgba(218,215,205,.5);font-size:11px;color:#64748b;line-height:1.8}
   </style>
   <script>window.onerror=function(msg){if(msg.includes('ResizeObserver'))return false;const l=document.getElementById('loading-screen');if(l)l.style.display='none';return false}</script>
 </head>
 <body>
+
+<!-- GAS URL 設定頁（首次使用） -->
+<div id="setup-page" style="display:none">
+  <div style="max-width:440px;width:100%">
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="font-size:32px;margin-bottom:12px">🌿</div>
+      <div style="font-size:22px;font-weight:700;color:#3a5a40;margin-bottom:6px">你不理財，才不理你</div>
+      <div style="font-size:13px;color:#888">首次使用請填入 GAS Web App 網址</div>
+    </div>
+    <div class="card">
+      <label style="display:block;font-size:12px;font-weight:700;color:#588157;margin-bottom:8px">GAS Web App 網址</label>
+      <input id="gas-url-input" type="url" class="input-custom" placeholder="https://script.google.com/macros/s/.../exec" style="margin-bottom:12px">
+      <p style="font-size:11px;color:#aaa;margin-bottom:16px;line-height:1.7">前往 GAS 編輯器 → 部署 → 管理部署，複製 Web App 網址貼上。網址存在瀏覽器 localStorage，不會上傳至任何伺服器。</p>
+      <button onclick="saveGasUrl()" class="btn btn-primary" style="width:100%;font-size:15px;padding:14px">開始使用</button>
+    </div>
+  </div>
+</div>
 
 <div id="loading-screen">
   <div style="text-align:center;padding:0 24px">
@@ -171,9 +162,33 @@
   </div>
 </div>
 
+<!-- GAS URL 設定的 JS（需在 Vue 之前執行） -->
+<script>
+  const GAS_URL_KEY = 'gas_webapp_url';
+  // ★ 預設 GAS URL：直接寫在這裡，不需要每次填寫
+  const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbzrFTtWxBH1aisKKkXWihYFittWQwUGldnjJTo3YE-jXonP_RoRhuoFsTKznW1Qtumw/exec';
+  function getGasUrl() {
+    return localStorage.getItem(GAS_URL_KEY) || DEFAULT_GAS_URL;
+  }
+  function saveGasUrl() {
+    const v = document.getElementById('gas-url-input').value.trim();
+    if (!v || !v.startsWith('https://script.google.com')) { alert('請輸入正確的 GAS Web App 網址（https://script.google.com/...）'); return; }
+    localStorage.setItem(GAS_URL_KEY, v);
+    document.getElementById('setup-page').style.display = 'none';
+    document.getElementById('loading-screen').style.display = 'flex';
+    window.location.reload();
+  }
+  // 啟動時檢查
+  (function() {
+    if (!getGasUrl()) {
+      document.getElementById('setup-page').style.display = 'flex';
+      document.getElementById('loading-screen').style.display = 'none';
+    }
+  })();
+</script>
+
 <div id="app">
 
-  <!-- HEADER -->
   <header style="position:fixed;top:0;left:0;right:0;height:64px;background:linear-gradient(135deg,#2d4a33 0%,#3a5a40 60%,#3e6145 100%);z-index:40;display:flex;align-items:center;justify-content:space-between;padding:0 16px;box-shadow:0 2px 16px rgba(0,0,0,.2);border-bottom:2px solid rgba(221,161,94,.35)">
     <button @click="isMobileSidebarOpen=true" class="p-2 rounded-xl text-white" style="background:rgba(255,255,255,.1)">
       <i class="ph ph-list" style="font-size:26px"></i>
@@ -182,7 +197,6 @@
     <div style="width:40px"></div>
   </header>
 
-  <!-- SIDEBAR OVERLAY -->
   <transition name="fade">
     <div v-if="isMobileSidebarOpen" @click="isMobileSidebarOpen=false" style="position:fixed;inset:0;background:rgba(52,78,65,.5);z-index:50;backdrop-filter:blur(4px)"></div>
   </transition>
@@ -203,7 +217,6 @@
     </aside>
   </transition>
 
-  <!-- MAIN -->
   <main class="page-wrap">
 
     <!-- ══ 儀表板 ══ -->
@@ -241,16 +254,16 @@
     <div v-if="currentTab==='realized'" class="space-y-4">
       <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-end">
         <div><h2 class="page-title">已實現損益</h2><p style="color:#588157;font-size:13px;margin-top:4px">歷史交易獲利統計</p></div>
-        <div style="display:flex;align-items:center;gap:8px"><div class="stat-badge"><div style="width:36px;height:36px;border-radius:50%;background:rgba(188,108,37,.1);display:flex;align-items:center;justify-content:center;color:#bc6c25;flex-shrink:0"><i class="ph-fill ph-coins" style="font-size:18px"></i></div><div><div style="font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.05em">篩選後總淨獲利</div><div class="font-bold num-font" :class="filteredRealizedTotal>0?'val-pos':'val-neg'" style="font-size:20px">{{ fmtInt(filteredRealizedTotal) }}</div></div></div><button @click="loadData(currentTab)" :disabled="listLoading" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:12px;font-size:13px;font-weight:700;background:white;border:1.5px solid #dad7cd;color:#3a5a40;cursor:pointer;white-space:nowrap;flex-shrink:0" onmouseover="this.style.background='#f0f4ee'" onmouseout="this.style.background='white'"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'" style="font-size:15px"></i> 更新</button></div>
+        <div style="display:flex;align-items:center;gap:8px"><div class="stat-badge"><div style="width:36px;height:36px;border-radius:50%;background:rgba(188,108,37,.1);display:flex;align-items:center;justify-content:center;color:#bc6c25;flex-shrink:0"><i class="ph-fill ph-coins" style="font-size:18px"></i></div><div><div style="font-size:11px;font-weight:700;color:#588157">篩選後總淨獲利</div><div class="font-bold num-font" :class="filteredRealizedTotal>0?'val-pos':'val-neg'" style="font-size:20px">{{ fmtInt(filteredRealizedTotal) }}</div></div></div><button @click="loadData(currentTab)" :disabled="listLoading" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:12px;font-size:13px;font-weight:700;background:white;border:1.5px solid #dad7cd;color:#3a5a40;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='#f0f4ee'" onmouseout="this.style.background='white'"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'" style="font-size:15px"></i> 更新</button></div>
       </div>
       <div class="filter-bar">
-        <div style="display:flex;align-items:center;gap:8px;min-width:160px"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px"><i class="ph ph-calendar-blank"></i> 年份</label><select v-model="realizedFilter.year" class="input-custom"><option value="ALL">全部年份</option><option v-for="y in uniqueYears" :key="y" :value="y">{{ y }}</option></select></div>
-        <div style="display:flex;align-items:center;gap:8px;flex:1"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px"><i class="ph ph-magnifying-glass"></i> 股票</label><input v-model="realizedFilter.name" type="text" class="input-custom" placeholder="代碼或名稱..."></div>
+        <div style="display:flex;align-items:center;gap:8px;min-width:160px"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px">年份</label><select v-model="realizedFilter.year" class="input-custom"><option value="ALL">全部年份</option><option v-for="y in uniqueYears" :key="y" :value="y">{{ y }}</option></select></div>
+        <div style="display:flex;align-items:center;gap:8px;flex:1"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px">股票</label><input v-model="realizedFilter.name" type="text" class="input-custom" placeholder="代碼或名稱..."></div>
         <button @click="exportCSV" class="btn btn-outline" style="font-size:13px;padding:8px 14px;white-space:nowrap">匯出 CSV</button>
       </div>
       <div class="table-wrap">
         <div v-if="listLoading" style="padding:48px;text-align:center;color:#588157"><i class="ph ph-spinner spin" style="font-size:28px;display:block;margin-bottom:8px"></i>讀取資料中...</div>
-        <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th v-for="h in realizedHeaders" :key="h" @click="sortBy(h)" class="table-th" :style="'cursor:pointer;'+realizedColAlign(h)">{{ h }}<span v-if="sortKey===h" style="margin-left:4px;color:#bc6c25"><i :class="sortOrder===1?'ph-bold ph-arrow-up':'ph-bold ph-arrow-down'"></i></span></th></tr></thead><tbody><tr v-for="(row,idx) in filteredRealizedList" :key="idx" onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''"><td v-for="h in realizedHeaders" :key="h" class="table-td" :style="realizedColAlign(h)" v-html="fmtCell(h,row[h])"></td></tr><tr v-if="!filteredRealizedList.length"><td :colspan="realizedHeaders.length" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合篩選條件的資料</td></tr></tbody></table></div>
+        <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th v-for="h in realizedHeaders" :key="h" @click="sortBy(h)" class="table-th" :style="'cursor:pointer;'+realizedColAlign(h)">{{ h }}<span v-if="sortKey===h" style="margin-left:4px;color:#bc6c25"><i :class="sortOrder===1?'ph-bold ph-arrow-up':'ph-bold ph-arrow-down'"></i></span></th></tr></thead><tbody><tr v-for="(row,idx) in filteredRealizedList" :key="idx"><td v-for="h in realizedHeaders" :key="h" class="table-td" :style="realizedColAlign(h)" v-html="fmtCell(h,row[h])"></td></tr><tr v-if="!filteredRealizedList.length"><td :colspan="realizedHeaders.length" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合篩選條件的資料</td></tr></tbody></table></div>
       </div>
     </div>
 
@@ -258,15 +271,15 @@
     <div v-if="currentTab==='holdings'" class="space-y-4">
       <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-end">
         <div><h2 class="page-title">庫存紀錄</h2><p style="color:#588157;font-size:13px;margin-top:4px">目前持有資產概況</p></div>
-        <div style="display:flex;align-items:center;gap:8px"><div class="stat-badge"><div style="width:36px;height:36px;border-radius:50%;background:rgba(188,108,37,.1);display:flex;align-items:center;justify-content:center;color:#bc6c25;flex-shrink:0"><i class="ph-fill ph-piggy-bank" style="font-size:20px"></i></div><div><div style="font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.05em">帳面獲利</div><div class="font-bold num-font" :class="totalHoldingsProfit>0?'val-pos':'val-neg'" style="font-size:20px">{{ fmtInt(totalHoldingsProfit) }}</div></div></div><button @click="loadData(currentTab)" :disabled="listLoading" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:12px;font-size:13px;font-weight:700;background:white;border:1.5px solid #dad7cd;color:#3a5a40;cursor:pointer;white-space:nowrap;flex-shrink:0" onmouseover="this.style.background='#f0f4ee'" onmouseout="this.style.background='white'"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'" style="font-size:15px"></i> 更新</button></div>
+        <div style="display:flex;align-items:center;gap:8px"><div class="stat-badge"><div style="width:36px;height:36px;border-radius:50%;background:rgba(188,108,37,.1);display:flex;align-items:center;justify-content:center;color:#bc6c25;flex-shrink:0"><i class="ph-fill ph-piggy-bank" style="font-size:20px"></i></div><div><div style="font-size:11px;font-weight:700;color:#588157">帳面獲利</div><div class="font-bold num-font" :class="totalHoldingsProfit>0?'val-pos':'val-neg'" style="font-size:20px">{{ fmtInt(totalHoldingsProfit) }}</div></div></div><button @click="loadData(currentTab)" :disabled="listLoading" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:12px;font-size:13px;font-weight:700;background:white;border:1.5px solid #dad7cd;color:#3a5a40;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='#f0f4ee'" onmouseout="this.style.background='white'"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'" style="font-size:15px"></i> 更新</button></div>
       </div>
       <div class="filter-bar">
-        <div style="display:flex;align-items:center;gap:8px;flex:1"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px"><i class="ph ph-magnifying-glass"></i> 搜尋</label><input v-model="searchText" type="text" class="input-custom" placeholder="代碼或名稱..."></div>
+        <div style="display:flex;align-items:center;gap:8px;flex:1"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px">搜尋</label><input v-model="searchText" type="text" class="input-custom" placeholder="代碼或名稱..."></div>
         <button @click="exportCSV" class="btn btn-outline" style="font-size:13px;padding:8px 14px;white-space:nowrap">匯出 CSV</button>
       </div>
       <div class="table-wrap">
         <div v-if="listLoading" style="padding:48px;text-align:center;color:#588157"><i class="ph ph-spinner spin" style="font-size:28px;display:block;margin-bottom:8px"></i>讀取中...</div>
-        <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th v-for="h in ['股票代碼','股票名稱','持有股數','買入均價','現價','獲利金額','獲利比例']" :key="h" @click="sortHoldingsBy(h)" class="table-th" style="cursor:pointer" :style="['持有股數','買入均價','現價','獲利金額','獲利比例'].includes(h)?'text-align:right':''">{{ h }}<span v-if="holdingsSortKey===h" style="margin-left:4px;color:#bc6c25"><i :class="holdingsSortOrder===1?'ph-bold ph-arrow-up':'ph-bold ph-arrow-down'"></i></span></th><th class="table-th" style="text-align:center">明細</th></tr></thead><tbody><tr v-for="(row,idx) in groupedHoldingsList" :key="idx" onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''"><td class="table-td font-medium">{{ row.symbol }}</td><td class="table-td font-medium">{{ row.name }}</td><td class="table-td num-font" style="text-align:right">{{ fmtInt(row.qty) }}</td><td class="table-td num-font" style="text-align:right">{{ row.avgPrice }}</td><td class="table-td num-font font-medium" :class="(row.currPrice-parseFloat(row.avgPrice))>0?'val-pos':'val-neg'" style="text-align:right">{{ row.currPrice }}</td><td class="table-td num-font font-bold" :class="row.profit>0?'val-pos':'val-neg'" style="text-align:right">{{ fmtInt(row.profit) }}</td><td class="table-td num-font font-bold" :class="parseFloat(row.profitPct)>0?'val-pos':'val-neg'" style="text-align:right">{{ row.profitPct }}%</td><td class="table-td" style="text-align:center"><button @click="openHoldingsModal(row)" style="color:#3a5a40;border:1px solid #dad7cd;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer" onmouseover="this.style.color='#bc6c25'" onmouseout="this.style.color='#3a5a40'"><i class="ph-bold ph-list-magnifying-glass"></i> 明細</button></td></tr><tr v-if="!groupedHoldingsList.length"><td colspan="8" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合的庫存資料</td></tr></tbody></table></div>
+        <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th v-for="h in ['股票代碼','股票名稱','持有股數','買入均價','現價','獲利金額','獲利比例']" :key="h" @click="sortHoldingsBy(h)" class="table-th" style="cursor:pointer" :style="['持有股數','買入均價','現價','獲利金額','獲利比例'].includes(h)?'text-align:right':''">{{ h }}<span v-if="holdingsSortKey===h" style="margin-left:4px;color:#bc6c25"><i :class="holdingsSortOrder===1?'ph-bold ph-arrow-up':'ph-bold ph-arrow-down'"></i></span></th><th class="table-th" style="text-align:center">明細</th></tr></thead><tbody><tr v-for="(row,idx) in groupedHoldingsList" :key="idx"><td class="table-td font-medium">{{ row.symbol }}</td><td class="table-td font-medium">{{ row.name }}</td><td class="table-td num-font" style="text-align:right">{{ fmtInt(row.qty) }}</td><td class="table-td num-font" style="text-align:right">{{ row.avgPrice }}</td><td class="table-td num-font font-medium" :class="(row.currPrice-parseFloat(row.avgPrice))>0?'val-pos':'val-neg'" style="text-align:right">{{ row.currPrice }}</td><td class="table-td num-font font-bold" :class="row.profit>0?'val-pos':'val-neg'" style="text-align:right">{{ fmtInt(row.profit) }}</td><td class="table-td num-font font-bold" :class="parseFloat(row.profitPct)>0?'val-pos':'val-neg'" style="text-align:right">{{ row.profitPct }}%</td><td class="table-td" style="text-align:center"><button @click="openHoldingsModal(row)" style="color:#3a5a40;border:1px solid #dad7cd;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer"><i class="ph-bold ph-list-magnifying-glass"></i> 明細</button></td></tr><tr v-if="!groupedHoldingsList.length"><td colspan="8" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合的庫存資料</td></tr></tbody></table></div>
       </div>
     </div>
 
@@ -274,16 +287,16 @@
     <div v-if="currentTab==='dividends'" class="space-y-4">
       <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-end">
         <div><h2 class="page-title">股利狀況</h2><p style="color:#588157;font-size:13px;margin-top:4px">歷年配息與殖利率分析</p></div>
-        <div style="display:flex;align-items:center;gap:8px"><div class="stat-badge"><div style="width:36px;height:36px;border-radius:50%;background:rgba(221,161,94,.1);display:flex;align-items:center;justify-content:center;color:#dda15e;flex-shrink:0"><i class="ph-fill ph-plant" style="font-size:18px"></i></div><div><div style="font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.05em">總股利</div><div class="font-bold num-font" style="font-size:20px;color:#3a5a40">{{ fmtInt(totalDividendAmount) }}</div></div></div><button @click="loadData(currentTab)" :disabled="listLoading" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:12px;font-size:13px;font-weight:700;background:white;border:1.5px solid #dad7cd;color:#3a5a40;cursor:pointer;white-space:nowrap;flex-shrink:0" onmouseover="this.style.background='#f0f4ee'" onmouseout="this.style.background='white'"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'" style="font-size:15px"></i> 更新</button></div>
+        <div style="display:flex;align-items:center;gap:8px"><div class="stat-badge"><div style="width:36px;height:36px;border-radius:50%;background:rgba(221,161,94,.1);display:flex;align-items:center;justify-content:center;color:#dda15e;flex-shrink:0"><i class="ph-fill ph-plant" style="font-size:18px"></i></div><div><div style="font-size:11px;font-weight:700;color:#588157">總股利</div><div class="font-bold num-font" style="font-size:20px;color:#3a5a40">{{ fmtInt(totalDividendAmount) }}</div></div></div><button @click="loadData(currentTab)" :disabled="listLoading" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:12px;font-size:13px;font-weight:700;background:white;border:1.5px solid #dad7cd;color:#3a5a40;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='#f0f4ee'" onmouseout="this.style.background='white'"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'" style="font-size:15px"></i> 更新</button></div>
       </div>
       <div class="filter-bar">
-        <div style="display:flex;align-items:center;gap:8px"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px"><i class="ph ph-calendar-blank"></i> 年度</label><select v-model="dividendFilter.year" class="input-custom" style="min-width:120px"><option value="ALL">全部年度</option><option v-for="y in uniqueDividendYears" :key="y" :value="y">{{ y }}</option></select></div>
-        <div style="display:flex;align-items:center;gap:8px;flex:1"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px"><i class="ph ph-magnifying-glass"></i> 搜尋</label><input v-model="searchText" type="text" class="input-custom" placeholder="代碼或名稱..."></div>
+        <div style="display:flex;align-items:center;gap:8px"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px">年度</label><select v-model="dividendFilter.year" class="input-custom" style="min-width:120px"><option value="ALL">全部年度</option><option v-for="y in uniqueDividendYears" :key="y" :value="y">{{ y }}</option></select></div>
+        <div style="display:flex;align-items:center;gap:8px;flex:1"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px">搜尋</label><input v-model="searchText" type="text" class="input-custom" placeholder="代碼或名稱..."></div>
         <button @click="exportCSV" class="btn btn-outline" style="font-size:13px;padding:8px 14px;white-space:nowrap">匯出 CSV</button>
       </div>
       <div class="table-wrap">
         <div v-if="listLoading" style="padding:48px;text-align:center;color:#588157">讀取中...</div>
-        <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th v-for="h in dividendHeaders" :key="h" class="table-th" :style="['現金股利 (元/股)','除息日持股數','實際領取金額','平均成交價','單次殖利率 (現金/買入價)'].includes(h)?'text-align:right':''">{{ h }}</th></tr></thead><tbody><tr v-for="(row,idx) in filteredDividendList" :key="idx" onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''"><td class="table-td">{{ row['股票代碼'] }}</td><td class="table-td">{{ row['股票名稱'] }}</td><td class="table-td">{{ row['股利年度'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['現金股利 (元/股)'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['除息日持股數'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['實際領取金額'] }}</td><td class="table-td">{{ row['除息日'] }}</td><td class="table-td">{{ row['發放日'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['平均成交價'] }}</td><td class="table-td num-font font-bold val-pos" style="text-align:right">{{ row['單次殖利率 (現金/買入價)'] }}</td></tr><tr v-if="!filteredDividendList.length"><td :colspan="dividendHeaders.length" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合篩選條件的資料</td></tr></tbody></table></div>
+        <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th v-for="h in dividendHeaders" :key="h" class="table-th" :style="['現金股利 (元/股)','除息日持股數','實際領取金額','平均成交價','單次殖利率 (現金/買入價)'].includes(h)?'text-align:right':''">{{ h }}</th></tr></thead><tbody><tr v-for="(row,idx) in filteredDividendList" :key="idx"><td class="table-td">{{ row['股票代碼'] }}</td><td class="table-td">{{ row['股票名稱'] }}</td><td class="table-td">{{ row['股利年度'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['現金股利 (元/股)'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['除息日持股數'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['實際領取金額'] }}</td><td class="table-td">{{ row['除息日'] }}</td><td class="table-td">{{ row['發放日'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['平均成交價'] }}</td><td class="table-td num-font font-bold val-pos" style="text-align:right">{{ row['單次殖利率 (現金/買入價)'] }}</td></tr><tr v-if="!filteredDividendList.length"><td :colspan="dividendHeaders.length" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合篩選條件的資料</td></tr></tbody></table></div>
       </div>
     </div>
 
@@ -293,102 +306,78 @@
         <div><h2 class="page-title">定期定額</h2><p style="color:#588157;font-size:13px;margin-top:4px">長期投資追蹤</p></div>
         <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;align-items:center" class="no-scrollbar">
           <div class="stat-badge" style="min-width:120px"><div style="width:32px;height:32px;border-radius:50%;background:rgba(88,129,87,.1);display:flex;align-items:center;justify-content:center;color:#588157;flex-shrink:0"><i class="ph-fill ph-wallet" style="font-size:16px"></i></div><div><div style="font-size:10px;font-weight:700;color:#588157">總成本</div><div class="font-bold num-font" style="font-size:16px;color:#3a5a40">{{ fmtInt(dcaSummary.totalCost) }}</div></div></div>
-          <div class="stat-badge" style="min-width:120px"><div style="width:32px;height:32px;border-radius:50%;background:rgba(58,90,64,.1);display:flex;align-items:center;justify-content:center;color:#3a5a40;flex-shrink:0"><i class="ph-fill ph-list-numbers" style="font-size:16px"></i></div><div><div style="font-size:10px;font-weight:700;color:#588157">投資檔數</div><div class="font-bold num-font" style="font-size:16px;color:#3a5a40">{{ dcaSummary.count }}</div></div></div>
           <div class="stat-badge" style="min-width:120px"><div style="width:32px;height:32px;border-radius:50%;background:rgba(188,108,37,.1);display:flex;align-items:center;justify-content:center;color:#bc6c25;flex-shrink:0"><i class="ph-fill ph-percent" style="font-size:16px"></i></div><div><div style="font-size:10px;font-weight:700;color:#588157">平均殖利率</div><div class="font-bold num-font val-pos" style="font-size:16px">{{ dcaSummary.avgYield }}%</div></div></div>
-          <button @click="loadData(currentTab)" :disabled="listLoading" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:12px;font-size:13px;font-weight:700;background:white;border:1.5px solid #dad7cd;color:#3a5a40;cursor:pointer;white-space:nowrap;flex-shrink:0" onmouseover="this.style.background='#f0f4ee'" onmouseout="this.style.background='white'"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'" style="font-size:15px"></i> 更新</button>
+          <button @click="loadData(currentTab)" :disabled="listLoading" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:12px;font-size:13px;font-weight:700;background:white;border:1.5px solid #dad7cd;color:#3a5a40;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='#f0f4ee'" onmouseout="this.style.background='white'"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'" style="font-size:15px"></i> 更新</button>
         </div>
       </div>
       <div class="filter-bar">
-        <div style="display:flex;align-items:center;gap:8px;flex:1"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px"><i class="ph ph-magnifying-glass"></i> 搜尋</label><input v-model="searchText" type="text" class="input-custom" placeholder="代碼或名稱..."></div>
+        <div style="display:flex;align-items:center;gap:8px;flex:1"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px">搜尋</label><input v-model="searchText" type="text" class="input-custom" placeholder="代碼或名稱..."></div>
         <button @click="exportCSV" class="btn btn-outline" style="font-size:13px;padding:8px 14px;white-space:nowrap">匯出 CSV</button>
       </div>
       <div class="table-wrap">
         <div v-if="listLoading" style="padding:48px;text-align:center;color:#588157">讀取中...</div>
-        <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th class="table-th">代碼</th><th class="table-th">名稱</th><th class="table-th">開始日期</th><th class="table-th" style="text-align:right">累計股數</th><th class="table-th" style="text-align:right">平均成本</th><th class="table-th" style="text-align:right">總投入</th><th class="table-th" style="text-align:right">累計股息</th><th class="table-th" style="text-align:right">殖利率</th><th class="table-th" style="text-align:center">明細</th></tr></thead><tbody><tr v-for="(row,idx) in groupedDcaList" :key="idx" onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''"><td class="table-td font-medium">{{ row.symbol }}</td><td class="table-td font-medium">{{ row.name }}</td><td class="table-td" style="color:#888">{{ row.firstDate }}</td><td class="table-td num-font font-bold" style="text-align:right">{{ fmtInt(row.totalQty) }}</td><td class="table-td num-font" style="text-align:right">{{ fmtDec(row.avgPrice) }}</td><td class="table-td num-font" style="text-align:right">{{ fmtInt(row.totalCost) }}</td><td class="table-td num-font val-pos" style="text-align:right">{{ fmtInt(row.totalDiv) }}</td><td class="table-td num-font font-bold" :class="row.yieldPct>0?'val-pos':'val-neg'" style="text-align:right">{{ fmtDec(row.yieldPct) }}%</td><td class="table-td" style="text-align:center"><button @click="openDcaDetailModal(row)" style="color:#3a5a40;border:1px solid #dad7cd;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer" onmouseover="this.style.color='#bc6c25'" onmouseout="this.style.color='#3a5a40'"><i class="ph-bold ph-list-magnifying-glass"></i> 明細</button></td></tr><tr v-if="!groupedDcaList.length"><td colspan="9" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合的 DCA 資料</td></tr></tbody></table></div>
+        <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th class="table-th">代碼</th><th class="table-th">名稱</th><th class="table-th">開始日期</th><th class="table-th" style="text-align:right">累計股數</th><th class="table-th" style="text-align:right">平均成本</th><th class="table-th" style="text-align:right">總投入</th><th class="table-th" style="text-align:right">累計股息</th><th class="table-th" style="text-align:right">殖利率</th><th class="table-th" style="text-align:center">明細</th></tr></thead><tbody><tr v-for="(row,idx) in groupedDcaList" :key="idx"><td class="table-td font-medium">{{ row.symbol }}</td><td class="table-td font-medium">{{ row.name }}</td><td class="table-td" style="color:#888">{{ row.firstDate }}</td><td class="table-td num-font font-bold" style="text-align:right">{{ fmtInt(row.totalQty) }}</td><td class="table-td num-font" style="text-align:right">{{ fmtDec(row.avgPrice) }}</td><td class="table-td num-font" style="text-align:right">{{ fmtInt(row.totalCost) }}</td><td class="table-td num-font val-pos" style="text-align:right">{{ fmtInt(row.totalDiv) }}</td><td class="table-td num-font font-bold" :class="row.yieldPct>0?'val-pos':'val-neg'" style="text-align:right">{{ fmtDec(row.yieldPct) }}%</td><td class="table-td" style="text-align:center"><button @click="openDcaDetailModal(row)" style="color:#3a5a40;border:1px solid #dad7cd;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer"><i class="ph-bold ph-list-magnifying-glass"></i> 明細</button></td></tr><tr v-if="!groupedDcaList.length"><td colspan="9" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合的 DCA 資料</td></tr></tbody></table></div>
       </div>
     </div>
 
     <!-- ══ 市場分析 ══ -->
     <div v-if="currentTab==='analysis'" class="space-y-5">
       <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-end">
-        <div><h2 class="page-title">市場分析</h2><p style="color:#588157;font-size:13px;margin-top:4px">Gemini AI 分析七大維度，自動讀庫存給出每檔操作建議</p></div>
-        <div v-if="analysisResult" :class="analysisResult.marketSignal==='偏多'?'signal-bull':analysisResult.marketSignal==='偏空'?'signal-bear':'signal-neu'" class="signal-badge">{{ analysisResult.marketSignal==='偏多'?'📈':analysisResult.marketSignal==='偏空'?'📉':'➡️' }} 市場訊號：{{ analysisResult.marketSignal }}</div>
+        <div><h2 class="page-title">市場分析</h2><p style="color:#588157;font-size:13px;margin-top:4px">Gemini AI 分析七大維度</p></div>
+        <div v-if="analysisResult" :class="analysisResult.marketSignal==='偏多'?'signal-bull':analysisResult.marketSignal==='偏空'?'signal-bear':'signal-neu'" class="signal-badge">{{ analysisResult.marketSignal==='偏多'?'📈':analysisResult.marketSignal==='偏空'?'📉':'➡️' }} {{ analysisResult.marketSignal }}</div>
       </div>
-      <!-- API Key -->
       <div style="background:white;border-radius:1.5rem;padding:18px 20px;border:1px solid rgba(0,0,0,.06);box-shadow:0 1px 4px rgba(0,0,0,.04)">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><i class="ph ph-key" style="font-size:18px;color:#3a5a40"></i><span style="font-weight:700;font-size:14px;color:#3a5a40">Gemini API Key</span><span v-if="GeminiKeyStatus.hasKey" style="background:rgba(88,129,87,.12);color:#588157;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">✓ 已設定</span><span v-else style="background:rgba(220,38,38,.08);color:#dc2626;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">未設定</span></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><input v-model="GeminiKeyInput" type="password" class="input-custom" placeholder="AIza..." style="flex:1;min-width:200px"><button @click="saveGeminiKey" class="btn btn-primary" style="white-space:nowrap;font-size:13px">儲存 Key</button></div>
-        <p style="font-size:10px;color:#aaa;margin-top:6px">Key 儲存至 GAS Script Properties。</p>
       </div>
-      <!-- 分析設定 -->
       <div style="background:white;border-radius:1.5rem;padding:18px 20px;border:1px solid rgba(0,0,0,.06);box-shadow:0 1px 4px rgba(0,0,0,.04)">
-        <!-- 七大維度 -->
         <div style="margin-bottom:16px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><i class="ph ph-sliders" style="font-size:16px;color:#3a5a40"></i><span style="font-weight:700;font-size:13px;color:#3a5a40">分析維度</span><span style="font-size:11px;color:#aaa">勾選要納入的市場面向</span></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><i class="ph ph-sliders" style="font-size:16px;color:#3a5a40"></i><span style="font-weight:700;font-size:13px;color:#3a5a40">分析維度</span></div>
           <div style="display:flex;flex-wrap:wrap;gap:8px">
             <label v-for="dim in analysisDimensions" :key="dim.key" :style="dim.checked?'background:#f0f4ee;border-color:#3a5a40;color:#3a5a40':'background:#f8f8f6;border-color:#dad7cd;color:#888'" style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;cursor:pointer;user-select:none;font-size:12px;font-weight:700;border:1.5px solid;transition:all .2s">
-              <input type="checkbox" v-model="dim.checked" class="hidden">
-              <i :class="dim.checked?'ph-bold ph-check-square':'ph ph-square'" style="font-size:13px"></i>
-              {{ dim.label }}
+              <input type="checkbox" v-model="dim.checked" class="hidden"><i :class="dim.checked?'ph-bold ph-check-square':'ph ph-square'" style="font-size:13px"></i>{{ dim.label }}
             </label>
           </div>
         </div>
-        <!-- 近期市場資訊 -->
         <div style="border-top:1px solid #f0f0f0;padding-top:14px;margin-bottom:16px">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><i class="ph ph-newspaper" style="font-size:16px;color:#3a5a40"></i><span style="font-weight:700;font-size:13px;color:#3a5a40">近期市場資訊（選填）</span></div>
-          <textarea v-model="userNotes" class="input-custom" rows="3" style="resize:vertical;min-height:70px;font-size:13px;line-height:1.7" placeholder="貼上近期新聞、財報、市場消息等，Gemini 會優先參考..."></textarea>
+          <textarea v-model="userNotes" class="input-custom" rows="3" style="resize:vertical;min-height:70px;font-size:13px;line-height:1.7" placeholder="貼上近期新聞、財報、市場消息..."></textarea>
         </div>
-        <!-- 圖片上傳 -->
         <div style="border-top:1px solid #f0f0f0;padding-top:14px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><i class="ph ph-image" style="font-size:16px;color:#3a5a40"></i><span style="font-weight:700;font-size:13px;color:#3a5a40">圖片上傳（選填）</span><span style="font-size:11px;color:#aaa">K線圖、新聞截圖，最多 5 張 ≤ 5MB</span></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><i class="ph ph-image" style="font-size:16px;color:#3a5a40"></i><span style="font-weight:700;font-size:13px;color:#3a5a40">圖片上傳（選填，最多 5 張）</span></div>
           <input type="file" id="imgFileInput" accept="image/*" multiple @change="addImages" style="display:none">
           <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start">
-            <div v-for="(img,i) in uploadedImages" :key="i" style="position:relative;width:80px;height:80px;flex-shrink:0">
-              <img :src="img.dataUrl" style="width:80px;height:80px;object-fit:cover;border-radius:10px;border:1.5px solid #e0e0e0">
-              <button @click="removeImage(i)" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:#dc2626;color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;line-height:1">×</button>
-            </div>
-            <label v-if="uploadedImages.length<5" for="imgFileInput" style="width:80px;height:80px;border-radius:10px;border:2px dashed #dad7cd;background:white;color:#aaa;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:11px;font-weight:700;transition:all .2s;flex-shrink:0" onmouseover="this.style.borderColor='#588157';this.style.color='#588157'" onmouseout="this.style.borderColor='#dad7cd';this.style.color='#aaa'"><i class="ph ph-plus" style="font-size:22px"></i>新增</label>
+            <div v-for="(img,i) in uploadedImages" :key="i" style="position:relative;width:80px;height:80px;flex-shrink:0"><img :src="img.dataUrl" style="width:80px;height:80px;object-fit:cover;border-radius:10px;border:1.5px solid #e0e0e0"><button @click="removeImage(i)" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:#dc2626;color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">×</button></div>
+            <label v-if="uploadedImages.length<5" for="imgFileInput" style="width:80px;height:80px;border-radius:10px;border:2px dashed #dad7cd;background:white;color:#aaa;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:11px;font-weight:700;flex-shrink:0"><i class="ph ph-plus" style="font-size:22px"></i>新增</label>
           </div>
-          <p v-if="uploadedImages.length" style="font-size:11px;color:#aaa;margin-top:8px">已上傳 {{ uploadedImages.length }} 張，Gemini 會讀取圖片內容並納入分析。</p>
         </div>
       </div>
-      <!-- 觸發分析 -->
       <div style="background:linear-gradient(135deg,#0c1a2e,#111827);border-radius:1.5rem;padding:20px 24px;border:1px solid rgba(56,189,248,.2)">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-          <div><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><i class="ph ph-robot" style="font-size:22px;color:#38bdf8"></i><span style="font-weight:700;font-size:16px;color:white">立即分析</span></div><p style="font-size:12px;color:rgba(148,163,184,.75);line-height:1.7;max-width:480px">自動讀《庫存紀錄》持股，分析七大市場維度（中東油價・聯準會・美元匯率・關稅・AI供應鏈・外資動向・地緣政治），為每一檔給出操作建議與原因，結果存入試算表。</p></div>
-          <button @click="runAnalysis" :disabled="analysisRunning" style="background:linear-gradient(135deg,#1e3a5f,#1e40af);border:1.5px solid #3b82f6;color:#93c5fd;padding:12px 28px;border-radius:12px;font-size:14px;font-weight:700;display:inline-flex;align-items:center;gap:10px;transition:all .2s;white-space:nowrap;flex-shrink:0;cursor:pointer"><i :class="analysisRunning?'ph ph-spinner spin':'ph ph-play'"></i>{{ analysisRunning?'分析中...':'▶ 立即分析' }}</button>
+          <div><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><i class="ph ph-robot" style="font-size:22px;color:#38bdf8"></i><span style="font-weight:700;font-size:16px;color:white">立即分析</span></div><p style="font-size:12px;color:rgba(148,163,184,.75);max-width:480px">自動讀庫存、分析七大市場維度，每檔給出操作建議，結果存入試算表。</p></div>
+          <button @click="runAnalysis" :disabled="analysisRunning" style="background:linear-gradient(135deg,#1e3a5f,#1e40af);border:1.5px solid #3b82f6;color:#93c5fd;padding:12px 28px;border-radius:12px;font-size:14px;font-weight:700;display:inline-flex;align-items:center;gap:10px;white-space:nowrap;flex-shrink:0;cursor:pointer;border:none"><i :class="analysisRunning?'ph ph-spinner spin':'ph ph-play'"></i>{{ analysisRunning?'分析中...':'▶ 立即分析' }}</button>
         </div>
         <div v-if="analysisMsg" style="margin-top:12px;font-size:12px;font-weight:600;padding:8px 12px;border-radius:8px" :style="analysisError?'background:rgba(248,113,113,.1);color:#f87171':'background:rgba(52,211,153,.1);color:#34d399'">{{ analysisMsg }}</div>
       </div>
-      <!-- 市場總結 -->
-      <div v-if="analysisResult" style="background:white;border-radius:1.5rem;padding:18px 20px;border:1px solid rgba(0,0,0,.06);box-shadow:0 1px 4px rgba(0,0,0,.04)">
+      <div v-if="analysisResult" style="background:white;border-radius:1.5rem;padding:18px 20px;border:1px solid rgba(0,0,0,.06)">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;color:#3a5a40"><i class="ph ph-newspaper" style="font-size:18px"></i><span style="font-weight:700;font-size:14px">市場總結</span><span style="font-size:11px;color:#aaa;margin-left:auto">{{ analysisResult.ts }}</span></div>
         <p style="font-size:13px;color:#444;line-height:1.8;padding:12px 14px;background:#f8faf8;border-radius:10px;border-left:3px solid #588157">{{ analysisResult.marketSummary }}</p>
       </div>
-      <!-- 持股操作建議 -->
       <div v-if="analysisResult && analysisResult.holdings.length">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">
           <h3 class="section-title" style="display:flex;align-items:center;gap:8px;margin:0"><i class="ph ph-list-checks" style="color:#588157"></i> 持股操作建議</h3>
-          <label style="display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;cursor:pointer;user-select:none;font-size:13px;font-weight:700;border:1.5px solid;transition:all .2s" :style="includeDividend?'background:#f0f4ee;border-color:#3a5a40;color:#3a5a40':'background:white;border-color:#dad7cd;color:#888'"><input type="checkbox" v-model="includeDividend" class="hidden"><i :class="includeDividend?'ph-bold ph-check-square':'ph ph-square'" style="font-size:15px"></i> 含息報酬</label>
+          <label style="display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;cursor:pointer;font-size:13px;font-weight:700;border:1.5px solid;transition:all .2s" :style="includeDividend?'background:#f0f4ee;border-color:#3a5a40;color:#3a5a40':'background:white;border-color:#dad7cd;color:#888'"><input type="checkbox" v-model="includeDividend" class="hidden"><i :class="includeDividend?'ph-bold ph-check-square':'ph ph-square'" style="font-size:15px"></i> 含息報酬</label>
         </div>
-        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-          <span v-if="analysisResult.holdings.filter(h=>h.actionEn==='hold').length"   class="action-tag action-hold">  繼續持有 {{ analysisResult.holdings.filter(h=>h.actionEn==='hold').length }}   檔</span>
-          <span v-if="analysisResult.holdings.filter(h=>h.actionEn==='buy').length"    class="action-tag action-buy">   加碼     {{ analysisResult.holdings.filter(h=>h.actionEn==='buy').length }}    檔</span>
-          <span v-if="analysisResult.holdings.filter(h=>h.actionEn==='reduce').length" class="action-tag action-reduce"> 減碼     {{ analysisResult.holdings.filter(h=>h.actionEn==='reduce').length }} 檔</span>
-          <span v-if="analysisResult.holdings.filter(h=>h.actionEn==='sell').length"   class="action-tag action-sell">  賣出     {{ analysisResult.holdings.filter(h=>h.actionEn==='sell').length }}   檔</span>
-        </div>
-        <div class="table-wrap"><div class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th class="table-th">代碼</th><th class="table-th">名稱</th><th class="table-th" style="text-align:right">股數</th><th class="table-th" style="text-align:right">均買價</th><th class="table-th" style="text-align:right">現價</th><th class="table-th" style="text-align:right">帳面損益</th><th class="table-th" style="text-align:right">報酬%</th><th v-if="includeDividend" class="table-th" style="text-align:right">累積股息</th><th v-if="includeDividend" class="table-th" style="text-align:right">含息報酬</th><th v-if="includeDividend" class="table-th" style="text-align:right">含息%</th><th class="table-th" style="text-align:center">建議</th><th class="table-th" style="min-width:200px">原因</th></tr></thead><tbody><tr v-for="h in analysisResult.holdings" :key="h.code" onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''"><td class="table-td" style="font-family:monospace;font-weight:700;color:#3a5a40">{{ h.code }}</td><td class="table-td font-medium" style="white-space:nowrap">{{ h.name }}</td><td class="table-td num-font" style="text-align:right;color:#94a3b8">{{ h.qty.toLocaleString() }}</td><td class="table-td num-font" style="text-align:right;color:#94a3b8">{{ h.avgCost }}</td><td class="table-td num-font font-bold" style="text-align:right" :style="h.curPrice?(h.curPrice>h.avgCost?'color:#bc6c25':'color:#588157'):'color:#ccc'">{{ h.curPrice||'—' }}</td><td class="table-td num-font font-bold" style="text-align:right" :class="(h.capPnl||0)>=0?'val-pos':'val-neg'">{{ h.capPnl!=null?((h.capPnl>=0?'+':'')+h.capPnl.toLocaleString()):'—' }}</td><td class="table-td num-font font-bold" style="text-align:right" :class="(h.pct||0)>=0?'val-pos':'val-neg'">{{ h.pct!=null?((h.pct>=0?'+':'')+h.pct+'%'):'—' }}</td><td v-if="includeDividend" class="table-td num-font val-pos" style="text-align:right">{{ h.totalDiv>0?'+'+fmtInt(h.totalDiv):'—' }}</td><td v-if="includeDividend" class="table-td num-font font-bold" style="text-align:right" :class="(h.totalReturn||0)>=0?'val-pos':'val-neg'">{{ h.totalReturn!=null?((h.totalReturn>=0?'+':'')+h.totalReturn.toLocaleString()):'—' }}</td><td v-if="includeDividend" class="table-td num-font font-bold" style="text-align:right" :class="(h.totalReturnPct||0)>=0?'val-pos':'val-neg'">{{ h.totalReturnPct!=null?((h.totalReturnPct>=0?'+':'')+h.totalReturnPct+'%'):'—' }}</td><td class="table-td" style="text-align:center"><span :class="['action-tag',h.actionEn==='buy'?'action-buy':h.actionEn==='sell'?'action-sell':h.actionEn==='reduce'?'action-reduce':'action-hold']">{{ h.action||'—' }}</span></td><td class="table-td" style="font-size:12px;color:#666;line-height:1.6;white-space:normal;min-width:200px;max-width:340px">{{ h.reason }}</td></tr></tbody></table></div></div>
+        <div class="table-wrap"><div class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th class="table-th">代碼</th><th class="table-th">名稱</th><th class="table-th" style="text-align:right">股數</th><th class="table-th" style="text-align:right">均買價</th><th class="table-th" style="text-align:right">現價</th><th class="table-th" style="text-align:right">帳面損益</th><th class="table-th" style="text-align:right">報酬%</th><th v-if="includeDividend" class="table-th" style="text-align:right">累積股息</th><th v-if="includeDividend" class="table-th" style="text-align:right">含息報酬</th><th v-if="includeDividend" class="table-th" style="text-align:right">含息%</th><th class="table-th" style="text-align:center">建議</th><th class="table-th" style="min-width:200px">原因</th></tr></thead><tbody><tr v-for="h in analysisResult.holdings" :key="h.code"><td class="table-td" style="font-family:monospace;font-weight:700;color:#3a5a40">{{ h.code }}</td><td class="table-td font-medium" style="white-space:nowrap">{{ h.name }}</td><td class="table-td num-font" style="text-align:right;color:#94a3b8">{{ h.qty.toLocaleString() }}</td><td class="table-td num-font" style="text-align:right;color:#94a3b8">{{ h.avgCost }}</td><td class="table-td num-font font-bold" style="text-align:right" :style="h.curPrice?(h.curPrice>h.avgCost?'color:#bc6c25':'color:#588157'):'color:#ccc'">{{ h.curPrice||'—' }}</td><td class="table-td num-font font-bold" style="text-align:right" :class="(h.capPnl||0)>=0?'val-pos':'val-neg'">{{ h.capPnl!=null?((h.capPnl>=0?'+':'')+h.capPnl.toLocaleString()):'—' }}</td><td class="table-td num-font font-bold" style="text-align:right" :class="(h.pct||0)>=0?'val-pos':'val-neg'">{{ h.pct!=null?((h.pct>=0?'+':'')+h.pct+'%'):'—' }}</td><td v-if="includeDividend" class="table-td num-font val-pos" style="text-align:right">{{ h.totalDiv>0?'+'+fmtInt(h.totalDiv):'—' }}</td><td v-if="includeDividend" class="table-td num-font font-bold" style="text-align:right" :class="(h.totalReturn||0)>=0?'val-pos':'val-neg'">{{ h.totalReturn!=null?((h.totalReturn>=0?'+':'')+h.totalReturn.toLocaleString()):'—' }}</td><td v-if="includeDividend" class="table-td num-font font-bold" style="text-align:right" :class="(h.totalReturnPct||0)>=0?'val-pos':'val-neg'">{{ h.totalReturnPct!=null?((h.totalReturnPct>=0?'+':'')+h.totalReturnPct+'%'):'—' }}</td><td class="table-td" style="text-align:center"><span :class="['action-tag',h.actionEn==='buy'?'action-buy':h.actionEn==='sell'?'action-sell':h.actionEn==='reduce'?'action-reduce':'action-hold']">{{ h.action||'—' }}</span></td><td class="table-td" style="font-size:12px;color:#666;line-height:1.6;white-space:normal;min-width:200px;max-width:340px">{{ h.reason }}</td></tr></tbody></table></div></div>
       </div>
-      <!-- AI 建議新股 -->
       <div v-if="analysisResult && analysisResult.suggestions && analysisResult.suggestions.length">
-        <h3 class="section-title" style="margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ph ph-star" style="color:#bc6c25"></i> AI 建議關注（現有持股以外）</h3>
-        <div class="table-wrap"><div class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th class="table-th">代碼</th><th class="table-th">名稱</th><th class="table-th" style="text-align:center">建議</th><th class="table-th" style="min-width:200px">原因</th></tr></thead><tbody><tr v-for="s in analysisResult.suggestions" :key="s.code" onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''"><td class="table-td" style="font-family:monospace;font-weight:700;color:#bc6c25">{{ s.code }}</td><td class="table-td font-medium">{{ s.name }}</td><td class="table-td" style="text-align:center"><span class="action-tag action-buy">{{ s.action || '考慮買入' }}</span></td><td class="table-td" style="font-size:13px;color:#555;line-height:1.6;white-space:normal;min-width:200px;max-width:400px">{{ s.reason }}</td></tr></tbody></table></div></div>
+        <h3 class="section-title" style="margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ph ph-star" style="color:#bc6c25"></i> AI 建議關注</h3>
+        <div class="table-wrap"><div class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th class="table-th">代碼</th><th class="table-th">名稱</th><th class="table-th" style="text-align:center">建議</th><th class="table-th" style="min-width:200px">原因</th></tr></thead><tbody><tr v-for="s in analysisResult.suggestions" :key="s.code"><td class="table-td" style="font-family:monospace;font-weight:700;color:#bc6c25">{{ s.code }}</td><td class="table-td font-medium">{{ s.name }}</td><td class="table-td" style="text-align:center"><span class="action-tag action-buy">{{ s.action||'考慮買入' }}</span></td><td class="table-td" style="font-size:13px;color:#555;line-height:1.6;white-space:normal;min-width:200px;max-width:400px">{{ s.reason }}</td></tr></tbody></table></div></div>
       </div>
-      <!-- 歷史紀錄 -->
       <div>
         <h3 class="section-title" style="margin-bottom:12px;display:flex;align-items:center;gap:8px"><i class="ph ph-clock-counter-clockwise" style="color:#588157"></i> 歷史分析紀錄 <span style="font-size:12px;font-weight:400;color:#aaa">（{{ analysisHistory.length }} 筆）</span></h3>
         <div v-if="analysisLoading" style="padding:32px;text-align:center;color:#588157"><i class="ph ph-spinner spin" style="font-size:24px"></i></div>
-        <div v-else-if="!analysisHistory.length" style="padding:40px;text-align:center;background:white;border-radius:1.5rem;color:#aaa;font-weight:700">尚無紀錄，按「立即分析」開始第一次分析</div>
+        <div v-else-if="!analysisHistory.length" style="padding:40px;text-align:center;background:white;border-radius:1.5rem;color:#aaa;font-weight:700">尚無紀錄</div>
         <div v-else class="space-y-3">
           <div v-for="(rec,i) in analysisHistory" :key="i" class="analysis-card">
             <div @click="expandedIdx=expandedIdx===i?null:i" class="analysis-card-hdr">
@@ -402,134 +391,234 @@
       </div>
     </div>
 
-    <!-- ══ 系統說明 ══ -->
-    <div v-if="currentTab==='docs'" class="space-y-6" style="max-width:900px">
-      <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px">
-        <div><h2 class="page-title">系統說明</h2><p style="color:#588157;font-size:13px;margin-top:4px">你不理財，才不理你 — 完整操作指南</p></div>
-        <div style="font-size:11px;color:#aaa;font-family:'DM Mono',monospace">v2.0 · 2026/03/29</div>
+    <!-- ══ 資產追蹤 ══ -->
+    <div v-if="currentTab==='wealth'" class="space-y-6">
+      <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-end">
+        <div><h2 class="page-title">資產追蹤</h2><p style="color:#588157;font-size:13px;margin-top:4px">每季 / 每半年手動記錄資產快照</p></div>
       </div>
-
-      <!-- ① 系統架構 -->
-      <div style="background:white;border-radius:1.5rem;padding:24px;border:1px solid rgba(0,0,0,.06);box-shadow:0 1px 4px rgba(0,0,0,.04)">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px"><div style="width:36px;height:36px;border-radius:12px;background:#3a5a40;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:18px">🏗️</span></div><div><div style="font-size:16px;font-weight:700;color:#3a5a40">一、系統架構</div><div style="font-size:12px;color:#aaa;margin-top:1px">三層結構，各司其職</div></div></div>
-        <div style="display:flex;flex-direction:column;gap:0;align-items:stretch">
-          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-            <div style="background:#f0f4ee;border:1.5px solid #588157;border-radius:12px;padding:10px 16px;text-align:center;min-width:110px"><div style="font-size:18px;margin-bottom:4px">📧</div><div style="font-size:11px;font-weight:700;color:#3a5a40">Gmail</div><div style="font-size:10px;color:#888">成交回報信件</div></div>
-            <div style="background:#f0f4ee;border:1.5px solid #588157;border-radius:12px;padding:10px 16px;text-align:center;min-width:110px"><div style="font-size:18px;margin-bottom:4px">📄</div><div style="font-size:11px;font-weight:700;color:#3a5a40">PDF 對帳單</div><div style="font-size:10px;color:#888">加密附件</div></div>
-            <div style="background:#f0f4ee;border:1.5px solid #588157;border-radius:12px;padding:10px 16px;text-align:center;min-width:110px"><div style="font-size:18px;margin-bottom:4px">📡</div><div style="font-size:11px;font-weight:700;color:#3a5a40">FinMind API</div><div style="font-size:10px;color:#888">股利資料</div></div>
+      <div v-if="wealthLoading" style="text-align:center;padding:40px;color:#588157"><i class="ph ph-spinner spin" style="font-size:32px"></i></div>
+      <template v-if="!wealthLoading">
+        <!-- 匯率 -->
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;color:#3a5a40"><i class="ph ph-currency-circle-dollar" style="font-size:20px"></i><span class="font-bold section-title">匯率設定</span></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+            <div><div style="font-size:12px;font-weight:700;color:#588157;margin-bottom:6px">💵 USD → TWD</div><input v-model="wealthRates.rate_usd" type="number" step="0.01" class="input-custom" placeholder="32.00"></div>
+            <div><div style="font-size:12px;font-weight:700;color:#588157;margin-bottom:6px">¥ JPY → TWD</div><input v-model="wealthRates.rate_jpy" type="number" step="0.001" class="input-custom" placeholder="0.220"></div>
+            <div><div style="font-size:12px;font-weight:700;color:#588157;margin-bottom:6px">¥ CNY → TWD</div><input v-model="wealthRates.rate_cny" type="number" step="0.01" class="input-custom" placeholder="4.40"></div>
           </div>
-          <div style="display:flex;justify-content:center;padding:6px 0;color:#588157;font-size:20px">↓</div>
-          <div style="background:linear-gradient(135deg,#344e41,#3a5a40);border-radius:14px;padding:16px 20px;color:white;margin:0 20px">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:18px">⚙️</span><span style="font-weight:700;font-size:13px">Google Apps Script（GAS）後端</span></div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-              <div style="background:rgba(255,255,255,.1);border-radius:8px;padding:8px 12px"><div style="font-size:11px;font-weight:700;opacity:.7;margin-bottom:3px">Code.gs</div><div style="font-size:11px;opacity:.9;line-height:1.6">資料處理引擎<br>交易擷取・庫存FIFO<br>股利・損益計算</div></div>
-              <div style="background:rgba(255,255,255,.1);border-radius:8px;padding:8px 12px"><div style="font-size:11px;font-weight:700;opacity:.7;margin-bottom:3px">WebAPI.gs</div><div style="font-size:11px;opacity:.9;line-height:1.6">前端 API 層<br>登入・儀表板<br>Gemini AI 分析</div></div>
+        </div>
+        <!-- 各機構 -->
+        <div style="display:grid;grid-template-columns:1fr;gap:14px">
+          <div v-for="inst in WEALTH_ACCTS" :key="inst.key" class="card" style="padding:18px">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+              <div :style="'width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:'+inst.color+';color:white;flex-shrink:0'"><i :class="['ph-bold',inst.icon]" style="font-size:20px"></i></div>
+              <div style="flex:1"><div class="font-bold" style="font-size:15px;color:#344e41">{{ inst.name }}</div></div>
+              <div class="num-font font-bold" :style="'font-size:14px;color:'+inst.color">{{ wealthBreakdown.find(b=>b.key===inst.key)?.twdTotal > 0 ? fmtInt(wealthBreakdown.find(b=>b.key===inst.key)?.twdTotal) + ' 元' : '' }}</div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
+              <div v-for="acc in inst.accounts" :key="acc.key">
+                <div style="font-size:12px;font-weight:700;color:#588157;margin-bottom:5px">{{ acc.label }}<span v-if="acc.currency!=='TWD'" style="color:#aaa;font-weight:400">（{{ acc.currency }}）</span></div>
+                <input v-model="wealthForm[acc.key]" type="number" step="1" class="input-custom" :placeholder="acc.currency==='TWD'?'輸入金額':'原幣金額'">
+              </div>
             </div>
           </div>
-          <div style="display:flex;justify-content:center;padding:6px 0;color:#588157;font-size:20px">↕</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0">
-            <div style="background:#fffdf8;border:1.5px solid #dda15e;border-radius:14px;padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:18px">📊</span><span style="font-weight:700;font-size:12px;color:#bc6c25">Google Sheets</span></div><div style="font-size:11px;color:#888;line-height:1.7">設定・交易紀錄<br>庫存・股利・損益<br>定期定額・分析紀錄</div></div>
-            <div style="background:#f0f8ff;border:1.5px solid #38bdf8;border-radius:14px;padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:18px">🖥️</span><span style="font-weight:700;font-size:12px;color:#0284c7">Index.html</span></div><div style="font-size:11px;color:#888;line-height:1.7">Vue 3 前端<br>儀表板・庫存・股利<br>損益・DCA・AI分析</div></div>
+        </div>
+        <!-- 合計 sticky -->
+        <div style="position:sticky;bottom:calc(56px + env(safe-area-inset-bottom,0px) + 12px);z-index:30">
+          <div style="background:#3a5a40;border-radius:1.25rem;padding:16px 22px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 8px 24px rgba(58,90,64,.35)">
+            <div style="color:rgba(255,255,255,.8);font-size:13px;font-weight:700">📊 換算台幣總資產</div>
+            <div class="num-font font-bold" style="font-size:clamp(22px,5vw,30px);color:white">{{ fmtInt(wealthTotalTWD) }} <span style="font-size:14px;opacity:.8">元</span></div>
           </div>
-          <div style="display:flex;justify-content:center;padding:6px 0;color:#588157;font-size:20px">↓</div>
-          <div style="background:#344e41;border-radius:14px;padding:12px 20px;text-align:center;color:white;margin:0 40px"><span style="font-size:16px">📱</span><span style="font-weight:700;font-size:13px;margin-left:8px">瀏覽器 / 手機開啟 Web App 網址</span></div>
+        </div>
+        <!-- 儲存 -->
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button @click="saveWealth" :disabled="wealthSaving" class="btn btn-primary" style="width:100%;font-size:16px;padding:14px;border-radius:1rem;display:flex;align-items:center;justify-content:center;gap:8px">
+            <i :class="wealthSaving?'ph ph-spinner spin':'ph ph-floppy-disk'" style="font-size:20px"></i>{{ wealthSaving?'儲存中...':'儲存資產快照到 Google Sheets' }}
+          </button>
+          <div v-if="wealthMsg" :style="'padding:10px 16px;border-radius:10px;font-size:13px;font-weight:700;text-align:center;'+(wealthError?'background:rgba(248,113,113,.1);color:#f87171':'background:rgba(52,211,153,.1);color:#34d399')">{{ wealthMsg }}</div>
+        </div>
+        <!-- 趨勢圖 -->
+        <div v-if="wealthHistory.length" class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;color:#3a5a40"><i class="ph ph-chart-bar" style="font-size:20px"></i><span class="font-bold section-title">資產趨勢</span></div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px">
+            <div style="display:flex;gap:4px;background:#f5f7f5;border-radius:10px;padding:3px">
+              <button v-for="opt in [{v:'all',l:'全部'},{v:'3y',l:'3年'},{v:'2y',l:'2年'},{v:'1y',l:'1年'}]" :key="opt.v" @click="wealthTimeRange=opt.v" :style="wealthTimeRange===opt.v?'background:white;color:#3a5a40;box-shadow:0 1px 4px rgba(0,0,0,.1)':'color:#aaa'" style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;border:none;cursor:pointer;transition:all .15s">{{ opt.l }}</button>
+            </div>
+            <button @click="toggleAllWealthFilter" style="font-size:11px;font-weight:700;color:#588157;background:rgba(88,129,87,.08);border:1.5px solid rgba(88,129,87,.3);border-radius:8px;padding:4px 10px;cursor:pointer;margin-left:auto">{{ wealthChartFilter.length===WEALTH_ACCTS.length?'取消全選':'全選' }}</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+            <button v-for="inst in WEALTH_ACCTS" :key="inst.key" @click="toggleWealthFilter(inst.key)" :style="wealthChartFilter.includes(inst.key)?'background:'+inst.color+';color:white;border-color:'+inst.color:'background:white;color:#bbb;border-color:#e0ddd8'" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;border:1.5px solid;cursor:pointer;transition:all .15s"><i :class="['ph-bold',inst.icon]" style="font-size:12px"></i>{{ inst.name }}</button>
+          </div>
+          <div v-if="!filteredWealthHistory.length" style="text-align:center;padding:32px;color:#aaa;font-size:13px">此時間範圍無紀錄</div>
+          <!-- ★ padding-top 加大，避免 datalabels 與圖例重疊 -->
+          <div v-else class="chart-area" style="height:340px"><canvas id="wealthChart"></canvas></div>
+        </div>
+        <!-- 歷史表 -->
+        <div v-if="wealthHistory.length" class="card" style="padding:0;overflow:hidden">
+          <div style="padding:16px 20px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:8px;color:#3a5a40"><i class="ph ph-clock-counter-clockwise" style="font-size:18px"></i><span class="font-bold" style="font-size:15px">歷史快照</span></div>
+          <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:380px"><thead><tr><th class="table-th">日期</th><th class="table-th" style="text-align:right">總資產（台幣）</th><th class="table-th" style="text-align:right">環比增減</th></tr></thead><tbody><tr v-for="(row,idx) in [...wealthHistory].sort((a,b)=>String(b.date).localeCompare(String(a.date)))" :key="idx"><td class="table-td">{{ String(row.date||'').slice(0,10) }}</td><td class="table-td num-font font-bold" style="text-align:right">{{ fmtInt(row.totalTWD) }}</td><td class="table-td num-font font-bold" style="text-align:right"><template v-if="idx < wealthHistory.length-1"><span :class="(parseFloat(row.totalTWD)-parseFloat([...wealthHistory].sort((a,b)=>String(b.date).localeCompare(String(a.date)))[idx+1]?.totalTWD||row.totalTWD))>0?'val-pos':'val-neg'">{{ fmtInt(parseFloat(row.totalTWD)-parseFloat([...wealthHistory].sort((a,b)=>String(b.date).localeCompare(String(a.date)))[idx+1]?.totalTWD||row.totalTWD)) }}</span></template><span v-else style="color:#aaa">—</span></td></tr></tbody></table></div>
+        </div>
+        <!-- Email 提醒 -->
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;color:#3a5a40"><i class="ph ph-bell" style="font-size:20px"></i><span class="font-bold section-title">Email 定期提醒</span></div>
+          <p style="font-size:12px;color:#888;margin-bottom:18px">在指定月份 1 日早上 9 點寄 Email 提醒記錄資產</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+            <label v-for="opt in [{v:'quarterly',l:'每季（1、4、7、10 月）'},{v:'halfyear',l:'每半年（1、7 月）'},{v:'none',l:'停用提醒'}]" :key="opt.v" :style="wealthReminderType===opt.v?'border-color:#3a5a40;background:#f0f4ee;':'border-color:#dad7cd;background:white;'" style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:12px;cursor:pointer;border:2px solid;transition:all .2s;flex:1;min-width:160px">
+              <input type="radio" v-model="wealthReminderType" :value="opt.v" class="hidden">
+              <span :style="wealthReminderType===opt.v?'background:#3a5a40':'background:white;border:2px solid #c9c4b8'" style="width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span v-if="wealthReminderType===opt.v" style="width:6px;height:6px;border-radius:50%;background:white;display:block"></span></span>
+              <span style="font-size:13px;color:#344e41">{{ opt.l }}</span>
+            </label>
+          </div>
+          <button @click="setupWealthTrigger" class="btn btn-primary" style="width:100%;font-size:14px;padding:12px;border-radius:1rem;display:flex;align-items:center;justify-content:center;gap:8px"><i class="ph ph-clock" style="font-size:18px"></i> 套用提醒設定</button>
+        </div>
+      </template>
+    </div>
+
+
+    <!-- ══ 待確認交易 ══ -->
+    <div v-if="currentTab==='pending'" class="space-y-4">
+      <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-end">
+        <div>
+          <h2 class="page-title" style="display:flex;align-items:center;gap:10px">
+            待確認交易
+            <span v-if="pendingList.length" style="background:#dc2626;color:white;border-radius:20px;font-size:12px;font-weight:700;padding:2px 10px;min-width:24px;text-align:center">{{ pendingList.length }}</span>
+          </h2>
+          <p style="color:#588157;font-size:13px;margin-top:4px">確認後才會寫入交易紀錄，可在此修正當沖類別</p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button @click="openAddTradeModal" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:12px;font-size:13px;font-weight:700;background:#3a5a40;color:white;border:none;cursor:pointer">
+            <i class="ph ph-plus" style="font-size:15px"></i> 手動新增
+          </button>
+          <button @click="loadPending" :disabled="pendingLoading" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:12px;font-size:13px;font-weight:700;background:white;border:1.5px solid #dad7cd;color:#3a5a40;cursor:pointer" onmouseover="this.style.background='#f0f4ee'" onmouseout="this.style.background='white'">
+            <i :class="pendingLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'" style="font-size:15px"></i> 重新載入
+          </button>
         </div>
       </div>
 
-      <!-- ② 試算表工作表 -->
-      <div style="background:white;border-radius:1.5rem;padding:24px;border:1px solid rgba(0,0,0,.06);box-shadow:0 1px 4px rgba(0,0,0,.04)">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px"><div style="width:36px;height:36px;border-radius:12px;background:#bc6c25;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:18px">📊</span></div><div><div style="font-size:16px;font-weight:700;color:#3a5a40">二、試算表工作表（共 9 個）</div><div style="font-size:12px;color:#aaa;margin-top:1px">每個工作表的用途與注意事項</div></div></div>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div v-for="sheet in docsSheets" :key="sheet.name" style="display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border-radius:12px;border:1px solid #f0f0f0;transition:background .15s" onmouseover="this.style.background='#fafcfa'" onmouseout="this.style.background=''">
-            <div style="width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0" :style="`background:${sheet.bg}`">{{ sheet.icon }}</div>
+      <!-- 載入中 -->
+      <div v-if="pendingLoading" style="padding:48px;text-align:center;color:#588157">
+        <i class="ph ph-spinner spin" style="font-size:28px;display:block;margin-bottom:8px"></i>載入中...
+      </div>
+
+      <!-- 無資料 -->
+      <div v-else-if="!pendingList.length" style="padding:48px;text-align:center;background:white;border-radius:1.5rem;color:#aaa">
+        <i class="ph ph-check-circle" style="font-size:48px;display:block;margin-bottom:12px;color:#588157;opacity:.4"></i>
+        <div style="font-weight:700;font-size:16px;margin-bottom:4px">沒有待確認的交易</div>
+        <div style="font-size:13px">擷取信件後新交易會在這裡等待確認</div>
+      </div>
+
+      <template v-else>
+        <!-- 操作列 -->
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;color:#3a5a40">
+            <input type="checkbox" @change="toggleSelectAll" :checked="pendingSelected.length===pendingList.length" style="width:16px;height:16px;accent-color:#3a5a40">
+            全選（{{ pendingSelected.length }}/{{ pendingList.length }}）
+          </label>
+          <button @click="confirmSelected" :disabled="!pendingSelected.length || pendingConfirming"
+            style="background:#3a5a40;color:white;padding:8px 18px;border-radius:12px;font-size:13px;font-weight:700;border:none;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s"
+            :style="!pendingSelected.length?'opacity:.4;cursor:not-allowed':''">
+            <i :class="pendingConfirming?'ph ph-spinner spin':'ph ph-check'" style="font-size:15px"></i>
+            確認寫入（{{ pendingSelected.length }} 筆）
+          </button>
+          <div v-if="pendingMsg" :style="pendingError?'color:#dc2626':'color:#16a34a'" style="font-size:13px;font-weight:700">{{ pendingMsg }}</div>
+        </div>
+
+        <!-- 依日期分組顯示 -->
+        <div v-for="(group, date) in pendingGrouped" :key="date" class="card" style="padding:0;overflow:hidden">
+          <!-- 日期標題 -->
+          <div style="background:#f0f4ee;padding:10px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #e8ece8">
+            <i class="ph ph-calendar" style="color:#588157"></i>
+            <span style="font-weight:700;color:#3a5a40;font-size:14px">{{ date }}</span>
+            <span style="font-size:12px;color:#888">{{ group.length }} 筆</span>
+            <!-- 當沖警示 -->
+            <span v-if="group.some(r=>r['成交類別'].includes('沖'))" style="background:rgba(251,191,36,.2);color:#d97706;border:1px solid rgba(251,191,36,.4);border-radius:20px;font-size:11px;font-weight:700;padding:2px 8px;margin-left:4px">⚡ 含當沖（已自動標記）</span>
+          </div>
+          <!-- 每筆交易 -->
+          <div v-for="row in group" :key="row._rowIndex"
+            style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #f5f5f5;transition:background .15s"
+            :style="pendingSelected.includes(row._rowIndex)?'background:#f0f7f0':''"
+            onmouseover="this.style.background=this.style.background||'#fafafa'" onmouseout="this.style.background=''">
+            <!-- 勾選 -->
+            <input type="checkbox"
+              :checked="pendingSelected.includes(row._rowIndex)"
+              @change="togglePendingRow(row._rowIndex)"
+              style="width:16px;height:16px;accent-color:#3a5a40;flex-shrink:0">
+            <!-- 代碼 + 名稱 -->
+            <div style="min-width:80px">
+              <div style="font-weight:700;font-size:14px;color:#3a5a40;font-family:monospace">{{ String(row['股票代碼']||'').replace(/^'+/,'') }}</div>
+              <div style="font-size:12px;color:#888">{{ row['股票名稱'] }}</div>
+            </div>
+            <!-- 成交類別（可修改） -->
+            <div style="flex-shrink:0">
+              <select v-model="row['成交類別']" @change="recalcTax(row)"
+                :style="row['成交類別'].includes('沖')?'background:rgba(251,191,36,.15);border-color:#d97706;color:#d97706;font-weight:700':''"
+                style="border:1.5px solid #dad7cd;border-radius:8px;padding:5px 8px;font-size:13px;font-weight:700;cursor:pointer;background:white;color:#3a5a40;outline:none">
+                <option value="現買">現買</option>
+                <option value="現賣">現賣</option>
+                <option value="沖買">⚡ 沖買</option>
+                <option value="沖賣">⚡ 沖賣</option>
+                <option value="集買">集買</option>
+                <option value="集賣">集賣</option>
+              </select>
+            </div>
+            <!-- 股數 + 成交價 -->
             <div style="flex:1;min-width:0">
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px"><span style="font-weight:700;font-size:13px;color:#3a5a40">{{ sheet.name }}</span><span style="font-size:10px;font-weight:700;padding:1px 8px;border-radius:20px" :style="`background:${sheet.tagBg};color:${sheet.tagColor}`">{{ sheet.tag }}</span></div>
-              <div style="font-size:12px;color:#666;line-height:1.6">{{ sheet.desc }}</div>
-              <div v-if="sheet.warn" style="display:flex;align-items:center;gap:5px;margin-top:5px;font-size:11px;color:#d97706;font-weight:600"><i class="ph ph-warning" style="font-size:13px"></i> {{ sheet.warn }}</div>
+              <div class="num-font" style="font-size:14px;font-weight:600;color:#344e41">
+                {{ fmtInt(row['股數']) }} 股 × {{ row['成交價'] }}
+              </div>
+              <div class="num-font" style="font-size:12px;color:#888">
+                成交金額：{{ fmtInt(row['成交金額']) }}
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ③ 日常操作流程 -->
-      <div style="background:white;border-radius:1.5rem;padding:24px;border:1px solid rgba(0,0,0,.06);box-shadow:0 1px 4px rgba(0,0,0,.04)">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px"><div style="width:36px;height:36px;border-radius:12px;background:#588157;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:18px">📅</span></div><div><div style="font-size:16px;font-weight:700;color:#3a5a40">三、日常操作流程</div><div style="font-size:12px;color:#aaa;margin-top:1px">建議設定排程自動執行</div></div></div>
-        <div style="position:relative;padding-left:28px;margin-bottom:20px">
-          <div style="position:absolute;left:9px;top:0;bottom:0;width:2px;background:linear-gradient(180deg,#3a5a40,#588157,#dda15e);border-radius:2px"></div>
-          <div v-for="(step,i) in docsSchedule" :key="i" style="position:relative;margin-bottom:16px">
-            <div style="position:absolute;left:-23px;width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 0 0 2px #588157" :style="`background:${step.color}`"></div>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:#3a5a40;min-width:60px">{{ step.time }}</span><span style="font-size:13px;font-weight:600;color:#344e41">{{ step.label }}</span><span style="font-size:11px;color:#888">{{ step.desc }}</span></div>
-          </div>
-        </div>
-        <div style="background:#f8faf8;border-radius:12px;padding:16px;border:1px solid #e8ece8">
-          <div style="font-weight:700;font-size:13px;color:#3a5a40;margin-bottom:12px;display:flex;align-items:center;gap:8px"><span style="font-size:16px">🤖</span> 市場分析流程（手動觸發）</div>
-          <div style="display:flex;align-items:center;gap:0;flex-wrap:wrap;gap:4px">
-            <div v-for="(step,i) in docsAnalysisFlow" :key="i" style="display:flex;align-items:center;gap:0">
-              <div style="background:white;border:1.5px solid #588157;border-radius:10px;padding:8px 10px;text-align:center;min-width:80px"><div style="font-size:14px;margin-bottom:3px">{{ step.icon }}</div><div style="font-size:10px;font-weight:700;color:#3a5a40;line-height:1.4">{{ step.label }}</div></div>
-              <div v-if="i<docsAnalysisFlow.length-1" style="color:#588157;font-size:14px;padding:0 2px;font-weight:700">→</div>
+            <!-- 手續費 + 交易稅 -->
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:12px;color:#888">費 {{ fmtInt(row['手續費']) }}</div>
+              <div style="font-size:12px" :style="row['成交類別'].includes('沖賣')?'color:#d97706;font-weight:700':'color:#888'">
+                稅 {{ fmtInt(row['交易稅']) }}
+                <span v-if="row['成交類別'].includes('沖賣')" style="font-size:10px">（半價）</span>
+              </div>
             </div>
+            <!-- 刪除 -->
+            <button @click="deletePendingRow(row)" style="color:#dc2626;background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0;opacity:.6" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.6'">
+              <i class="ph ph-trash" style="font-size:18px"></i>
+            </button>
           </div>
         </div>
-      </div>
 
-      <!-- ④ 七大分析維度 -->
-      <div style="background:linear-gradient(135deg,#0c1a2e,#111827);border-radius:1.5rem;padding:24px;border:1px solid rgba(56,189,248,.2)">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px"><div style="width:36px;height:36px;border-radius:12px;background:rgba(56,189,248,.2);display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:18px">🌍</span></div><div><div style="font-size:16px;font-weight:700;color:white">四、市場分析七大維度</div><div style="font-size:12px;color:rgba(148,163,184,.7);margin-top:1px">Gemini AI 每次分析涵蓋的面向</div></div></div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
-          <div v-for="dim in docsDimensions" :key="dim.label" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px 16px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='rgba(255,255,255,.06)'">
-            <div style="font-size:22px;margin-bottom:8px">{{ dim.icon }}</div>
-            <div style="font-size:12px;font-weight:700;color:white;margin-bottom:4px">{{ dim.label }}</div>
-            <div style="font-size:11px;color:rgba(148,163,184,.8);line-height:1.6">{{ dim.desc }}</div>
-          </div>
-        </div>
-        <div style="margin-top:16px;padding:12px 14px;background:rgba(52,211,153,.08);border-radius:10px;border:1px solid rgba(52,211,153,.2)">
-          <div style="font-size:12px;color:#34d399;font-weight:600">💡 觸底訊號重點觀察</div>
-          <div style="font-size:12px;color:rgba(148,163,184,.8);margin-top:4px;line-height:1.7">台幣匯率止貶回升 ＋ 外資現貨連續買超 ＋ 外資期貨未平倉轉多 → 三個訊號同時出現才是真正的底部確認</div>
-        </div>
-      </div>
-
-      <!-- ⑤ 設定頁功能 -->
-      <div style="background:white;border-radius:1.5rem;padding:24px;border:1px solid rgba(0,0,0,.06);box-shadow:0 1px 4px rgba(0,0,0,.04)">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px"><div style="width:36px;height:36px;border-radius:12px;background:#dda15e;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:18px">⚙️</span></div><div><div style="font-size:16px;font-weight:700;color:#3a5a40">五、設定頁功能說明</div><div style="font-size:12px;color:#aaa;margin-top:1px">手動執行與參數設定</div></div></div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px">
-          <div v-for="fn in docsFunctions" :key="fn.label" style="background:#f8faf8;border-radius:12px;padding:14px;text-align:center;border:1px solid #eef0ec">
-            <div style="font-size:22px;margin-bottom:6px">{{ fn.icon }}</div>
-            <div style="font-size:12px;font-weight:700;color:#3a5a40;margin-bottom:3px">{{ fn.label }}</div>
-            <div style="font-size:10px;color:#888;line-height:1.5">{{ fn.desc }}</div>
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:8px">
-          <div v-for="warn in docsWarnings" :key="warn.text" style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:10px" :style="`background:${warn.bg};border:1px solid ${warn.border}`">
-            <span style="font-size:16px;flex-shrink:0;margin-top:1px">{{ warn.icon }}</span>
-            <div style="font-size:12px;line-height:1.6" :style="`color:${warn.color}`">{{ warn.text }}</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ⑥ 常見問題 -->
-      <div style="background:white;border-radius:1.5rem;padding:24px;border:1px solid rgba(0,0,0,.06);box-shadow:0 1px 4px rgba(0,0,0,.04)">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px"><div style="width:36px;height:36px;border-radius:12px;background:#588157;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:18px">❓</span></div><div><div style="font-size:16px;font-weight:700;color:#3a5a40">六、常見問題</div></div></div>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div v-for="(qa,i) in docsFAQ" :key="i" style="border-radius:12px;overflow:hidden;border:1px solid #f0f0f0">
-            <div style="background:#f8faf8;padding:12px 16px;display:flex;align-items:center;gap:10px"><span style="width:22px;height:22px;border-radius:50%;background:#3a5a40;color:white;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">Q</span><span style="font-size:13px;font-weight:600;color:#3a5a40">{{ qa.q }}</span></div>
-            <div style="padding:12px 16px;display:flex;align-items:flex-start;gap:10px"><span style="width:22px;height:22px;border-radius:50%;background:#dda15e;color:white;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">A</span><span style="font-size:13px;color:#555;line-height:1.7">{{ qa.a }}</span></div>
-          </div>
-        </div>
-      </div>
+        <!-- 底部確認按鈕 -->
+        <button @click="confirmSelected" :disabled="!pendingSelected.length || pendingConfirming"
+          class="btn btn-primary" style="width:100%;font-size:15px;padding:14px;border-radius:1rem;display:flex;align-items:center;justify-content:center;gap:8px"
+          :style="!pendingSelected.length?'opacity:.4;cursor:not-allowed':''">
+          <i :class="pendingConfirming?'ph ph-spinner spin':'ph ph-check-circle'" style="font-size:20px"></i>
+          {{ pendingConfirming ? '寫入中...' : `確認寫入 ${pendingSelected.length} 筆交易紀錄` }}
+        </button>
+      </template>
     </div>
 
     <!-- ══ 設定 ══ -->
     <div v-if="currentTab==='settings'" class="space-y-6" style="padding-bottom:100px">
-      <div><h2 class="page-title">系統設定</h2><p style="color:#588157;font-size:13px;margin-top:4px">管理參數與帳戶安全</p></div>
-      <div v-if="settingsLoading" style="text-align:center;padding:60px 0"><i class="ph ph-spinner spin" style="font-size:28px;color:#3a5a40"></i></div>
-      <div v-else class="space-y-4">
-        <div class="settings-group">
-          <h3 class="section-title" style="margin-bottom:14px;display:flex;align-items:center;gap:8px"><span style="width:4px;height:22px;background:#dda15e;border-radius:2px;display:inline-block"></span>手動執行</h3>
-          <div class="action-grid">
-            <button v-for="fn in actionFunctions" :key="fn.key" @click="runFunction(fn.key)" :disabled="!!functionRunning" style="background:#588157;color:white;padding:12px 8px;border-radius:12px;font-weight:600;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:6px;transition:all .2s;border:none;cursor:pointer" onmouseover="this.style.background='#3a5a40'" onmouseout="this.style.background='#588157'"><i :class="['ph-bold',fn.icon]" style="font-size:20px"></i><span>{{ fn.label }}</span><i v-if="functionRunning===fn.key" class="ph ph-spinner spin" style="font-size:12px"></i></button>
-          </div>
-          <div v-if="functionMsg" :style="functionError?'background:#fef2f2;color:#dc2626':'background:#f0fdf4;color:#16a34a'" style="margin-top:12px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;text-align:center">{{ functionMsg }}</div>
+      <div><h2 class="page-title">系統設定</h2><p style="color:#588157;font-size:13px;margin-top:4px">管理參數與連接設定</p></div>
+      <!-- GAS URL 設定 -->
+      <div class="settings-group">
+        <h3 class="section-title" style="margin-bottom:14px;display:flex;align-items:center;gap:8px"><span style="width:4px;height:22px;background:#38bdf8;border-radius:2px;display:inline-block"></span>GAS Web App 網址</h3>
+        <p style="font-size:12px;color:#888;margin-bottom:12px">修改 GAS Web App 網址（存在瀏覽器 localStorage）</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input v-model="gasUrlInput" type="url" class="input-custom" placeholder="https://script.google.com/macros/s/.../exec" style="flex:1;min-width:200px">
+          <button @click="updateGasUrl" class="btn btn-primary" style="white-space:nowrap;font-size:13px">更新網址</button>
         </div>
+        <p style="font-size:11px;color:#aaa;margin-top:8px">目前：{{ currentGasUrl || '（未設定）' }}</p>
+      </div>
+      <!-- 手動執行 -->
+      <div class="settings-group">
+        <h3 class="section-title" style="margin-bottom:14px;display:flex;align-items:center;gap:8px"><span style="width:4px;height:22px;background:#dda15e;border-radius:2px;display:inline-block"></span>手動執行</h3>
+        <div class="action-grid">
+          <button v-for="fn in actionFunctions" :key="fn.key" @click="runFunction(fn.key)" :disabled="!!functionRunning" style="background:#588157;color:white;padding:12px 8px;border-radius:12px;font-weight:600;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:6px;transition:all .2s;border:none;cursor:pointer" onmouseover="this.style.background='#3a5a40'" onmouseout="this.style.background='#588157'"><i :class="['ph-bold',fn.icon]" style="font-size:20px"></i><span>{{ fn.label }}</span><i v-if="functionRunning===fn.key" class="ph ph-spinner spin" style="font-size:12px"></i></button>
+        </div>
+        <div v-if="functionMsg" :style="functionError?'background:#fef2f2;color:#dc2626':'background:#f0fdf4;color:#16a34a'" style="margin-top:12px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;text-align:center">{{ functionMsg }}</div>
+      </div>
+      <!-- 其他設定 -->
+      <div v-if="settingsLoading" style="text-align:center;padding:60px 0"><i class="ph ph-spinner spin" style="font-size:28px;color:#3a5a40"></i></div>
+      <template v-else>
         <div v-for="(section,idx) in settingsSchema" :key="idx">
           <h3 v-if="section.header" class="section-title" style="margin:20px 0 10px;display:flex;align-items:center;gap:8px"><span style="width:4px;height:22px;background:#dda15e;border-radius:2px;display:inline-block"></span>{{ section.header }}</h3>
           <div v-if="section.group" class="settings-group">
@@ -545,206 +634,22 @@
             </div>
           </div>
         </div>
-      </div>
-      <div v-if="!settingsLoading" class="save-fab"><button @click="saveSettings" style="background:#3a5a40;color:white;box-shadow:0 8px 24px rgba(58,90,64,.4);border-radius:9999px;padding:14px 24px;display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;transition:all .2s;border:none;cursor:pointer" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"><i class="ph ph-floppy-disk" style="font-size:22px"></i> 儲存變更</button></div>
-    </div>
-
-    <!-- ══ 待確認 ══ -->
-    <div v-if="currentTab==='review'" class="space-y-5">
-      <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-end">
-        <div><h2 class="page-title">待確認</h2><p style="color:#588157;font-size:13px;margin-top:4px">手動補登缺漏的交易紀錄</p></div>
-        <button @click="openAddTradeModal" class="btn btn-primary" style="display:flex;align-items:center;gap:8px;font-size:14px;padding:10px 20px"><i class="ph ph-plus" style="font-size:18px"></i> 新增交易</button>
-      </div>
-      <div class="card">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;color:#3a5a40"><i class="ph ph-info" style="font-size:18px"></i><span class="font-bold" style="font-size:14px">使用說明</span></div>
-        <p style="font-size:13px;color:#666;line-height:1.9">發現 Gmail 自動擷取有缺漏的交易時，按右上角「新增交易」手動補登。<br>新增後會直接寫入《交易紀錄》工作表，補登完畢後建議執行「更新庫存」及「計算損益」重新計算。</p>
-      </div>
-    </div>
-
-    <!-- ══ 資產追蹤 ══ -->
-    <div v-if="currentTab==='wealth'" class="space-y-6">
-
-      <!-- 標題 -->
-      <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-end">
-        <div><h2 class="page-title">資產追蹤</h2><p style="color:#588157;font-size:13px;margin-top:4px">每季 / 每半年手動記錄資產快照</p></div>
-        <div v-if="wealthHistory.length" style="background:white;border:1px solid #e8e6e1;border-radius:1rem;padding:10px 18px;font-size:12px;color:#588157">
-          共 <span class="font-bold num-font" style="color:#3a5a40">{{ wealthHistory.length }}</span> 筆紀錄
-        </div>
-      </div>
-
-      <div v-if="wealthLoading" style="text-align:center;padding:40px;color:#588157"><i class="ph ph-spinner spin" style="font-size:32px"></i></div>
-
-      <template v-if="!wealthLoading">
-
-        <!-- 匯率設定 -->
-        <div class="card">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;color:#3a5a40"><i class="ph ph-currency-circle-dollar" style="font-size:20px"></i><span class="font-bold section-title">匯率設定（手動填入當日匯率）</span></div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
-            <div>
-              <div style="font-size:12px;font-weight:700;color:#588157;margin-bottom:6px">💵 USD → TWD</div>
-              <input v-model="wealthRates.rate_usd" type="number" step="0.01" class="input-custom" placeholder="32.00">
-            </div>
-            <div>
-              <div style="font-size:12px;font-weight:700;color:#588157;margin-bottom:6px">¥ JPY → TWD</div>
-              <input v-model="wealthRates.rate_jpy" type="number" step="0.001" class="input-custom" placeholder="0.220">
-            </div>
-            <div>
-              <div style="font-size:12px;font-weight:700;color:#588157;margin-bottom:6px">¥ CNY → TWD</div>
-              <input v-model="wealthRates.rate_cny" type="number" step="0.01" class="input-custom" placeholder="4.40">
-            </div>
-          </div>
-        </div>
-
-        <!-- 各帳戶填寫 -->
-        <div style="display:grid;grid-template-columns:1fr;gap:14px">
-          <div v-for="inst in WEALTH_ACCTS" :key="inst.key" class="card" style="padding:18px">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-              <div :style="'width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:'+inst.color+';color:white;flex-shrink:0;box-shadow:0 2px 8px '+inst.color+'55'">
-                <i :class="['ph-bold',inst.icon]" style="font-size:20px"></i>
-              </div>
-              <div style="flex:1">
-                <div class="font-bold" style="font-size:15px;color:#344e41">{{ inst.name }}</div>
-              </div>
-              <div class="num-font font-bold" :style="'font-size:14px;color:'+inst.color">
-                {{ wealthBreakdown.find(b=>b.key===inst.key)?.twdTotal > 0 ? fmtInt(wealthBreakdown.find(b=>b.key===inst.key)?.twdTotal) + ' 元' : '' }}
-              </div>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
-              <div v-for="acc in inst.accounts" :key="acc.key">
-                <div style="font-size:12px;font-weight:700;color:#588157;margin-bottom:5px">
-                  {{ acc.label }}
-                  <span v-if="acc.currency!=='TWD'" style="color:#aaa;font-weight:400">（{{ acc.currency }}）</span>
-                </div>
-                <input v-model="wealthForm[acc.key]" type="number" step="1" class="input-custom" :placeholder="acc.currency==='TWD'?'輸入金額':'原幣金額'">
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 合計 sticky bar -->
-        <div style="position:sticky;bottom:calc(56px + env(safe-area-inset-bottom,0px) + 12px);z-index:30">
-          <div style="background:#3a5a40;border-radius:1.25rem;padding:16px 22px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 8px 24px rgba(58,90,64,.35)">
-            <div style="color:rgba(255,255,255,.8);font-size:13px;font-weight:700">📊 換算台幣總資產</div>
-            <div class="num-font font-bold" style="font-size:clamp(22px,5vw,30px);color:white">{{ fmtInt(wealthTotalTWD) }} <span style="font-size:14px;opacity:.8">元</span></div>
-          </div>
-        </div>
-
-        <!-- 儲存按鈕 + 訊息 -->
-        <div style="display:flex;flex-direction:column;gap:10px;align-items:stretch">
-          <button @click="saveWealth" :disabled="wealthSaving" class="btn btn-primary" style="width:100%;font-size:16px;padding:14px;border-radius:1rem;display:flex;align-items:center;justify-content:center;gap:8px">
-            <i :class="wealthSaving?'ph ph-spinner spin':'ph ph-floppy-disk'" style="font-size:20px"></i>
-            {{ wealthSaving ? '儲存中...' : '儲存資產快照到 Google Sheets' }}
-          </button>
-          <div v-if="wealthMsg" :style="'padding:10px 16px;border-radius:10px;font-size:13px;font-weight:700;text-align:center;'+(wealthError?'background:rgba(248,113,113,.1);color:#f87171':'background:rgba(52,211,153,.1);color:#34d399')">{{ wealthMsg }}</div>
-        </div>
-
-        <!-- 歷史趨勢圖 -->
-        <div v-if="wealthHistory.length" class="card">
-          <!-- 標題列 -->
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;color:#3a5a40">
-            <i class="ph ph-chart-bar" style="font-size:20px"></i>
-            <span class="font-bold section-title">資產趨勢</span>
-          </div>
-
-          <!-- 時間區間 + 機構篩選 同列 -->
-          <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px">
-            <!-- 時間區間 -->
-            <div style="display:flex;gap:4px;background:#f5f7f5;border-radius:10px;padding:3px">
-              <button v-for="opt in [{v:'all',l:'全部'},{v:'3y',l:'3年'},{v:'2y',l:'2年'},{v:'1y',l:'1年'}]" :key="opt.v"
-                @click="wealthTimeRange=opt.v"
-                :style="wealthTimeRange===opt.v?'background:white;color:#3a5a40;box-shadow:0 1px 4px rgba(0,0,0,.1)':'color:#aaa'"
-                style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;border:none;cursor:pointer;transition:all .15s">
-                {{ opt.l }}
-              </button>
-            </div>
-            <!-- 機構全選/取消 -->
-            <button @click="toggleAllWealthFilter"
-              style="font-size:11px;font-weight:700;color:#588157;background:rgba(88,129,87,.08);border:1.5px solid rgba(88,129,87,.3);border-radius:8px;padding:4px 10px;cursor:pointer;margin-left:auto">
-              {{ wealthChartFilter.length===WEALTH_ACCTS.length?'取消全選':'全選' }}
-            </button>
-          </div>
-
-          <!-- 機構篩選 Pills -->
-          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
-            <button v-for="inst in WEALTH_ACCTS" :key="inst.key" @click="toggleWealthFilter(inst.key)"
-              :style="wealthChartFilter.includes(inst.key)
-                ? 'background:'+inst.color+';color:white;border-color:'+inst.color+';box-shadow:0 2px 6px '+inst.color+'44'
-                : 'background:white;color:#bbb;border-color:#e0ddd8'"
-              style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;border:1.5px solid;cursor:pointer;transition:all .15s">
-              <i :class="['ph-bold',inst.icon]" style="font-size:12px"></i>{{ inst.name }}
-            </button>
-          </div>
-
-          <!-- 無資料提示 -->
-          <div v-if="!filteredWealthHistory.length" style="text-align:center;padding:32px;color:#aaa;font-size:13px">
-            <i class="ph ph-chart-bar" style="font-size:32px;display:block;margin-bottom:8px;opacity:.4"></i>
-            此時間範圍無紀錄
-          </div>
-
-          <div v-else class="chart-area" style="height:320px"><canvas id="wealthChart"></canvas></div>
-        </div>
-
-        <!-- 歷史紀錄表 -->
-        <div v-if="wealthHistory.length" class="card" style="padding:0;overflow:hidden">
-          <div style="padding:16px 20px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:8px;color:#3a5a40"><i class="ph ph-clock-counter-clockwise" style="font-size:18px"></i><span class="font-bold" style="font-size:15px">歷史快照</span></div>
-          <div style="overflow-x:auto">
-            <table style="width:100%;border-collapse:collapse;min-width:380px">
-              <thead><tr>
-                <th class="table-th">日期</th>
-                <th class="table-th" style="text-align:right">總資產（台幣）</th>
-                <th class="table-th" style="text-align:right">環比增減</th>
-              </tr></thead>
-              <tbody>
-                <tr v-for="(row,idx) in [...wealthHistory].sort((a,b)=>String(b.date).localeCompare(String(a.date)))" :key="idx">
-                  <td class="table-td">{{ String(row.date||'').slice(0,10) }}</td>
-                  <td class="table-td num-font font-bold" style="text-align:right">{{ fmtInt(row.totalTWD) }}</td>
-                  <td class="table-td num-font font-bold" style="text-align:right">
-                    <template v-if="idx < wealthHistory.length-1">
-                      <span :class="(parseFloat(row.totalTWD)-parseFloat([...wealthHistory].sort((a,b)=>String(b.date).localeCompare(String(a.date)))[idx+1]?.totalTWD||row.totalTWD))>0?'val-pos':'val-neg'">
-                        {{ fmtInt(parseFloat(row.totalTWD)-parseFloat([...wealthHistory].sort((a,b)=>String(b.date).localeCompare(String(a.date)))[idx+1]?.totalTWD||row.totalTWD)) }}
-                      </span>
-                    </template>
-                    <span v-else style="color:#aaa">—</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Email 提醒設定 -->
-        <div class="card">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;color:#3a5a40"><i class="ph ph-bell" style="font-size:20px"></i><span class="font-bold section-title">Email 定期提醒</span></div>
-          <p style="font-size:12px;color:#888;margin-bottom:18px">系統在指定月份 1 日早上 9 點寄 Email 提醒你回來記錄資產（寄到試算表設定的通知信箱）</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-            <label v-for="opt in [{v:'quarterly',l:'每季（1、4、7、10 月）'},{v:'halfyear',l:'每半年（1、7 月）'},{v:'none',l:'停用提醒'}]" :key="opt.v"
-              :style="wealthReminderType===opt.v?'border-color:#3a5a40;background:#f0f4ee;':'border-color:#dad7cd;background:white;'"
-              style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:12px;cursor:pointer;border:2px solid;transition:all .2s;user-select:none;flex:1;min-width:160px">
-              <input type="radio" v-model="wealthReminderType" :value="opt.v" class="hidden">
-              <span :style="wealthReminderType===opt.v?'background:#3a5a40':'background:white;border:2px solid #c9c4b8'" style="width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s">
-                <span v-if="wealthReminderType===opt.v" style="width:6px;height:6px;border-radius:50%;background:white;display:block"></span>
-              </span>
-              <span style="font-size:13px;color:#344e41">{{ opt.l }}</span>
-            </label>
-          </div>
-          <button @click="setupWealthTrigger" class="btn btn-primary" style="width:100%;font-size:14px;padding:12px;border-radius:1rem;display:flex;align-items:center;justify-content:center;gap:8px">
-            <i class="ph ph-clock" style="font-size:18px"></i> 套用提醒設定
-          </button>
-          <div style="margin-top:12px;padding:10px 14px;background:rgba(58,90,64,.05);border-radius:10px">
-            <p style="font-size:12px;color:#588157;font-weight:700;margin-bottom:4px">📱 iPhone 提醒事項（推薦）</p>
-            <p style="font-size:11px;color:#888;line-height:1.7">對 Siri 說：<span style="font-weight:700;color:#344e41">「每個月1號提醒我記錄資產」</span><br>Siri 會在提醒事項 App 建立每月重複提醒，更直接方便。</p>
-          </div>
-        </div>
-
       </template>
+      <div v-if="!settingsLoading" class="save-fab"><button @click="saveSettings" style="background:#3a5a40;color:white;box-shadow:0 8px 24px rgba(58,90,64,.4);border-radius:9999px;padding:14px 24px;display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;transition:all .2s;border:none;cursor:pointer"><i class="ph ph-floppy-disk" style="font-size:22px"></i> 儲存變更</button></div>
     </div>
 
   </main>
 
   <!-- BOTTOM NAV -->
-  <nav class="bottom-nav md:hidden">
+  <nav class="bottom-nav">
     <div v-for="tab in bottomTabs" :key="tab.id" @click="selectTab(tab.id)" class="bottom-nav-item" :class="currentTab===tab.id?'active':''">
-      <i :class="['ph',currentTab===tab.id?tab.iconFill:tab.icon]"></i>
+      <div style="position:relative;display:inline-flex">
+        <i :class="['ph',currentTab===tab.id?tab.iconFill:tab.icon]"></i>
+        <span v-if="tab.id==='pending' && pendingList.length"
+          style="position:absolute;top:-6px;right:-8px;background:#dc2626;color:white;border-radius:20px;font-size:9px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:14px">
+          {{ pendingList.length }}
+        </span>
+      </div>
       <span>{{ tab.shortName }}</span>
     </div>
   </nav>
@@ -775,8 +680,8 @@
               </div>
               <div style="grid-column:span 2">
                 <label style="display:block;font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">成交類別 *</label>
-                <div style="display:flex;gap:8px">
-                  <label v-for="t in ['現買','現賣','沖買','沖賣','集買','集賣']" :key="t" :style="addTradeForm.type===t?'background:#3a5a40;color:white;border-color:#3a5a40':'background:white;border-color:#dad7cd;color:#588157'" style="display:flex;align-items:center;justify-content:center;flex:1;padding:8px 4px;border-radius:10px;cursor:pointer;user-select:none;font-size:13px;font-weight:700;border:1.5px solid;transition:all .2s"><input type="radio" v-model="addTradeForm.type" :value="t" class="hidden">{{ t }}</label>
+                <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px">
+                  <label v-for="t in ['現買','現賣','沖買','沖賣','集買','集賣']" :key="t" :style="addTradeForm.type===t?'background:#3a5a40;color:white;border-color:#3a5a40':'background:white;border-color:#dad7cd;color:#588157'" style="display:flex;align-items:center;justify-content:center;padding:8px 2px;border-radius:10px;cursor:pointer;user-select:none;font-size:12px;font-weight:700;border:1.5px solid;transition:all .2s"><input type="radio" v-model="addTradeForm.type" :value="t" style="display:none">{{ t }}</label>
                 </div>
               </div>
               <div>
@@ -791,16 +696,16 @@
                 <div style="font-size:10px;font-weight:700;color:#aaa;letter-spacing:.08em;margin-bottom:8px">預估金額</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
                   <div><div style="font-size:10px;color:#aaa;margin-bottom:2px">成交金額</div><div class="num-font font-bold" style="color:#3a5a40">{{ fmtInt(addTradeCalc.amount) }}</div></div>
-                  <div><div style="font-size:10px;color:#aaa;margin-bottom:2px">手續費</div><div class="num-font" style="color:#666">{{ fmtInt(addTradeCalc.feeEst) }}</div></div>
-                  <div><div style="font-size:10px;color:#aaa;margin-bottom:2px">淨收付</div><div class="num-font font-bold" :class="addTradeForm.type.includes('賣')?'val-pos':'val-neg'">{{ fmtInt(addTradeCalc.net) }}</div></div>
+                  <div><div style="font-size:10px;color:#aaa;margin-bottom:2px">手續費（估）</div><div class="num-font" style="color:#666">{{ fmtInt(addTradeCalc.feeEst) }}</div></div>
+                  <div><div style="font-size:10px;color:#aaa;margin-bottom:2px">淨收付（估）</div><div class="num-font font-bold" :class="addTradeForm.type.includes('賣')?'val-pos':'val-neg'">{{ fmtInt(addTradeCalc.net) }}</div></div>
                 </div>
               </div>
               <div>
-                <label style="display:block;font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">手續費（空白自動計算）</label>
+                <label style="display:block;font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">手續費（空白自動）</label>
                 <input v-model="addTradeForm.fee" type="number" step="1" min="0" class="input-custom" placeholder="自動計算">
               </div>
               <div>
-                <label style="display:block;font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">交易稅（空白自動計算）</label>
+                <label style="display:block;font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">交易稅（空白自動）</label>
                 <input v-model="addTradeForm.tax" type="number" step="1" min="0" class="input-custom" placeholder="賣出時自動計算">
               </div>
               <div>
@@ -815,7 +720,9 @@
             <div v-if="addTradeMsg" :style="addTradeError?'background:rgba(248,113,113,.1);color:#f87171':'background:rgba(52,211,153,.1);color:#34d399'" style="margin-top:12px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;text-align:center">{{ addTradeMsg }}</div>
           </div>
           <div style="padding:12px 20px 16px;border-top:1px solid #f0f0f0;flex-shrink:0">
-            <button @click="submitManualTrade" :disabled="addTradeSubmitting" class="btn btn-primary" style="width:100%;font-size:15px;padding:13px;display:flex;align-items:center;justify-content:center;gap:8px"><i :class="addTradeSubmitting?'ph ph-spinner spin':'ph ph-check-circle'" style="font-size:18px"></i>{{ addTradeSubmitting?'儲存中...':'確認新增到交易紀錄' }}</button>
+            <button @click="submitManualTrade" :disabled="addTradeSubmitting" class="btn btn-primary" style="width:100%;font-size:15px;padding:13px;display:flex;align-items:center;justify-content:center;gap:8px">
+              <i :class="addTradeSubmitting?'ph ph-spinner spin':'ph ph-check-circle'" style="font-size:18px"></i>{{ addTradeSubmitting?'儲存中...':'確認新增到交易紀錄' }}
+            </button>
           </div>
         </div>
       </transition>
@@ -861,11 +768,23 @@
     </div>
   </transition>
 
-
 </div>
 
 <script>
 const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
+
+// ── fetch 包裝：呼叫 GAS doPost ──────────────────────────────
+async function callGAS(action, args = []) {
+  const url = getGasUrl();
+  if (!url) throw new Error('尚未設定 GAS Web App 網址，請至「設定」頁填入。');
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' }, // GAS doPost 需要 text/plain 繞過 CORS preflight
+    body: JSON.stringify({ action, args }),
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
 
 createApp({
   setup() {
@@ -879,17 +798,23 @@ createApp({
     const settingsData = ref({});
     const settingsSchema = ref([]);
     const settingsLoading = ref(false);
-
     const showDetailModal = ref(false);
     const currentDetailStock = ref({ symbol:'', name:'' });
     const currentDetailList = ref([]);
     const detailType = ref('holdings');
-    const showPwdModal = ref(false);
-    const pwdForm = ref({ old:'', new1:'', new2:'' });
-    const pwdMsg = ref('');
-    const pwdError = ref(false);
 
-    // 市場分析
+    // GAS URL 管理
+    const gasUrlInput = ref(getGasUrl());
+    const currentGasUrl = ref(getGasUrl());
+    const updateGasUrl = () => {
+      const v = gasUrlInput.value.trim();
+      if (!v || !v.startsWith('https://script.google.com')) { alert('請輸入正確的 GAS Web App 網址'); return; }
+      localStorage.setItem(GAS_URL_KEY, v);
+      currentGasUrl.value = v;
+      alert('✅ 網址已更新，重新整理後生效');
+    };
+
+    // 分析相關
     const analysisHistory = ref([]);
     const analysisLoading = ref(false);
     const analysisRunning = ref(false);
@@ -900,194 +825,24 @@ createApp({
     const expandedIdx = ref(null);
     const analysisResult = ref(null);
     const includeDividend = ref(false);
-
-    // 說明頁資料
-    const docsSheets = [
-      { icon:'⚙️', name:'設定',        bg:'rgba(88,129,87,.1)',    tag:'手動填寫', tagBg:'rgba(88,129,87,.1)',   tagColor:'#588157', desc:'系統所有參數，包含 Gmail 標籤、券商折數、FinMind Token、DCA 標的等。首次使用執行 installWizard_Init() 自動建立。', warn:'' },
-      { icon:'📝', name:'交易紀錄',     bg:'rgba(58,90,64,.1)',     tag:'自動擷取', tagBg:'rgba(58,90,64,.1)',    tagColor:'#3a5a40', desc:'由 Gmail 自動擷取成交回報寫入。成交類別：現買、現賣、沖買、沖賣、股票股利。股票代碼為文字格式（00878，非 878）。', warn:'代碼格式異常請執行 fixStockCodes_Global()' },
-      { icon:'📋', name:'期初庫存',     bg:'rgba(188,108,37,.1)',   tag:'手動填一次',tagBg:'rgba(188,108,37,.1)', tagColor:'#bc6c25', desc:'系統建立前已持有的股票，手動填入一次即可。賣出時系統自動扣除，不需再維護。', warn:'' },
-      { icon:'📦', name:'庫存紀錄',     bg:'rgba(56,189,248,.1)',   tag:'自動重建', tagBg:'rgba(56,189,248,.1)',  tagColor:'#0284c7', desc:'由 rebuildAll_B_SAFE() 自動重建，I 欄現價為 GOOGLEFINANCE 公式。市場分析讀取此表的現價。', warn:'請勿手動編輯，每次重建會清空覆蓋' },
-      { icon:'🌱', name:'股利狀況',     bg:'rgba(221,161,94,.1)',   tag:'自動新增', tagBg:'rgba(221,161,94,.1)',  tagColor:'#bc6c25', desc:'由 FinMind API 自動抓取歷年配息，只新增不覆蓋。需設定 FINMIND_TOKEN 才能正常運作。', warn:'' },
-      { icon:'💰', name:'已實現損益',   bg:'rgba(188,108,37,.1)',   tag:'自動重建', tagBg:'rgba(188,108,37,.1)',  tagColor:'#bc6c25', desc:'由 rebuildRealizedPnL_FIFO_SAFE() 以 FIFO 計算。顯示每筆賣出的淨獲利、持有天數、每日獲利。每次執行清空重建。', warn:'' },
-      { icon:'📅', name:'定期定額',     bg:'rgba(88,129,87,.1)',    tag:'自動新增', tagBg:'rgba(88,129,87,.1)',   tagColor:'#588157', desc:'由 appendDCAFromHoldings_SAFE() 從庫存篩選 DCA 標的，計算累計股息與個人殖利率。只新增不覆蓋。', warn:'' },
-      { icon:'🤖', name:'市場分析紀錄', bg:'rgba(56,189,248,.08)',  tag:'自動新增', tagBg:'rgba(56,189,248,.1)',  tagColor:'#0284c7', desc:'每次在 App 按「立即分析」後，Gemini 的完整分析結果自動存入。可查看所有歷史分析，不限筆數。', warn:'' },
-      { icon:'🚨', name:'錯誤通知紀錄', bg:'rgba(248,113,113,.08)', tag:'自動記錄', tagBg:'rgba(248,113,113,.1)', tagColor:'#dc2626', desc:'系統執行時的錯誤自動記錄於此，同時發送 Email 通知（需設定 ALERT_TO）。排查問題時優先查這裡。', warn:'' },
-    ];
-    const docsSchedule = [
-      { time:'11:00', label:'更新股利',    desc:'從 FinMind API 抓取最新配息資料', color:'#dda15e' },
-      { time:'12:00', label:'更新定期定額', desc:'彙整 DCA 持股，計算累計殖利率',   color:'#dda15e' },
-      { time:'18:00', label:'擷取信件',    desc:'從 Gmail 抓取當日成交回報',        color:'#588157' },
-      { time:'18:30', label:'更新庫存',    desc:'重建庫存紀錄，更新 GOOGLEFINANCE 現價', color:'#3a5a40' },
-      { time:'19:00', label:'計算損益',    desc:'FIFO 重算所有已實現損益',          color:'#3a5a40' },
-    ];
-    const docsAnalysisFlow = [
-      { icon:'👆', label:'按下立即分析' },
-      { icon:'📦', label:'讀取庫存紀錄' },
-      { icon:'✍️', label:'組成提示詞' },
-      { icon:'🤖', label:'GAS呼叫\nGemini' },
-      { icon:'📋', label:'解析JSON\n建議清單' },
-      { icon:'💾', label:'存入試算表' },
-      { icon:'📊', label:'畫面顯示' },
-    ];
-    const docsDimensions = [
-      { icon:'🛢️', label:'中東衝突 × 油價',   desc:'伊朗戰爭、霍爾木茲封鎖、能源成本對台灣製造業影響' },
-      { icon:'🏦', label:'聯準會利率',          desc:'降息預期、資金成本變化、對成長股估值的影響' },
-      { icon:'💵', label:'美元 × 台幣匯率',     desc:'匯率止貶是外資回流的前置訊號，最重要的觀察點之一' },
-      { icon:'🔖', label:'美國關稅政策',        desc:'台美 15% 協議現況、半導體 232 條款後續' },
-      { icon:'🤖', label:'AI 供應鏈需求',       desc:'台積電月營收、輝達走勢、五大 CSP 資本支出能見度' },
-      { icon:'💰', label:'外資動向',            desc:'現貨買賣超趨勢、期貨未平倉口數、是否出現回流台股訊號' },
-      { icon:'🌏', label:'地緣政治',            desc:'台海情勢、美中科技戰、A 股資金流向蹺蹺板效應' },
-    ];
-    const docsFunctions = [
-      { icon:'📧', label:'擷取信件',    desc:'從 Gmail 抓成交回報寫入交易紀錄' },
-      { icon:'📦', label:'更新庫存',    desc:'重建庫存紀錄 FIFO 成本' },
-      { icon:'🌱', label:'更新股利',    desc:'FinMind API 抓最新配息' },
-      { icon:'📅', label:'更新定期',    desc:'彙整 DCA 標的殖利率' },
-      { icon:'💰', label:'計算損益',    desc:'FIFO 重算已實現損益' },
-    ];
-    const docsWarnings = [
-      { icon:'⚠️', text:'修改程式碼後必須重新部署新版本才會生效：部署 → 管理部署 → 編輯 → 建立新版本 → 部署，並清除瀏覽器快取。', bg:'rgba(251,191,36,.06)', border:'rgba(251,191,36,.2)', color:'#92400e' },
-      { icon:'🔑', text:'Gemini API Key 存於 GAS Script Properties。', bg:'rgba(56,189,248,.06)', border:'rgba(56,189,248,.2)', color:'#0c4a6e' },
-      { icon:'📦', text:'《庫存紀錄》由系統自動重建，請勿手動編輯。要修改歷史資料請在《交易紀錄》或《期初庫存》更改後重新重建。', bg:'rgba(248,113,113,.06)', border:'rgba(248,113,113,.2)', color:'#7f1d1d' },
-    ];
-    const docsFAQ = [
-      { q:'App 開啟後一直轉圈圈', a:'確認已重新部署新版本，並清除瀏覽器快取後重新開啟。' },
-      { q:'股利資料沒有更新', a:'確認《設定》的 FINMIND_TOKEN 已填入有效 Token。可查《錯誤通知紀錄》工作表看詳細錯誤。' },
-      { q:'市場分析失敗，顯示 API 錯誤', a:'重新進入「市場分析」分頁，輸入 Gemini API Key 後點「儲存 Key」。確認顯示「✓ 已設定」再按立即分析。' },
-      { q:'庫存現價全部是 0 或 —', a:'GOOGLEFINANCE 公式需時間更新。在試算表按 Ctrl+R 強制重算，或等待 5-10 分鐘後再按更新庫存。' },
-      { q:'股票代碼顯示 878 而非 00878', a:'在 GAS 編輯器執行 fixStockCodes_Global() 一次，即可修復所有工作表的代碼格式。' },
-      { q:'PDF 附件無法解鎖', a:'確認《設定》的 ID_NUMBER 填的是本人身分證字號，CLOUD_RUN_URL 填的是正確 Cloud Run 服務網址。' },
-      { q:'如何取得 Gemini API Key', a:'前往 aistudio.google.com，登入後點「Get API key」→「Create API key」，複製 AIza 開頭的字串貼入 App 即可。' },
-    ];
-
-    setTimeout(() => { const el = document.getElementById('loading-screen'); if (el) el.style.display = 'none'; }, 800);
-
-    const totalReturnItems = ref([
-      { key:'realized',   label:'已實現損益', checked:true, value:0 },
-      { key:'dividend',   label:'歷年總股利', checked:true, value:0 },
-      { key:'unrealized', label:'帳面未實現', checked:true, value:0 },
-    ]);
-    watch(dashboard, d => {
-      totalReturnItems.value[0].value = d.summary.realizedProfit  || 0;
-      totalReturnItems.value[1].value = d.summary.totalDividend   || 0;
-      totalReturnItems.value[2].value = d.summary.unrealizedProfit || 0;
-    }, { deep: true });
-    const computedTotalReturn  = computed(() => totalReturnItems.value.filter(i=>i.checked).reduce((s,i)=>s+i.value,0));
-    const computedTotalFormula = computed(() => { const p=totalReturnItems.value.filter(i=>i.checked).map(i=>i.label); return p.length?'('+p.join(' + ')+')'  :'請勾選項目'; });
-
-    const tabs = [
-      { id:'dashboard', name:'儀表板',    icon:'ph-squares-four' },
-      { id:'holdings',  name:'庫存紀錄',  icon:'ph-chart-pie-slice' },
-      { id:'dividends', name:'股利狀況',  icon:'ph-plant' },
-      { id:'realized',  name:'已實現損益',icon:'ph-coins' },
-      { id:'dca',       name:'定期定額',  icon:'ph-calendar-check' },
-      { id:'review',    name:'待確認',    icon:'ph-clipboard-text' },
-      { id:'analysis',  name:'市場分析',  icon:'ph-robot' },
-      { id:'wealth',    name:'資產追蹤',  icon:'ph-piggy-bank' },
-      { id:'docs',      name:'系統說明',  icon:'ph-book-open' },
-      { id:'settings',  name:'設定',      icon:'ph-gear' },
-    ];
-    const bottomTabs = [
-      { id:'dashboard', shortName:'總覽', icon:'ph-squares-four',   iconFill:'ph-fill ph-squares-four' },
-      { id:'holdings',  shortName:'庫存', icon:'ph-chart-pie-slice', iconFill:'ph-fill ph-chart-pie-slice' },
-      { id:'analysis',  shortName:'分析', icon:'ph-robot',           iconFill:'ph-fill ph-robot' },
-      { id:'wealth',    shortName:'資產', icon:'ph-piggy-bank',      iconFill:'ph-fill ph-piggy-bank' },
-      { id:'settings',  shortName:'設定', icon:'ph-gear',            iconFill:'ph-fill ph-gear' },
-    ];
-    const actionFunctions = [
-      { key:'ingestFromGmail_Plaintext_SAFE', label:'擷取信件', icon:'ph-envelope-open' },
-      { key:'rebuildAll_B_SAFE',              label:'更新庫存', icon:'ph-database' },
-      { key:'runDividendsFullCycle_SAFE',     label:'更新股利', icon:'ph-plant' },
-      { key:'appendDCAFromHoldings_SAFE',     label:'更新定期', icon:'ph-calendar-check' },
-      { key:'rebuildRealizedPnL_FIFO_SAFE',   label:'計算損益', icon:'ph-coins' },
-    ];
-    const functionRunning = ref(false);
-    const functionMsg = ref('');
-    const functionError = ref(false);
-
-    const fmtInt = v => { if (v==null||v==='') return '0'; const n=parseFloat(v); return isNaN(n)?'0':new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(n); };
-    const fmtDec = v => { if (v==null||v==='') return '0.00'; const n=parseFloat(v); return isNaN(n)?'0.00':new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n); };
-    const runGAS = (fn, args=[]) => new Promise((resolve,reject) => {
-      if (typeof google==='undefined'||typeof google.script==='undefined') return reject(new Error('Not in GAS'));
-      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fn](...args);
-    });
-
-    const selectTab = id => { currentTab.value=id; isMobileSidebarOpen.value=false; };
-    watch(currentTab, v => { localStorage.setItem('last_tab',v); searchText.value=''; loadData(v); });
-
-    const loadData = async tab => {
-      if (tab==='dashboard') {
-        const res = await runGAS('api_getDashboard');
-        if (res.ok) { dashboard.value=res; setTimeout(()=>renderCharts(res.charts),100); }
-      } else if (tab==='settings') {
-        settingsLoading.value=true;
-        const res = await runGAS('api_getSettingsSchema');
-        if (res.ok) {
-          settingsSchema.value=res.schema;
-          settingsData.value=res.values;
-        }
-        settingsLoading.value=false;
-      } else if (tab==='analysis') {
-        analysisLoading.value=true;
-        const [hRes,kRes] = await Promise.all([runGAS('api_getAnalysisHistory'),runGAS('api_getGeminiKeyStatus')]);
-        if (hRes.ok) analysisHistory.value=hRes.data;
-        if (kRes.ok) GeminiKeyStatus.value=kRes;
-        analysisLoading.value=false;
-      } else if (tab==='wealth') {
-        wealthLoading.value=true;
-        const hRes = await runGAS('api_getWealthHistory');
-        if (hRes.ok) {
-          wealthHistory.value=hRes.data;
-          if (hRes.last) {
-            const last=hRes.last;
-            ['rate_usd','rate_jpy','rate_cny'].forEach(k=>{ if(last[k]!==undefined) wealthRates.value[k]=last[k]; });
-            WEALTH_ACCTS.forEach(inst=>inst.accounts.forEach(acc=>{ if(last[acc.key]!==undefined) wealthForm.value[acc.key]=last[acc.key]; }));
-          }
-          setTimeout(()=>renderWealthChart(),200);
-        }
-        wealthLoading.value=false;
-      } else if (tab==='docs') {
-        // 說明頁資料寫死在前端，不需呼叫後端
-      } else {
-        listLoading.value=true; listData.value=[];
-        const res = await runGAS('api_getDataList',[tab]);
-        if (res.ok) { listData.value=res.data; if (res.config) holdingsConfig.value=res.config; }
-        listLoading.value=false;
-      }
-    };
-
-    onMounted(() => loadData(currentTab.value));
-
-    // 市場分析：儲存 Key
-    const saveGeminiKey = async () => {
-      const k = GeminiKeyInput.value.trim();
-      if (!k) { alert('請先輸入 API Key'); return; }
-      const res = await runGAS('api_saveGeminiKey',[k]);
-      if (res.ok) {
-        GeminiKeyStatus.value = { hasKey:true, masked:k.slice(0,14)+'...' };
-        GeminiKeyInput.value = '';
-        alert('✅ API Key 已儲存到 Script Properties。');
-      }
-    };
-
-    // 市場分析：七大維度勾選
-    const analysisDimensions = ref([
-      { key:'oil',     label:'🛢 中東油價',  desc:'對台灣製造業的影響',         checked:true },
-      { key:'fed',     label:'🏦 聯準會利率', desc:'降息預期與資金成本變化',     checked:true },
-      { key:'fx',      label:'💵 台幣匯率',   desc:'止貶走勢與外資回流關係',     checked:true },
-      { key:'tariff',  label:'🔖 美國關稅',   desc:'台美協議與半導體政策現況',   checked:true },
-      { key:'ai',      label:'🤖 AI供應鏈',   desc:'台積電/輝達/CoWoS需求能見度', checked:true },
-      { key:'foreign', label:'💰 外資動向',   desc:'現貨買賣超與期貨未平倉部位', checked:true },
-      { key:'geo',     label:'🌏 地緣政治',   desc:'台海情勢與美中科技戰',       checked:true },
-    ]);
-
-    // 市場分析：圖片上傳
+    const userNotes = ref('');
     const uploadedImages = ref([]);
+
+    const analysisDimensions = ref([
+      { key:'oil',     label:'🛢 中東油價',  checked:true },
+      { key:'fed',     label:'🏦 聯準會利率', checked:true },
+      { key:'fx',      label:'💵 台幣匯率',   checked:true },
+      { key:'tariff',  label:'🔖 美國關稅',   checked:true },
+      { key:'ai',      label:'🤖 AI供應鏈',   checked:true },
+      { key:'foreign', label:'💰 外資動向',   checked:true },
+      { key:'geo',     label:'🌏 地緣政治',   checked:true },
+    ]);
+
     const addImages = event => {
       const files = Array.from(event.target.files);
       files.forEach(file => {
         if (uploadedImages.value.length >= 5) return;
-        if (file.size > 5 * 1024 * 1024) { alert(file.name + ' 超過 5MB，請壓縮後再上傳'); return; }
+        if (file.size > 5 * 1024 * 1024) { alert(file.name + ' 超過 5MB'); return; }
         const reader = new FileReader();
         reader.onload = e => {
           const dataUrl = e.target.result;
@@ -1099,35 +854,136 @@ createApp({
     };
     const removeImage = idx => uploadedImages.value.splice(idx, 1);
 
-    // 市場分析：使用者自填資訊
-    const userNotes = ref('');
+    setTimeout(() => { const el = document.getElementById('loading-screen'); if (el) el.style.display = 'none'; }, 800);
 
-    // 市場分析：解析 JSON
+    const totalReturnItems = ref([
+      { key:'realized',   label:'已實現損益', checked:true, value:0 },
+      { key:'dividend',   label:'歷年總股利', checked:true, value:0 },
+      { key:'unrealized', label:'帳面未實現', checked:true, value:0 },
+    ]);
+    watch(dashboard, d => {
+      totalReturnItems.value[0].value = d.summary.realizedProfit   || 0;
+      totalReturnItems.value[1].value = d.summary.totalDividend    || 0;
+      totalReturnItems.value[2].value = d.summary.unrealizedProfit || 0;
+    }, { deep: true });
+    const computedTotalReturn  = computed(() => totalReturnItems.value.filter(i=>i.checked).reduce((s,i)=>s+i.value,0));
+    const computedTotalFormula = computed(() => { const p=totalReturnItems.value.filter(i=>i.checked).map(i=>i.label); return p.length?'('+p.join(' + ')+')':'請勾選項目'; });
+
+    const tabs = [
+      { id:'dashboard', name:'儀表板',    icon:'ph-squares-four' },
+      { id:'holdings',  name:'庫存紀錄',  icon:'ph-chart-pie-slice' },
+      { id:'dividends', name:'股利狀況',  icon:'ph-plant' },
+      { id:'realized',  name:'已實現損益',icon:'ph-coins' },
+      { id:'dca',       name:'定期定額',  icon:'ph-calendar-check' },
+      { id:'analysis',  name:'市場分析',  icon:'ph-robot' },
+      { id:'pending',   name:'待確認交易',icon:'ph-clock-countdown' },
+      { id:'wealth',    name:'資產追蹤',  icon:'ph-piggy-bank' },
+      { id:'settings',  name:'設定',      icon:'ph-gear' },
+    ];
+    const bottomTabs = [
+      { id:'dashboard', shortName:'總覽',  icon:'ph-squares-four',     iconFill:'ph-fill ph-squares-four' },
+      { id:'holdings',  shortName:'庫存',  icon:'ph-chart-pie-slice',  iconFill:'ph-fill ph-chart-pie-slice' },
+      { id:'realized',  shortName:'損益',  icon:'ph-coins',             iconFill:'ph-fill ph-coins' },
+      { id:'pending',   shortName:'待確認', icon:'ph-clock-countdown',  iconFill:'ph-fill ph-clock-countdown' },
+      { id:'wealth',    shortName:'資產',  icon:'ph-piggy-bank',        iconFill:'ph-fill ph-piggy-bank' },
+      { id:'settings',  shortName:'設定',  icon:'ph-gear',              iconFill:'ph-fill ph-gear' },
+    ];
+    const actionFunctions = [
+      { key:'ingestFromGmail_Plaintext_SAFE', label:'擷取信件', icon:'ph-envelope-open' },
+      { key:'rebuildAll_B_SAFE',              label:'更新庫存', icon:'ph-database' },
+      { key:'runDividendsFullCycle_SAFE',     label:'更新股利', icon:'ph-plant' },
+      { key:'appendDCAFromHoldings_SAFE',     label:'更新定期', icon:'ph-calendar-check' },
+      { key:'rebuildDCADividends_SAFE',       label:'重算股息', icon:'ph-arrow-clockwise' },
+      { key:'rebuildRealizedPnL_FIFO_SAFE',   label:'計算損益', icon:'ph-coins' },
+    ];
+    const functionRunning = ref(false);
+    const functionMsg = ref('');
+    const functionError = ref(false);
+
+    const fmtInt = v => { if (v==null||v==='') return '0'; const n=parseFloat(v); return isNaN(n)?'0':new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(n); };
+    const fmtDec = v => { if (v==null||v==='') return '0.00'; const n=parseFloat(v); return isNaN(n)?'0.00':new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n); };
+
+    const selectTab = id => { currentTab.value=id; isMobileSidebarOpen.value=false; };
+    watch(currentTab, v => { localStorage.setItem('last_tab',v); searchText.value=''; loadData(v); });
+
+    const loadData = async tab => {
+      try {
+        if (tab==='dashboard') {
+          const res = await callGAS('api_getDashboard');
+          if (res.ok) { dashboard.value=res; setTimeout(()=>renderCharts(res.charts),100); }
+        } else if (tab==='settings') {
+          settingsLoading.value=true;
+          const res = await callGAS('api_getSettingsSchema');
+          if (res.ok) { settingsSchema.value=res.schema; settingsData.value=res.values; }
+          settingsLoading.value=false;
+        } else if (tab==='analysis') {
+          analysisLoading.value=true;
+          const [hRes,kRes] = await Promise.all([callGAS('api_getAnalysisHistory'),callGAS('api_getGeminiKeyStatus')]);
+          if (hRes.ok) analysisHistory.value=hRes.data;
+          if (kRes.ok) GeminiKeyStatus.value=kRes;
+          analysisLoading.value=false;
+        } else if (tab==='pending') {
+          await loadPending();
+        } else if (tab==='wealth') {
+          wealthLoading.value=true;
+          const hRes = await callGAS('api_getWealthHistory');
+          if (hRes.ok) {
+            wealthHistory.value=hRes.data;
+            if (hRes.last) {
+              const last=hRes.last;
+              ['rate_usd','rate_jpy','rate_cny'].forEach(k=>{ if(last[k]!==undefined) wealthRates.value[k]=last[k]; });
+              WEALTH_ACCTS.forEach(inst=>inst.accounts.forEach(acc=>{ if(last[acc.key]!==undefined) wealthForm.value[acc.key]=last[acc.key]; }));
+            }
+            setTimeout(()=>renderWealthChart(),200);
+          }
+          wealthLoading.value=false;
+        } else {
+          listLoading.value=true; listData.value=[];
+          const res = await callGAS('api_getDataList',[tab]);
+          if (res.ok) { listData.value=res.data; if (res.config) holdingsConfig.value=res.config; }
+          listLoading.value=false;
+        }
+      } catch(e) {
+        console.error(e);
+        if (tab==='settings') settingsLoading.value=false;
+        if (tab==='wealth')   wealthLoading.value=false;
+        listLoading.value=false;
+        analysisLoading.value=false;
+      }
+    };
+
+    onMounted(() => {
+      if (getGasUrl()) {
+        loadData(currentTab.value);
+        loadPending(); // 啟動時預先載入待確認數量
+      }
+    });
+
+    // ── Gemini Key ──
+    const saveGeminiKey = async () => {
+      const k = GeminiKeyInput.value.trim();
+      if (!k) { alert('請先輸入 API Key'); return; }
+      const res = await callGAS('api_saveGeminiKey',[k]);
+      if (res.ok) { GeminiKeyStatus.value={hasKey:true,masked:k.slice(0,8)+'...'}; GeminiKeyInput.value=''; alert('✅ API Key 已儲存'); }
+    };
+
     const parseGeminiJSON = text => {
-  try {
-    // 移除 thinking 標籤（Gemini 2.5 有時會輸出 <think> 或 <thinking>）
-    text = text.replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/g, '').trim();
+      try {
+        text = text.replace(/<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/g, '').trim();
+        const m = text.match(/```json\s*([\s\S]*?)```/);
+        if (m) return JSON.parse(m[1].trim());
+        const m2 = text.match(/\{[\s\S]*\}/);
+        if (m2) return JSON.parse(m2[0]);
+      } catch(e) { console.error('JSON 解析失敗:', e); }
+      return null;
+    };
 
-    // 優先抓 ```json ... ``` 區塊
-    const m = text.match(/```json\s*([\s\S]*?)```/);
-    if (m) return JSON.parse(m[1].trim());
-
-    // 其次直接抓 { ... } 最外層
-    const m2 = text.match(/\{[\s\S]*\}/);
-    if (m2) return JSON.parse(m2[0]);
-  } catch(e) {
-    console.error('JSON 解析失敗:', e, text);
-  }
-  return null;
-};
-
-    // 市場分析：主函式
     const runAnalysis = async () => {
       if (analysisRunning.value) return;
       if (!GeminiKeyStatus.value.hasKey) { analysisMsg.value='❌ 請先輸入並儲存 Gemini API Key'; analysisError.value=true; return; }
       analysisRunning.value=true; analysisMsg.value='⏳ 步驟 1/3：讀取庫存紀錄...'; analysisError.value=false;
       try {
-        const holdRes = await runGAS('api_getHoldingsForAnalysis');
+        const holdRes = await callGAS('api_getHoldingsForAnalysis');
         if (!holdRes.ok||!holdRes.data.length) throw new Error(holdRes.msg||'庫存紀錄無資料');
         const holdings = holdRes.data;
         analysisMsg.value='⏳ 步驟 2/3：呼叫 Gemini 分析（約 30 秒）...';
@@ -1137,77 +993,32 @@ createApp({
           const pStr = h.curPrice?`，現價$${h.curPrice}，帳面${h.capPnl>=0?'+':''}NT$${(h.capPnl||0).toLocaleString()}（${h.pct>=0?'+':''}${h.pct||0}%）`:'（現價未更新）';
           return `- [${h.code}] ${h.name}：均價$${h.avgCost}，${h.qty.toLocaleString()}股，成本NT$${h.totalCost.toLocaleString()}${pStr}`;
         }).join('\n');
-        const notesSection = userNotes.value.trim()
-          ? `\n【使用者提供的近期市場資訊 / 新聞（請重點參考）】\n${userNotes.value.trim()}\n` : '';
-        const imgCount = uploadedImages.value.length;
-        const imgNote = imgCount ? `\n【已附上 ${imgCount} 張圖片，請仔細讀取圖中內容並納入分析】\n` : '';
+        const notesSection = userNotes.value.trim() ? `\n【使用者提供的近期市場資訊】\n${userNotes.value.trim()}\n` : '';
         const activeDims = analysisDimensions.value.filter(d => d.checked);
-        const dimLines = activeDims.map((d, i) => `${i+1}. ${d.label}：${d.desc}`).join('\n');
-        const step1 = activeDims.length
-          ? `步驟一：簡要分析以下 ${activeDims.length} 個市場維度（每點1-2句，務必簡潔）\n${dimLines}`
-          : '步驟一：略過維度分析（使用者未勾選任何維度）';
-        const prompt = `你是專業的台灣股票市場分析師，今天是 ${today}。
-
-【目前持股組合】
-${holdingDesc}
-${notesSection}${imgNote}
-任務分三步：
-
-${step1}
-
-步驟二：針對每一檔持股，逐一給出操作建議與理由。
-
-步驟三：根據當前市況，推薦 3～5 檔目前未持有的台股（ETF 或個股均可），說明原因。
-
-最後輸出 JSON（必須包含，不可省略，不要加任何說明文字在 JSON 外）：
-\`\`\`json
-{
-  "marketSummary": "市場現況一句話總結",
-  "marketSignal": "偏多",
-  "holdings": [
-    {"code": "股票代碼（純數字，如2330）", "action": "繼續持有", "actionEn": "hold", "reason": "原因說明"}
-  ],
-  "suggestions": [
-    {"code": "股票代碼（純數字）", "name": "股票名稱", "action": "建議買入", "reason": "買入原因"}
-  ]
-}
-\`\`\`
-
-marketSignal 只能填：偏多、偏空、中性
-holdings[].action 只能填：繼續持有、加碼、減碼、賣出
-holdings[].actionEn 對應：hold、buy、reduce、sell
-holdings 必須涵蓋所有持股：${heldCodes}`;
+        const dimLines = activeDims.map((d, i) => `${i+1}. ${d.label}`).join('\n');
+        const step1 = activeDims.length ? `步驟一：簡要分析以下 ${activeDims.length} 個市場維度（每點1-2句）\n${dimLines}` : '步驟一：略過維度分析';
+        const prompt = `你是專業的台灣股票市場分析師，今天是 ${today}。\n\n【目前持股組合】\n${holdingDesc}\n${notesSection}\n任務分三步：\n\n${step1}\n\n步驟二：針對每一檔持股，逐一給出操作建議與理由。\n\n步驟三：根據當前市況，推薦 3～5 檔目前未持有的台股，說明原因。\n\n最後輸出 JSON：\n\`\`\`json\n{\n  "marketSummary": "市場現況一句話總結",\n  "marketSignal": "偏多",\n  "holdings": [\n    {"code": "股票代碼（純數字）", "action": "繼續持有", "actionEn": "hold", "reason": "原因"}\n  ],\n  "suggestions": [\n    {"code": "股票代碼", "name": "股票名稱", "action": "建議買入", "reason": "原因"}\n  ]\n}\n\`\`\`\nmarketSignal 只能填：偏多、偏空、中性\nholdings[].actionEn 對應：hold、buy、reduce、sell\nholdings 必須涵蓋所有持股：${heldCodes}`;
         analysisMsg.value='⏳ 步驟 3/3：等待 Gemini 回應...';
         const imgPayload = uploadedImages.value.map(img => ({ mimeType: img.mimeType, base64: img.base64 }));
-        const GeminiRes = await runGAS('api_callGemini', [prompt, imgPayload]);
+        const GeminiRes = await callGAS('api_callGemini', [prompt, imgPayload]);
         if (!GeminiRes.ok) throw new Error(GeminiRes.msg);
         const parsed = parseGeminiJSON(GeminiRes.text);
-        if (!parsed) throw new Error('Gemini 回傳格式無法解析，請稍後重試');
-        // 對持股做 fuzzy match：先精確比對 code，再 fallback 用名稱比對
+        if (!parsed) throw new Error('Gemini 回傳格式無法解析');
         const findHolding = h => {
           let s = (parsed.holdings||[]).find(x => String(x.code).trim() === String(h.code).trim());
-          if (!s) s = (parsed.holdings||[]).find(x => String(x.code).includes(h.code) || h.name.includes(String(x.code)));
+          if (!s) s = (parsed.holdings||[]).find(x => String(x.code).includes(h.code));
           return s || {};
         };
-        const mergedHoldings = holdings.map(h => {
-          const s = findHolding(h);
-          return {...h, action:s.action||'—', actionEn:s.actionEn||'hold', reason:s.reason||''};
-        });
-        analysisResult.value = {
-          ts: new Date().toLocaleString('zh-TW'),
-          marketSummary: parsed.marketSummary || '（摘要解析失敗）',
-          marketSignal: parsed.marketSignal || '中性',
-          holdings: mergedHoldings,
-          suggestions: parsed.suggestions || [],
-          fullText: GeminiRes.text,
-        };
-        const saveRes = await runGAS('api_saveAnalysis',[GeminiRes.text]);
+        const mergedHoldings = holdings.map(h => { const s=findHolding(h); return {...h,action:s.action||'—',actionEn:s.actionEn||'hold',reason:s.reason||''}; });
+        analysisResult.value = { ts:new Date().toLocaleString('zh-TW'), marketSummary:parsed.marketSummary||'（摘要解析失敗）', marketSignal:parsed.marketSignal||'中性', holdings:mergedHoldings, suggestions:parsed.suggestions||[] };
+        const saveRes = await callGAS('api_saveAnalysis',[GeminiRes.text]);
         if (saveRes.ok) analysisHistory.value = [{ts:saveRes.ts,text:GeminiRes.text},...analysisHistory.value].slice(0,30);
-        analysisMsg.value=`✅ 分析完成並已儲存（${saveRes.ts||''}）`; analysisError.value=false; expandedIdx.value=null;
+        analysisMsg.value=`✅ 分析完成（${saveRes.ts||''}）`; analysisError.value=false;
       } catch(e) { analysisMsg.value=`❌ ${e.message}`; analysisError.value=true; }
       finally { analysisRunning.value=false; setTimeout(()=>{analysisMsg.value='';},10000); }
     };
 
+    // ── 資料表 ──
     const realizedFilter = ref({ year:'ALL', name:'' });
     const sortKey = ref(''), sortOrder = ref(1);
     const holdingsSortKey = ref(''), holdingsSortOrder = ref(1);
@@ -1330,9 +1141,13 @@ holdings 必須涵蓋所有持股：${heldCodes}`;
         for(const b of Object.values(item.brokers)){if(b.totalQty>0.001){fQ+=b.totalQty;fP+=b.totalPrincipal;fF+=b.totalBuyFee;}}
         if(fQ<0.1) return null;
         const avgPrice=fP/fQ,mv=fQ*item.curPrice;
-        const sFee=Math.round(mv*0.001425),sTax=Math.round(mv*0.003);
-        const profit=Math.round(mv-(fP+fF)-sFee-sTax);
-        const profitPct=(fP+fF)>0?((profit/(fP+fF))*100).toFixed(2):'0.00';
+        // ★ 修正：賣出手續費套用折數（預估）
+        const cfg2=holdingsConfig.value;
+        const sellDiscount=cfg2.defaultDiscount!==undefined?cfg2.defaultDiscount:0.28;
+        const sFee=Math.round(mv*0.001425*sellDiscount);
+        const sTax=Math.round(mv*0.003);
+        const profit=item.curPrice>0?Math.round(mv-(fP+fF)-sFee-sTax):0;
+        const profitPct=(fP+fF)>0&&item.curPrice>0?((profit/(fP+fF))*100).toFixed(2):'—';
         return{symbol:item.symbol,name:item.name,qty:Math.round(fQ),avgPrice:avgPrice.toFixed(2),currPrice:item.curPrice,profit,profitPct,details:item.details.sort((a,b)=>String(a.date).localeCompare(String(b.date)))};
       }).filter(x=>x!==null);
       if(holdingsSortKey.value){
@@ -1390,28 +1205,23 @@ holdings 必須涵蓋所有持股：${heldCodes}`;
     };
 
     const saveSettings = async () => {
-      const res=await runGAS('api_saveSettings',[JSON.parse(JSON.stringify(settingsData.value))]);
+      const res=await callGAS('api_saveSettings',[JSON.parse(JSON.stringify(settingsData.value))]);
       alert(res.msg);
     };
-    const closePwdModal = () => { showPwdModal.value=false; pwdForm.value={old:'',new1:'',new2:''}; pwdMsg.value=''; };
-    const changePassword = async () => {
-      pwdMsg.value=''; pwdError.value=false;
-      if(pwdForm.value.new1!==pwdForm.value.new2){pwdError.value=true;pwdMsg.value='確認密碼不一致';return;}
-      try{const res=await runGAS('api_changePassword',[pwdForm.value.old,pwdForm.value.new1]);if(res.ok){pwdError.value=false;pwdMsg.value='修改成功';setTimeout(closePwdModal,1000);}else{pwdError.value=true;pwdMsg.value=res.msg;}}catch(e){pwdError.value=true;pwdMsg.value=e.message;}
-    };
 
-    const fnNames={'ingestFromGmail_Plaintext_SAFE':'擷取信件','rebuildAll_B_SAFE':'更新庫存紀錄','runDividendsFullCycle_SAFE':'更新股利','appendDCAFromHoldings_SAFE':'更新定期定額','rebuildRealizedPnL_FIFO_SAFE':'計算已實現損益'};
+    const fnNames={'ingestFromGmail_Plaintext_SAFE':'擷取信件','rebuildAll_B_SAFE':'更新庫存紀錄','runDividendsFullCycle_SAFE':'更新股利','appendDCAFromHoldings_SAFE':'更新定期定額','rebuildDCADividends_SAFE':'重算DCA股息','rebuildRealizedPnL_FIFO_SAFE':'計算已實現損益'};
     const runFunction = async funcName => {
       if(functionRunning.value) return;
       functionRunning.value=funcName; functionMsg.value=`正在執行：${fnNames[funcName]}...`; functionError.value=false;
       try{
-        await runGAS(funcName);
+        await callGAS(funcName);
         functionMsg.value=`✅ ${fnNames[funcName]} 執行完成`; functionError.value=false;
-        setTimeout(()=>{loadData('dashboard');if(funcName==='rebuildAll_B_SAFE'&&currentTab.value==='holdings')loadData('holdings');if(funcName==='runDividendsFullCycle_SAFE'&&currentTab.value==='dividends')loadData('dividends');if(funcName==='appendDCAFromHoldings_SAFE'&&currentTab.value==='dca')loadData('dca');if(funcName==='rebuildRealizedPnL_FIFO_SAFE'&&currentTab.value==='realized')loadData('realized');},1000);
+        setTimeout(()=>loadData('dashboard'),1000);
       }catch(e){functionMsg.value=`❌ 執行失敗：${e.message||'未知錯誤'}`;functionError.value=true;}
       finally{functionRunning.value=false;setTimeout(()=>{functionMsg.value='';functionError.value=false;},4000);}
     };
 
+    // ── Dashboard chart ──
     let chart3=null;
     const renderCharts = data => {
       if(chart3)chart3.destroy();
@@ -1433,9 +1243,10 @@ holdings 必須涵蓋所有持股：${heldCodes}`;
       });
     };
 
-    // ══ 資產追蹤 ══════════════════════════════════════════════════════════
+    // ══ 資產追蹤 ══════════════════════════════════════════════
+    // ★ 新增 cathay_us_stock（美股，USD）
     const WEALTH_ACCTS = [
-      { key:'ctbc',      name:'中國信託',       icon:'ph-buildings', color:'#4a7a9b', accounts:[
+      { key:'ctbc',       name:'中國信託',          icon:'ph-buildings',      color:'#4a7a9b', accounts:[
         { key:'ctbc_twd_saving', label:'台幣活存',   currency:'TWD' },
         { key:'ctbc_twd_fixed',  label:'台幣定存',   currency:'TWD' },
         { key:'ctbc_usd_saving', label:'美金活存',   currency:'USD' },
@@ -1443,45 +1254,44 @@ holdings 必須涵蓋所有持股：${heldCodes}`;
         { key:'ctbc_cny_saving', label:'人民幣活存', currency:'CNY' },
         { key:'ctbc_cny_fixed',  label:'人民幣定存', currency:'CNY' },
       ]},
-      { key:'cathay_bank', name:'國泰世華',     icon:'ph-vault', color:'#4a8a5e', accounts:[
+      { key:'cathay_bank', name:'國泰世華',          icon:'ph-vault',          color:'#4a8a5e', accounts:[
         { key:'cathay_twd', label:'台幣活存', currency:'TWD' },
         { key:'cathay_usd', label:'美金活存', currency:'USD' },
       ]},
-      { key:'taishin',   name:'台新銀行',       icon:'ph-credit-card', color:'#b85c3a', accounts:[
+      { key:'taishin',    name:'台新銀行',           icon:'ph-credit-card',    color:'#b85c3a', accounts:[
         { key:'taishin_twd', label:'台幣活存', currency:'TWD' },
         { key:'taishin_jpy', label:'日幣活存', currency:'JPY' },
       ]},
-      { key:'richart',   name:'Richart（台新數位）', icon:'ph-device-mobile', color:'#c4883a', accounts:[
+      { key:'richart',    name:'Richart（台新數位）', icon:'ph-device-mobile', color:'#c4883a', accounts:[
         { key:'richart_twd',  label:'台幣活存', currency:'TWD' },
         { key:'richart_fund', label:'基金市值', currency:'TWD' },
       ]},
-      { key:'chang',     name:'彰銀',           icon:'ph-coins', color:'#7a6545', accounts:[
+      { key:'chang',      name:'彰銀',               icon:'ph-coins',          color:'#7a6545', accounts:[
         { key:'chang_twd', label:'台幣活存', currency:'TWD' },
       ]},
-      { key:'land',      name:'合庫',           icon:'ph-leaf', color:'#5a7a6a', accounts:[
+      { key:'land',       name:'合庫',               icon:'ph-leaf',           color:'#5a7a6a', accounts:[
         { key:'land_twd', label:'台幣活存', currency:'TWD' },
       ]},
-      { key:'post',      name:'郵局',           icon:'ph-mailbox', color:'#9a4a4a', accounts:[
+      { key:'post',       name:'郵局',               icon:'ph-mailbox',        color:'#9a4a4a', accounts:[
         { key:'post_twd', label:'台幣活存', currency:'TWD' },
       ]},
-      { key:'uni_sec',   name:'統一證券',       icon:'ph-chart-line-up', color:'#6a4a8a', accounts:[
+      { key:'uni_sec',    name:'統一證券',            icon:'ph-chart-line-up',  color:'#6a4a8a', accounts:[
         { key:'uni_stock', label:'台股總市值', currency:'TWD' },
       ]},
-      { key:'cathay_sec',name:'國泰證券',       icon:'ph-chart-bar', color:'#3a7a7a', accounts:[
-        { key:'cathay_stock', label:'台股總市值', currency:'TWD' },
+      { key:'cathay_sec', name:'國泰證券',            icon:'ph-chart-bar',      color:'#3a7a7a', accounts:[
+        { key:'cathay_stock',    label:'台股總市值', currency:'TWD' },
+        { key:'cathay_us_stock', label:'美股總市值', currency:'USD' },  // ← 新增
       ]},
     ];
 
-    // 預先把所有 key 初始化為 0，確保 Vue 3 響應式追蹤正常
-    // 輔助：機構 key → 帳戶 key 列表 / 帳戶幣別 / 投資類帳戶
     const INST_ACCT_MAP_   = Object.fromEntries(WEALTH_ACCTS.map(i=>[i.key, i.accounts.map(a=>a.key)]));
     const ACCT_CURRENCY_   = Object.fromEntries(WEALTH_ACCTS.flatMap(i=>i.accounts.map(a=>[a.key,a.currency])));
-    const INVEST_KEYS_SET_ = new Set(['uni_stock','cathay_stock','richart_fund']);
+    const INVEST_KEYS_SET_ = new Set(['uni_stock','cathay_stock','cathay_us_stock','richart_fund']);
 
     const _wealthFormInit = Object.fromEntries(
       WEALTH_ACCTS.flatMap(inst => inst.accounts.map(acc => [acc.key, 0]))
     );
-    const wealthForm        = ref(_wealthFormInit);
+    const wealthForm        = ref({..._wealthFormInit});
     const wealthRates       = ref({ rate_usd:32, rate_jpy:0.22, rate_cny:4.4 });
     const wealthHistory     = ref([]);
     const wealthLoading     = ref(false);
@@ -1490,8 +1300,8 @@ holdings 必須涵蓋所有持股：${heldCodes}`;
     const wealthError       = ref(false);
     const wealthReminderType= ref('quarterly');
     const wealthChartInst   = ref(null);
-    const wealthChartFilter = ref(WEALTH_ACCTS.map(i=>i.key)); // 預設全選
-    const wealthTimeRange   = ref('all'); // 'all' | '1y' | '2y' | '3y'
+    const wealthChartFilter = ref(WEALTH_ACCTS.map(i=>i.key));
+    const wealthTimeRange   = ref('all');
 
     const filteredWealthHistory = computed(() => {
       const all = wealthHistory.value;
@@ -1528,11 +1338,10 @@ holdings 必須涵蓋所有持股：${heldCodes}`;
       wealthSaving.value=true; wealthMsg.value='';
       try {
         const payload={...wealthForm.value, ...wealthRates.value, totalTWD:wealthTotalTWD.value};
-        const res=await runGAS('api_saveWealthSnapshot',[payload]);
+        const res=await callGAS('api_saveWealthSnapshot',[payload]);
         if (res.ok) {
-          const savedTotal = res.total || 0;
-          wealthMsg.value='✅ 快照已儲存！台幣總資產：' + fmtInt(savedTotal) + ' 元'; wealthError.value=false;
-          const hRes=await runGAS('api_getWealthHistory');
+          wealthMsg.value='✅ 快照已儲存！台幣總資產：'+fmtInt(res.total||0)+' 元'; wealthError.value=false;
+          const hRes=await callGAS('api_getWealthHistory');
           if (hRes.ok) { wealthHistory.value=hRes.data; setTimeout(()=>renderWealthChart(),100); }
         } else { wealthMsg.value='❌ '+(res.msg||'儲存失敗'); wealthError.value=true; }
       } catch(e) { wealthMsg.value='❌ '+e.message; wealthError.value=true; }
@@ -1540,16 +1349,12 @@ holdings 必須涵蓋所有持股：${heldCodes}`;
     };
 
     const setupWealthTrigger = async () => {
-      const res=await runGAS('api_setupWealthTrigger',[wealthReminderType.value]);
+      const res=await callGAS('api_setupWealthTrigger',[wealthReminderType.value]);
       alert(res.ok?'✅ '+(res.msg||'提醒設定完成'):'❌ '+(res.msg||'設定失敗'));
     };
 
-    // 防抖：多次快速點擊只執行最後一次
     let _wealthRenderTimer = null;
-    const scheduleRender_ = () => {
-      clearTimeout(_wealthRenderTimer);
-      _wealthRenderTimer = setTimeout(renderWealthChart, 80);
-    };
+    const scheduleRender_ = () => { clearTimeout(_wealthRenderTimer); _wealthRenderTimer = setTimeout(renderWealthChart, 80); };
 
     const toggleWealthFilter = key => {
       const arr = wealthChartFilter.value;
@@ -1557,22 +1362,16 @@ holdings 必須涵蓋所有持股：${heldCodes}`;
       wealthChartFilter.value = idx >= 0 ? arr.filter(k => k !== key) : [...arr, key];
       scheduleRender_();
     };
-
     const toggleAllWealthFilter = () => {
-      wealthChartFilter.value = wealthChartFilter.value.length === WEALTH_ACCTS.length
-        ? [] : WEALTH_ACCTS.map(i => i.key);
+      wealthChartFilter.value = wealthChartFilter.value.length === WEALTH_ACCTS.length ? [] : WEALTH_ACCTS.map(i => i.key);
       scheduleRender_();
     };
 
-    // 目前圖表資料列（供 datalabels formatter 跨更新引用）
     let _wRows = [];
-
     const renderWealthChart = () => {
       try {
         const canvas = document.getElementById('wealthChart');
         if (!canvas) return;
-
-        // 先確保 canvas 上沒有任何殘留 Chart 實例
         const stale = Chart.getChart(canvas);
         if (stale) stale.destroy();
         wealthChartInst.value = null;
@@ -1603,28 +1402,20 @@ holdings 必須涵蓋所有持股：${heldCodes}`;
 
         const fmtL = v => v>=10000?(v/10000).toFixed(0)+'萬':fmtInt(v);
 
-        // ── 建立圖表 ───────────────────────────────────────────────
-        const ctx = canvas;
-
-        // ── 建立圖表 ───────────────────────────────────────────────
-        const barDlBase = {
-          color:'white', anchor:'center', align:'center',
-          font:{size:10,weight:'bold'},
-        };
-        wealthChartInst.value = new Chart(ctx, {
+        // ★ 修正：padding-top 加大到 52，讓 line datalabels 不蓋到圖例
+        const barDlBase = { color:'white', anchor:'center', align:'center', font:{size:10,weight:'bold'} };
+        wealthChartInst.value = new Chart(canvas, {
           type:'bar',
           data:{ labels, datasets:[
             { type:'bar', label:'銀行存款', data:_wRows.map(r=>r.bank),
-              backgroundColor:'rgba(88,129,87,.8)', borderRadius:4,
-              maxBarThickness:64, stack:'main', order:2,
+              backgroundColor:'rgba(88,129,87,.8)', borderRadius:4, maxBarThickness:64, stack:'main', order:2,
               datalabels:{ ...barDlBase,
                 display: c => (_wRows[c.dataIndex]?.bank||0) > 0,
                 formatter:(v,c)=>{ const t=_wRows[c.dataIndex]?.total||1; return fmtL(v)+'\n'+Math.round(v/t*100)+'%'; }
               }
             },
             { type:'bar', label:'投資', data:_wRows.map(r=>r.invest),
-              backgroundColor:'rgba(188,108,37,.85)', borderRadius:4,
-              maxBarThickness:64, stack:'main', order:2,
+              backgroundColor:'rgba(188,108,37,.85)', borderRadius:4, maxBarThickness:64, stack:'main', order:2,
               datalabels:{ ...barDlBase,
                 display: c => (_wRows[c.dataIndex]?.invest||0) > 0,
                 formatter:(v,c)=>{ const t=_wRows[c.dataIndex]?.total||1; return fmtL(v)+'\n'+Math.round(v/t*100)+'%'; }
@@ -1634,16 +1425,18 @@ holdings 必須涵蓋所有持股：${heldCodes}`;
               borderColor:'#344e41', backgroundColor:'transparent',
               borderWidth:2.5, pointRadius:5, pointBackgroundColor:'#344e41',
               tension:.3, fill:false, order:1,
-              datalabels:{ display:true, color:'#344e41', anchor:'end', align:'top', offset:4,
+              // ★ 修正：offset 加大到 12，避免數字蓋到折線點
+              datalabels:{ display:true, color:'#344e41', anchor:'end', align:'top', offset:12,
                 font:{size:10,weight:'bold'}, formatter:v=>fmtL(v) }
             },
           ]},
           options:{ responsive:true, maintainAspectRatio:false,
-            layout:{ padding:{top:24} },
+            // ★ 修正：padding-top 加大到 52
+            layout:{ padding:{top:24, bottom:4} },
             interaction:{mode:'index', intersect:false},
             plugins:{
-              legend:{display:true, position:'top', align:'end',
-                labels:{usePointStyle:true, pointStyle:'circle', boxWidth:8, padding:12, color:'#588157', font:{size:11,weight:'bold'}}},
+              legend:{ display:true, position:'bottom', align:'center',
+                labels:{usePointStyle:true, pointStyle:'circle', boxWidth:8, padding:14, color:'#588157', font:{size:11,weight:'bold'}} },
               tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmtInt(c.parsed.y)+' 元'}},
               datalabels:{}
             },
@@ -1663,6 +1456,100 @@ holdings 必須涵蓋所有持股：${heldCodes}`;
     };
 
     watch(wealthTimeRange, scheduleRender_);
+
+    // ══ 待確認交易 ══════════════════════════════════
+    const pendingList      = ref([]);
+    const pendingSelected  = ref([]);
+    const pendingLoading   = ref(false);
+    const pendingConfirming= ref(false);
+    const pendingMsg       = ref('');
+    const pendingError     = ref(false);
+
+    const pendingGrouped = computed(() => {
+      const g = {};
+      pendingList.value.forEach(r => {
+        const d = String(r['成交日期']||'').slice(0,10);
+        if (!g[d]) g[d] = [];
+        g[d].push(r);
+      });
+      return g;
+    });
+
+    const loadPending = async () => {
+      pendingLoading.value = true;
+      pendingSelected.value = [];
+      try {
+        const res = await callGAS('api_getPendingTrades');
+        if (res.ok) pendingList.value = res.data;
+      } catch(e) { console.error(e); }
+      pendingLoading.value = false;
+    };
+
+    const toggleSelectAll = (e) => {
+      if (e.target.checked) pendingSelected.value = pendingList.value.map(r => r._rowIndex);
+      else pendingSelected.value = [];
+    };
+
+    const togglePendingRow = (rowIndex) => {
+      const idx = pendingSelected.value.indexOf(rowIndex);
+      if (idx >= 0) pendingSelected.value.splice(idx, 1);
+      else pendingSelected.value.push(rowIndex);
+    };
+
+    // 修改成交類別時重算交易稅
+    const recalcTax = (row) => {
+      const side   = String(row['成交類別']||'');
+      const amount = parseFloat(String(row['成交金額']||'0').replace(/,/g,'')) || 0;
+      const fee    = parseFloat(String(row['手續費']||'0').replace(/,/g,''))    || 0;
+      if (side.includes('沖賣')) {
+        row['交易稅'] = Math.round(amount * 0.0015);
+      } else if (side.includes('賣')) {
+        row['交易稅'] = Math.round(amount * 0.003);
+      } else {
+        row['交易稅'] = 0;
+      }
+    };
+
+    const confirmSelected = async () => {
+      if (!pendingSelected.value.length) return;
+      pendingConfirming.value = true;
+      pendingMsg.value = '';
+      try {
+        const rows = pendingList.value
+          .filter(r => pendingSelected.value.includes(r._rowIndex))
+          .map(r => ({
+            _rowIndex:    r._rowIndex,
+            '成交類別':   r['成交類別'],
+            '交易稅':     r['交易稅'],
+          }));
+        const res = await callGAS('api_confirmTrades', [rows]);
+        if (res.ok) {
+          pendingMsg.value = `✅ ${res.msg}`;
+          pendingError.value = false;
+          await loadPending();
+          // 重新整理儀表板
+          setTimeout(() => loadData('dashboard'), 500);
+        } else {
+          pendingMsg.value = '❌ ' + (res.msg || '寫入失敗');
+          pendingError.value = true;
+        }
+      } catch(e) {
+        pendingMsg.value = '❌ ' + e.message;
+        pendingError.value = true;
+      }
+      pendingConfirming.value = false;
+      setTimeout(() => { pendingMsg.value = ''; }, 5000);
+    };
+
+    const deletePendingRow = async (row) => {
+      if (!confirm(`確定要刪除這筆交易？\n${row['成交日期']} ${String(row['股票代碼']||'').replace(/^'+/,'')} ${row['成交類別']} ${row['股數']}股`)) return;
+      try {
+        await callGAS('api_deletePendingTrade', [row._rowIndex]);
+        pendingList.value = pendingList.value.filter(r => r._rowIndex !== row._rowIndex);
+        pendingSelected.value = pendingSelected.value.filter(i => i !== row._rowIndex);
+      } catch(e) { alert('刪除失敗：' + e.message); }
+    };
+    // ════════════════════════════════════════════════
 
     // ── 手動新增交易 ──────────────────────────────────────────────
     const showAddTradeModal  = ref(false);
@@ -1709,7 +1596,7 @@ holdings 必須涵蓋所有持股：${heldCodes}`;
       addTradeMsg.value        = '';
       addTradeError.value      = false;
       try {
-        const res = await runGAS('api_addManualTrade', [f]);
+        const res = await callGAS('api_addManualTrade', [f]);
         if (res.ok) {
           addTradeMsg.value   = res.msg || '已成功新增';
           addTradeError.value = false;
@@ -1742,11 +1629,13 @@ holdings 必須涵蓋所有持股：${heldCodes}`;
       GeminiKeyStatus,GeminiKeyInput,expandedIdx,analysisResult,userNotes,includeDividend,
       analysisDimensions,uploadedImages,addImages,removeImage,
       saveGeminiKey,runAnalysis,
-      docsSheets,docsSchedule,docsAnalysisFlow,docsDimensions,docsFunctions,docsWarnings,docsFAQ,
       WEALTH_ACCTS,wealthForm,wealthRates,wealthHistory,wealthLoading,wealthSaving,wealthMsg,wealthError,
       wealthTotalTWD,wealthBreakdown,
       wealthReminderType,wealthChartFilter,wealthTimeRange,filteredWealthHistory,
       saveWealth,setupWealthTrigger,toggleWealthFilter,toggleAllWealthFilter,
+      gasUrlInput,currentGasUrl,updateGasUrl,
+      pendingList,pendingSelected,pendingLoading,pendingConfirming,pendingMsg,pendingError,
+      pendingGrouped,loadPending,toggleSelectAll,togglePendingRow,recalcTax,confirmSelected,deletePendingRow,
       showAddTradeModal,addTradeForm,addTradeCalc,addTradeSubmitting,addTradeMsg,addTradeError,
       openAddTradeModal,closeAddTradeModal,submitManualTrade,
     };
@@ -1756,31 +1645,27 @@ holdings 必須涵蓋所有持股：${heldCodes}`;
   props: ['modelValue'],
   emits: ['update:modelValue'],
   setup(props, { emit }) {
-    const { ref, computed, watch } = Vue;
+    const { ref, computed, onMounted, onBeforeUnmount } = Vue;
     const showCalendar = ref(false);
+    const calTop = ref(0);
+    const calLeft = ref(0);
+    const triggerEl = ref(null);
     const today = new Date();
     const viewYear = ref(today.getFullYear());
     const viewMonth = ref(today.getMonth());
-
     const parseDate = (v) => {
       if (!v) return null;
       const m = String(v).trim().match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
       return m ? new Date(+m[1], +m[2]-1, +m[3]) : null;
     };
-
     const selectedDate = computed(() => parseDate(props.modelValue));
     const displayValue = computed(() => {
       const d = parseDate(props.modelValue);
       if (!d) return '';
-      const y = d.getFullYear();
-      const mo = String(d.getMonth()+1).padStart(2,'0');
-      const day = String(d.getDate()).padStart(2,'0');
-      return `${y}/${mo}/${day}`;
+      return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
     });
-
     const monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
     const monthLabel = computed(() => `${viewYear.value} 年 ${monthNames[viewMonth.value]}`);
-
     const calendarDays = computed(() => {
       const firstDay = new Date(viewYear.value, viewMonth.value, 1).getDay();
       const total = new Date(viewYear.value, viewMonth.value+1, 0).getDate();
@@ -1788,35 +1673,32 @@ holdings 必須涵蓋所有持股：${heldCodes}`;
       for (let i = 1; i <= total; i++) cells.push(i);
       return cells;
     });
-
     const prevMonth = () => { if (viewMonth.value===0){viewYear.value--;viewMonth.value=11;}else viewMonth.value--; };
     const nextMonth = () => { if (viewMonth.value===11){viewYear.value++;viewMonth.value=0;}else viewMonth.value++; };
-
     const isSelected = (day) => {
       if (!selectedDate.value) return false;
-      return selectedDate.value.getFullYear()===viewYear.value &&
-             selectedDate.value.getMonth()===viewMonth.value &&
-             selectedDate.value.getDate()===day;
+      return selectedDate.value.getFullYear()===viewYear.value && selectedDate.value.getMonth()===viewMonth.value && selectedDate.value.getDate()===day;
     };
-
-    const toggleCalendar = () => {
+    const toggleCalendar = (e) => {
       if (!showCalendar.value) {
-        const d = selectedDate.value || today;
-        viewYear.value = d.getFullYear();
-        viewMonth.value = d.getMonth();
+        const d=selectedDate.value||today; viewYear.value=d.getFullYear(); viewMonth.value=d.getMonth();
+        const rect = e.currentTarget.getBoundingClientRect();
+        calTop.value = rect.bottom + 4;
+        calLeft.value = rect.left;
       }
       showCalendar.value = !showCalendar.value;
     };
-
     const selectDay = (day) => {
-      const y = viewYear.value;
-      const mo = String(viewMonth.value+1).padStart(2,'0');
-      const d = String(day).padStart(2,'0');
-      emit('update:modelValue', `${y}/${mo}/${d}`);
+      const mo=String(viewMonth.value+1).padStart(2,'0'), d=String(day).padStart(2,'0');
+      emit('update:modelValue', `${viewYear.value}/${mo}/${d}`);
       showCalendar.value = false;
     };
-
-    return { showCalendar, viewYear, viewMonth, monthLabel, calendarDays, prevMonth, nextMonth, isSelected, toggleCalendar, selectDay, displayValue };
+    const onClickOutside = (e) => {
+      if (showCalendar.value && !e.target.closest('.dp-cal')) showCalendar.value = false;
+    };
+    onMounted(() => document.addEventListener('click', onClickOutside, true));
+    onBeforeUnmount(() => document.removeEventListener('click', onClickOutside, true));
+    return { showCalendar, calTop, calLeft, viewYear, viewMonth, monthLabel, calendarDays, prevMonth, nextMonth, isSelected, toggleCalendar, selectDay, displayValue };
   },
   template: `
     <div style="position:relative;width:100%">
@@ -1824,24 +1706,24 @@ holdings 必須涵蓋所有持股：${heldCodes}`;
         <span :style="displayValue?'color:#344e41':'color:#aaa;font-size:12px'">{{ displayValue || 'YYYY/MM/DD' }}</span>
         <i class="ph ph-calendar-blank" style="color:#588157;flex-shrink:0;font-size:15px"></i>
       </div>
-      <div v-if="showCalendar" style="position:absolute;top:calc(100% + 4px);left:0;z-index:9999;background:white;border:1px solid #e8e6e1;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:14px;min-width:252px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <button @click.stop="prevMonth" style="border:none;background:#f4f1ec;cursor:pointer;color:#588157;font-size:16px;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700">‹</button>
-          <span style="font-weight:700;color:#344e41;font-size:13px">{{ monthLabel }}</span>
-          <button @click.stop="nextMonth" style="border:none;background:#f4f1ec;cursor:pointer;color:#588157;font-size:16px;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700">›</button>
+      <Teleport to="body">
+        <div v-if="showCalendar" class="dp-cal" :style="{position:'fixed',top:calTop+'px',left:calLeft+'px',zIndex:99999,background:'white',border:'1px solid #e8e6e1',borderRadius:'12px',boxShadow:'0 8px 24px rgba(0,0,0,.14)',padding:'14px',minWidth:'252px'}">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <button @click.stop="prevMonth" style="border:none;background:#f4f1ec;cursor:pointer;color:#588157;font-size:16px;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700">‹</button>
+            <span style="font-weight:700;color:#344e41;font-size:13px">{{ monthLabel }}</span>
+            <button @click.stop="nextMonth" style="border:none;background:#f4f1ec;cursor:pointer;color:#588157;font-size:16px;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700">›</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);text-align:center;margin-bottom:4px">
+            <div v-for="d in ['日','一','二','三','四','五','六']" :key="d" style="font-size:10px;font-weight:700;color:#aaa;padding:4px 0">{{ d }}</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);text-align:center;gap:2px">
+            <template v-for="(day,i) in calendarDays" :key="i">
+              <button v-if="day" @click.stop="selectDay(day)" :style="isSelected(day)?'background:#588157;color:white;':'background:none;color:#344e41;'" style="border:none;cursor:pointer;width:32px;height:32px;border-radius:50%;font-size:12px;font-weight:500;margin:1px auto;display:block;transition:background .15s">{{ day }}</button>
+              <div v-else style="width:32px;height:32px"></div>
+            </template>
+          </div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(7,1fr);text-align:center;margin-bottom:4px">
-          <div v-for="d in ['日','一','二','三','四','五','六']" :key="d" style="font-size:10px;font-weight:700;color:#aaa;padding:4px 0">{{ d }}</div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(7,1fr);text-align:center;gap:2px">
-          <template v-for="(day,i) in calendarDays" :key="i">
-            <button v-if="day" @click.stop="selectDay(day)"
-              :style="isSelected(day)?'background:#588157;color:white;':'background:none;color:#344e41;'"
-              style="border:none;cursor:pointer;width:32px;height:32px;border-radius:50%;font-size:12px;font-weight:500;margin:1px auto;display:block;transition:background .15s">{{ day }}</button>
-            <div v-else style="width:32px;height:32px"></div>
-          </template>
-        </div>
-      </div>
+      </Teleport>
     </div>
   `
 })
