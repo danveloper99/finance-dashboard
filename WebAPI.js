@@ -770,6 +770,39 @@ function api_batchDeletePendingTrades(rowIndices) {
   return { ok: true, count: rowIndices.length };
 }
 
+function api_updatePendingTrade(rowIndex, fields) {
+  const sh = ensureStagingSheet_();
+  if (!rowIndex || rowIndex < 2 || rowIndex > sh.getLastRow())
+    return { ok: false, msg: '無效的列索引' };
+  const status = String(sh.getRange(rowIndex, 15).getValue());
+  if (status === '已刪除' || status === '已確認')
+    return { ok: false, msg: `此交易已${status}，無法修改` };
+
+  const existing = sh.getRange(rowIndex, 1, 1, 14).getValues()[0];
+  const side   = String(fields['成交類別'] || existing[4]);
+  const qty    = Number(fields['股數'])    || Number(existing[5]) || 0;
+  const price  = Number(fields['成交價'])  || Number(existing[6]) || 0;
+  const amount = Math.round(qty * price * 100) / 100;
+  const fee    = fields['手續費'] !== undefined ? Number(fields['手續費']) : Number(existing[9]);
+  const tax    = fields['交易稅'] !== undefined ? Number(fields['交易稅']) : Number(existing[10]);
+  const net    = side.includes('賣') ? amount - fee - tax : -(amount + fee);
+
+  sh.getRange(rowIndex, 3).setNumberFormat('@'); // 股票代碼保持文字格式
+  sh.getRange(rowIndex, 1, 1, 14).setValues([[
+    fields['成交日期'] || existing[0],
+    existing[1],
+    String(fields['股票代碼'] !== undefined ? fields['股票代碼'] : existing[2]),
+    fields['股票名稱'] !== undefined ? fields['股票名稱'] : existing[3],
+    side,
+    qty, price, amount,
+    existing[8],
+    fee, tax, net,
+    fields['証券商'] !== undefined ? fields['証券商'] : existing[12],
+    fields['備註']   !== undefined ? fields['備註']   : existing[13],
+  ]]);
+  return { ok: true, msg: '已更新', data: { '成交金額': amount, '手續費': fee, '交易稅': tax, '淨收付金額': net } };
+}
+
 /* ============================================================
    doPost — 統一 API 入口
    ============================================================ */
@@ -792,6 +825,7 @@ function doPost(e) {
       'api_runDividendsUpdate', 'appendDCAFromHoldings_SAFE',
       'rebuildRealizedPnL_FIFO_SAFE', 'rebuildDCADividends_SAFE',
       'api_getPendingTrades', 'api_confirmTrades', 'api_deletePendingTrade', 'api_batchDeletePendingTrades',
+      'api_updatePendingTrade',
       'api_addManualTrade', 'api_lookupStockName',
     ]);
 

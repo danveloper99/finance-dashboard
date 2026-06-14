@@ -585,6 +585,10 @@
                 <span v-if="row['成交類別'].includes('沖賣')" style="font-size:10px">（半價）</span>
               </div>
             </div>
+            <!-- 編輯 -->
+            <button @click="openEditModal(row)" style="color:#588157;background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0;opacity:.5" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.5'" title="編輯">
+              <i class="ph ph-pencil-simple" style="font-size:18px"></i>
+            </button>
             <!-- 刪除 -->
             <button @click="deletePendingRow(row)" style="color:#dc2626;background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0;opacity:.6" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.6'">
               <i class="ph ph-trash" style="font-size:18px"></i>
@@ -735,6 +739,84 @@
           <div style="padding:12px 20px 16px;border-top:1px solid #f0f0f0;flex-shrink:0">
             <button @click="submitManualTrade" :disabled="addTradeSubmitting" class="btn btn-primary" style="width:100%;font-size:15px;padding:13px;display:flex;align-items:center;justify-content:center;gap:8px">
               <i :class="addTradeSubmitting?'ph ph-spinner spin':'ph ph-check-circle'" style="font-size:18px"></i>{{ addTradeSubmitting?'儲存中...':'確認新增到交易紀錄' }}
+            </button>
+          </div>
+        </div>
+      </transition>
+    </div>
+  </transition>
+
+  <!-- EDIT PENDING TRADE MODAL -->
+  <transition name="fade">
+    <div v-if="showEditModal" class="modal-backdrop" @click.self="closeEditModal">
+      <transition name="modal">
+        <div class="modal-sheet">
+          <div class="modal-handle"></div>
+          <div style="padding:20px 20px 0;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+            <h3 style="font-weight:700;color:#3a5a40;font-size:16px;display:flex;align-items:center;gap:8px"><i class="ph ph-pencil-simple" style="font-size:20px;color:#3a5a40"></i> 編輯待確認交易</h3>
+            <button @click="closeEditModal" style="width:30px;height:30px;border-radius:50%;background:#f0f0f0;display:flex;align-items:center;justify-content:center;color:#666;flex-shrink:0;border:none;cursor:pointer"><i class="ph ph-x" style="font-size:16px"></i></button>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:16px 20px 8px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div style="grid-column:span 2">
+                <label style="display:block;font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">成交日期 *</label>
+                <input v-model="editTradeForm.date" type="date" class="input-custom">
+              </div>
+              <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">股票代碼 *</label>
+                <input v-model="editTradeForm.code" type="text" class="input-custom" placeholder="例：00878">
+              </div>
+              <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">股票名稱</label>
+                <input v-model="editTradeForm.name" type="text" class="input-custom">
+              </div>
+              <div style="grid-column:span 2">
+                <label style="display:block;font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">成交類別 *</label>
+                <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px">
+                  <label v-for="t in ['現買','現賣','沖買','沖賣','集買','集賣']" :key="t" :style="editTradeForm.type===t?'background:#3a5a40;color:white;border-color:#3a5a40':'background:white;border-color:#dad7cd;color:#588157'" style="display:flex;align-items:center;justify-content:center;padding:8px 2px;border-radius:10px;cursor:pointer;user-select:none;font-size:12px;font-weight:700;border:1.5px solid;transition:all .2s"><input type="radio" v-model="editTradeForm.type" :value="t" style="display:none">{{ t }}</label>
+                </div>
+              </div>
+              <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">股數 *</label>
+                <input v-model="editTradeForm.qty" type="number" step="1" min="1" class="input-custom">
+              </div>
+              <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">成交價 *</label>
+                <input v-model="editTradeForm.price" type="number" step="0.01" min="0" class="input-custom">
+              </div>
+              <div style="grid-column:span 2;background:#f8faf8;border-radius:10px;padding:12px 16px">
+                <div style="font-size:10px;font-weight:700;color:#aaa;letter-spacing:.08em;margin-bottom:8px">金額預覽</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+                  <div><div style="font-size:10px;color:#aaa;margin-bottom:2px">成交金額</div><div class="num-font font-bold" style="color:#3a5a40">{{ fmtInt(editTradeCalc.amount) }}</div></div>
+                  <div><div style="font-size:10px;color:#aaa;margin-bottom:2px">手續費</div><div class="num-font" style="color:#666">{{ fmtInt(editTradeCalc.fee) }}</div></div>
+                  <div><div style="font-size:10px;color:#aaa;margin-bottom:2px">淨收付</div><div class="num-font font-bold" :class="editTradeForm.type&&editTradeForm.type.includes('賣')?'val-pos':'val-neg'">{{ fmtInt(editTradeCalc.net) }}</div></div>
+                </div>
+              </div>
+              <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">手續費</label>
+                <input v-model="editTradeForm.fee" type="number" step="1" min="0" class="input-custom">
+              </div>
+              <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">交易稅</label>
+                <input v-model="editTradeForm.tax" type="number" step="1" min="0" class="input-custom">
+              </div>
+              <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">證券商</label>
+                <select v-model="editTradeForm.broker" class="input-custom">
+                  <option value="">（不填）</option>
+                  <option v-for="b in addTradeBrokerOptions" :key="b" :value="b">{{ b }}</option>
+                </select>
+              </div>
+              <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">備註</label>
+                <input v-model="editTradeForm.note" type="text" class="input-custom">
+              </div>
+            </div>
+            <div v-if="editTradeMsg" :style="editTradeError?'background:rgba(248,113,113,.1);color:#f87171':'background:rgba(52,211,153,.1);color:#34d399'" style="margin-top:12px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;text-align:center">{{ editTradeMsg }}</div>
+          </div>
+          <div style="padding:12px 20px 16px;border-top:1px solid #f0f0f0;flex-shrink:0">
+            <button @click="submitEditTrade" :disabled="editTradeSubmitting" class="btn btn-primary" style="width:100%;font-size:15px;padding:13px;display:flex;align-items:center;justify-content:center;gap:8px">
+              <i :class="editTradeSubmitting?'ph ph-spinner spin':'ph ph-check-circle'" style="font-size:18px"></i>{{ editTradeSubmitting?'儲存中...':'儲存修改' }}
             </button>
           </div>
         </div>
@@ -1604,6 +1686,105 @@ createApp({
     };
     // ════════════════════════════════════════════════
 
+    // ── 編輯待確認交易 ──────────────────────────────────────────────
+    const showEditModal       = ref(false);
+    const editTradeRow        = ref(null);
+    const editTradeSubmitting = ref(false);
+    const editTradeMsg        = ref('');
+    const editTradeError      = ref(false);
+    const editTradeForm       = ref({
+      date:'', code:'', name:'', type:'現買', qty:'', price:'', fee:'', tax:'', broker:'', note:'',
+    });
+
+    const editTradeCalc = computed(() => {
+      const qty    = parseFloat(editTradeForm.value.qty)   || 0;
+      const price  = parseFloat(editTradeForm.value.price) || 0;
+      const amount = qty * price;
+      const fee    = parseFloat(editTradeForm.value.fee)   || 0;
+      const tax    = parseFloat(editTradeForm.value.tax)   || 0;
+      const t      = editTradeForm.value.type || '現買';
+      const net    = t.includes('賣') ? amount - fee - tax : -(amount + fee);
+      return { amount, fee, tax, net };
+    });
+
+    const openEditModal = (row) => {
+      editTradeRow.value = row;
+      editTradeForm.value = {
+        date:   String(row['成交日期'] || '').slice(0, 10),
+        code:   String(row['股票代碼'] || '').replace(/^'+/, ''),
+        name:   String(row['股票名稱'] || ''),
+        type:   String(row['成交類別'] || '現買'),
+        qty:    String(row['股數']     || ''),
+        price:  String(row['成交價']   || ''),
+        fee:    String(row['手續費']   || ''),
+        tax:    String(row['交易稅']   || ''),
+        broker: String(row['証券商']   || ''),
+        note:   String(row['備註']     || ''),
+      };
+      editTradeMsg.value   = '';
+      editTradeError.value = false;
+      showEditModal.value  = true;
+    };
+
+    const closeEditModal = () => { showEditModal.value = false; };
+
+    const submitEditTrade = async () => {
+      const f = editTradeForm.value;
+      if (!f.date || !f.code || !f.qty || !f.price) {
+        editTradeMsg.value   = '請填寫必填欄位（日期、代碼、股數、成交價）';
+        editTradeError.value = true;
+        return;
+      }
+      editTradeSubmitting.value = true;
+      editTradeMsg.value        = '';
+      editTradeError.value      = false;
+      try {
+        const res = await callGAS('api_updatePendingTrade', [
+          editTradeRow.value._rowIndex,
+          {
+            '成交日期': f.date,
+            '股票代碼': f.code,
+            '股票名稱': f.name,
+            '成交類別': f.type,
+            '股數':     Number(f.qty),
+            '成交價':   Number(f.price),
+            '手續費':   Number(f.fee) || 0,
+            '交易稅':   Number(f.tax) || 0,
+            '証券商':   f.broker,
+            '備註':     f.note,
+          }
+        ]);
+        if (res.ok) {
+          const row = editTradeRow.value;
+          const d   = res.data || {};
+          row['成交日期']   = f.date;
+          row['股票代碼']   = f.code;
+          row['股票名稱']   = f.name;
+          row['成交類別']   = f.type;
+          row['股數']       = Number(f.qty);
+          row['成交價']     = Number(f.price);
+          row['成交金額']   = d['成交金額']   ?? editTradeCalc.value.amount;
+          row['手續費']     = d['手續費']     ?? Number(f.fee);
+          row['交易稅']     = d['交易稅']     ?? Number(f.tax);
+          row['淨收付金額'] = d['淨收付金額'] ?? editTradeCalc.value.net;
+          row['証券商']     = f.broker;
+          row['備註']       = f.note;
+          editTradeMsg.value   = '✅ 已更新';
+          editTradeError.value = false;
+          setTimeout(closeEditModal, 1000);
+        } else {
+          editTradeMsg.value   = res.msg || '更新失敗';
+          editTradeError.value = true;
+        }
+      } catch(e) {
+        editTradeMsg.value   = e.message || '發生錯誤';
+        editTradeError.value = true;
+      } finally {
+        editTradeSubmitting.value = false;
+      }
+    };
+    // ════════════════════════════════════════════════
+
     // ── 手動新增交易 ──────────────────────────────────────────────
     const showAddTradeModal  = ref(false);
     const addTradeSubmitting = ref(false);
@@ -1729,6 +1910,8 @@ createApp({
       isGroupAllSelected,toggleSelectGroup,deleteSelectedRows,
       showAddTradeModal,addTradeForm,addTradeCalc,addTradeSubmitting,addTradeMsg,addTradeError,addTradeNameLoading,addTradeBrokerOptions,
       openAddTradeModal,closeAddTradeModal,submitManualTrade,
+      showEditModal,editTradeForm,editTradeCalc,editTradeSubmitting,editTradeMsg,editTradeError,
+      openEditModal,closeEditModal,submitEditTrade,
     };
   }
 })
