@@ -470,7 +470,7 @@ function parseCloudRunData_(rawData, tz) {
 
   const colMap = {
     date: ['成交日期', '交易日期'], time: ['成交時間', '時間'],
-    sym:  ['股票代碼', '股票代號', '股號', '商品代碼'],
+    sym:  ['股票代碼', '股票代號', '股號', '商品代碼', '商品名稱'],
     name: ['股票名稱', '商品名稱', '名稱'], side: ['類別', '交易別', '買賣別', '種類'],
     qty:  ['成交股數', '股數', '數量'], price:['單價', '成交單價', '成交價'],
     amt:  ['成交金額', '價金', '金額'], ord:  ['委託書號', '委託單號', '書號']
@@ -638,10 +638,9 @@ function ingestFromGmail_Plaintext() {
                 r[12] = 'CloudRun_SIP';
                 keptRows.push(r);
               } else if (!isNaN(Number(sym))) {
-                // 純數字但非已知代碼，跳過（PDF 路徑限 DCA 代碼）
+                // 純數字但非已知代碼，跳過
               } else {
-                // 非數字且無法對應到任何已知代碼（名稱誤解析為代碼），跳過
-                Logger.log(`[PDF skip] 無法識別的代碼: sym="${sym}"，已略過`);
+                keptRows.push(r);
               }
             });
             if (keptRows.length > 0) {
