@@ -339,6 +339,7 @@ function updateDividendsFromFinMind_SAFE(){ return runWithAlert_(updateDividends
 function rebuildRealizedPnL_FIFO_SAFE(){ return runWithAlert_(rebuildRealizedPnL_FIFO,'rebuildRealizedPnL_FIFO'); }
 function appendDCAFromHoldings_SAFE(){ return runWithAlert_(appendDCAFromHoldings, 'appendDCAFromHoldings'); }
 function runDividendsFullCycle_SAFE() { return runWithAlert_(runDividendsFullCycle_, 'runDividendsFullCycle'); }
+function rebuildDCADividends_SAFE() { return runWithAlert_(appendDCAFromHoldings, 'appendDCAFromHoldings'); }
 
 /* ===== 測試用 ===== */
 function testErrorAlert_SendSample() {

@@ -778,7 +778,7 @@ function doPost(e) {
       'api_saveGeminiKey', 'api_saveWealthSnapshot', 'api_getWealthHistory',
       'api_setupWealthTrigger',
       'ingestFromGmail_Plaintext_SAFE', 'rebuildAll_B_SAFE',
-      'runDividendsFullCycle_SAFE', 'appendDCAFromHoldings_SAFE',
+      'api_runDividendsUpdate', 'appendDCAFromHoldings_SAFE',
       'rebuildRealizedPnL_FIFO_SAFE', 'rebuildDCADividends_SAFE',
       'api_getPendingTrades', 'api_confirmTrades', 'api_deletePendingTrade', 'api_batchDeletePendingTrades',
       'api_addManualTrade', 'api_lookupStockName',
@@ -799,5 +799,11 @@ function doPost(e) {
     output.setContent(JSON.stringify({ ok: false, msg: err.message || String(err) }));
   }
   return output;
+}
+
+function api_runDividendsUpdate() {
+  PropertiesService.getScriptProperties().deleteProperty('DIV_CURSOR');
+  ScriptApp.newTrigger('runDividendsFullCycle_SAFE').timeBased().at(new Date(Date.now() + 3000)).create();
+  return { ok: true };
 }
 
