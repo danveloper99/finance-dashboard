@@ -590,14 +590,31 @@ function ingestFromGmail_Plaintext() {
   learnFromSheet(C.SHEET_TRADES);
   learnFromSheet(C.SHEET_OPENING);
   learnFromSheet(C.SHEET_HOLD);
+  // 從待確認交易補學：只採信代碼為數字的項目，避免名稱誤解析的髒資料污染 map
+  const stagingShTmp = ss.getSheetByName(C.SHEET_STAGING || '待確認交易');
+  if (stagingShTmp && stagingShTmp.getLastRow() > 1) {
+    stagingShTmp.getRange(2, 1, stagingShTmp.getLastRow()-1, 4).getValues().forEach(r => {
+      const c = String(r[2]||'').trim(), n = String(r[3]||'').trim().replace(/\s+/g,'');
+      if (c && n && !isNaN(Number(c)) && !nameToCodeMap.has(n)) nameToCodeMap.set(n, c);
+    });
+  }
 
   const existedOrder = new Set();
   const existedNoOrd = new Set();
 
-  // 去重用的代碼正規化：若為非數字名稱且 nameToCodeMap 有對應，換成數字代碼
+  // 去重用的代碼正規化
   const normSymForDedup_ = (s) => {
     const t = String(s||'').trim();
-    return (t && isNaN(Number(t)) && nameToCodeMap.has(t)) ? nameToCodeMap.get(t) : t;
+    if (!t || !isNaN(Number(t))) return t;
+    // 完全比對
+    if (nameToCodeMap.has(t)) return nameToCodeMap.get(t);
+    // 去掉尾端 * 等特殊字元後再比對（如「國巨*」→「國巨」）
+    const stripped = t.replace(/[*＊·•！]+$/, '').trim();
+    if (stripped && stripped !== t && nameToCodeMap.has(stripped)) return nameToCodeMap.get(stripped);
+    // 開頭是 4~6 位數字就提取為代碼（如「2327國巨*」→「2327」）
+    const numPrefix = t.match(/^(\d{4,6})/);
+    if (numPrefix) return numPrefix[1];
+    return t;
   };
   // 去重用的類別正規化：現買/沖買/集買 → 買；現賣/沖賣 → 賣
   // 避免同一筆交易因不同信件的類別標記不同（如「現買」vs「沖買」）而被當成兩筆
@@ -679,6 +696,12 @@ function ingestFromGmail_Plaintext() {
       if (rows.length > 0) parsed = parsed.concat(rows);
     }));
   }
+
+  // 合併前先正規化代碼，確保同委託單號的「國巨*」與「2327」能在 consolidate 時被合併
+  parsed.forEach(r => {
+    const sym = normSymForDedup_(String(r[2]||'').trim());
+    if (sym !== String(r[2]||'').trim()) r[2] = sym;
+  });
 
   const consolidated = consolidateByOrderNo_(parsed);
   const toWrite = [];
