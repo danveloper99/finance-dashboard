@@ -666,10 +666,10 @@ function ingestFromGmail_Plaintext() {
               if (dcaWhitelist.has(sym)) {
                 r[12] = 'CloudRun_SIP';
                 keptRows.push(r);
-              } else if (!isNaN(Number(sym))) {
-                // 純數字但非已知代碼，跳過
               } else {
-                keptRows.push(r);
+                // PDF 路徑只保留定期定額（DCA 白名單）股票
+                // 一般股票已由 HTML 信件處理，此處跳過以避免重複與代碼錯誤
+                Logger.log(`[PDF skip] sym="${sym}" 非 DCA 白名單，由 HTML 信件負責`);
               }
             });
             if (keptRows.length > 0) {
