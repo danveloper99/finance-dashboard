@@ -713,7 +713,10 @@
               </div>
               <div>
                 <label style="display:block;font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">證券商</label>
-                <input v-model="addTradeForm.broker" type="text" class="input-custom" placeholder="例：國泰證券">
+                <select v-model="addTradeForm.broker" class="input-custom">
+                  <option value="">（不填）</option>
+                  <option v-for="b in addTradeBrokerOptions" :key="b" :value="b">{{ b }}</option>
+                </select>
               </div>
               <div>
                 <label style="display:block;font-size:11px;font-weight:700;color:#588157;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">備註</label>
@@ -1596,7 +1599,17 @@ createApp({
       return { amount, feeEst, taxEst, net };
     });
 
-    const openAddTradeModal = () => {
+    // 券商下拉選項：優先從已載入的 holdingsConfig / settingsData 取，否則開 modal 時載入
+    const addTradeBrokerOptions = computed(() => {
+      const opts = new Set();
+      if (holdingsConfig.value.defaultName) opts.add(holdingsConfig.value.defaultName);
+      if (holdingsConfig.value.broker2Name)  opts.add(holdingsConfig.value.broker2Name);
+      if (settingsData.value.BROKER_DEFAULT_NAME) opts.add(settingsData.value.BROKER_DEFAULT_NAME);
+      if (settingsData.value.BROKER_2_NAME)       opts.add(settingsData.value.BROKER_2_NAME);
+      return [...opts].filter(Boolean);
+    });
+
+    const openAddTradeModal = async () => {
       addTradeForm.value = {
         date: new Date().toISOString().slice(0, 10),
         code:'', name:'', type:'現買', qty:'', price:'', fee:'', tax:'', broker:'', note:'',
@@ -1604,6 +1617,13 @@ createApp({
       addTradeMsg.value   = '';
       addTradeError.value = false;
       showAddTradeModal.value = true;
+      // 若券商選項尚未載入，快速取一次設定
+      if (!addTradeBrokerOptions.value.length) {
+        try {
+          const res = await callGAS('api_getSettingsSchema');
+          if (res.ok) { settingsSchema.value = res.schema; settingsData.value = res.values; }
+        } catch(e) {}
+      }
     };
 
     const closeAddTradeModal = () => { showAddTradeModal.value = false; };
@@ -1659,7 +1679,7 @@ createApp({
       gasUrlInput,currentGasUrl,updateGasUrl,
       pendingList,pendingSelected,pendingLoading,pendingConfirming,pendingMsg,pendingError,
       pendingGrouped,loadPending,toggleSelectAll,togglePendingRow,recalcTax,confirmSelected,deletePendingRow,
-      showAddTradeModal,addTradeForm,addTradeCalc,addTradeSubmitting,addTradeMsg,addTradeError,addTradeNameLoading,
+      showAddTradeModal,addTradeForm,addTradeCalc,addTradeSubmitting,addTradeMsg,addTradeError,addTradeNameLoading,addTradeBrokerOptions,
       openAddTradeModal,closeAddTradeModal,submitManualTrade,
     };
   }
