@@ -727,30 +727,45 @@ function api_getPendingTrades() {
 
 function api_confirmTrades(confirmedRows) {
   const C  = getCfg_();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
   const shStaging = ensureStagingSheet_();
   const shTrades  = ensureSheetWithHeader_(C.SHEET_TRADES || '交易紀錄', [
     '成交日期','成交時間','股票代碼','股票名稱','成交類別',
     '股數','成交價','成交金額','委託單號','手續費','交易稅','淨收付金額','證券商','備註'
   ]);
-  // 預先讀取 staging 所有確認狀態（第 15 欄），防止已刪除的項目被寫入
-  const lastStagingRow = shStaging.getLastRow();
-  const currentStatuses = lastStagingRow >= 2
-    ? shStaging.getRange(2, 15, lastStagingRow - 1, 1).getValues().flat().map(String)
-    : [];
+
+  // 一次讀取所有 staging 資料（含狀態欄），避免逐列讀取
+  const lastRow = shStaging.getLastRow();
+  if (lastRow < 2) return { ok: true, msg: '0 筆交易已確認寫入' };
+  const allStaging = shStaging.getRange(2, 1, lastRow - 1, 15).getValues();
 
   let count = 0;
   for (const row of (confirmedRows || [])) {
-    // _rowIndex 是 1-based sheet row number，row 2 = index 0
-    const statusIdx = row._rowIndex - 2;
-    const currentStatus = currentStatuses[statusIdx] || '';
-    if (currentStatus === '已刪除' || currentStatus === '已確認') continue;
+    const idx = row._rowIndex - 2;            // 0-based index into allStaging
+    const sr  = allStaging[idx];              // staging row array [0..14]
+    if (!sr) continue;
+    const status = String(sr[14] || '');
+    if (status === '已刪除' || status === '已確認') continue;
+
+    // 前端可能改了成交類別 & 交易稅，其餘欄位從 staging 讀
+    const side   = String(row['成交類別'] || sr[4]);
+    const amount = Number(sr[7]) || 0;
+    const fee    = Number(sr[9]) || 0;
+    const tax    = (row['交易稅'] !== undefined && row['交易稅'] !== null)
+                   ? Number(row['交易稅']) : Number(sr[10]) || 0;
+    const net    = side.includes('賣') ? amount - fee - tax : -(amount + fee);
 
     shTrades.appendRow([
-      row['成交日期'], row['成交時間'], row['股票代碼'], row['股票名稱'], row['成交類別'],
-      Number(row['股數']), Number(row['成交價']), Number(row['成交金額']),
-      row['委託單號'] || '', Number(row['手續費']), Number(row['交易稅']), Number(row['淨收付金額']),
-      row['證券商'] || '', row['備註'] || ''
+      sr[0], sr[1],           // 成交日期, 成交時間
+      String(sr[2]),          // 股票代碼（保持文字，避免前導零被截）
+      sr[3],                  // 股票名稱
+      side,                   // 成交類別（前端覆蓋）
+      Number(sr[5]),          // 股數
+      Number(sr[6]),          // 成交價
+      amount,                 // 成交金額
+      sr[8] || '',            // 委託單號
+      fee, tax, net,          // 手續費, 交易稅, 淨收付金額
+      sr[12] || '',           // 証券商
+      sr[13] || '',           // 備註
     ]);
     shStaging.getRange(row._rowIndex, 15).setValue('已確認');
     count++;
