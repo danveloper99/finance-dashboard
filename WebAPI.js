@@ -733,8 +733,19 @@ function api_confirmTrades(confirmedRows) {
     '成交日期','成交時間','股票代碼','股票名稱','成交類別',
     '股數','成交價','成交金額','委託單號','手續費','交易稅','淨收付金額','證券商','備註'
   ]);
+  // 預先讀取 staging 所有確認狀態（第 15 欄），防止已刪除的項目被寫入
+  const lastStagingRow = shStaging.getLastRow();
+  const currentStatuses = lastStagingRow >= 2
+    ? shStaging.getRange(2, 15, lastStagingRow - 1, 1).getValues().flat().map(String)
+    : [];
+
   let count = 0;
   for (const row of (confirmedRows || [])) {
+    // _rowIndex 是 1-based sheet row number，row 2 = index 0
+    const statusIdx = row._rowIndex - 2;
+    const currentStatus = currentStatuses[statusIdx] || '';
+    if (currentStatus === '已刪除' || currentStatus === '已確認') continue;
+
     shTrades.appendRow([
       row['成交日期'], row['成交時間'], row['股票代碼'], row['股票名稱'], row['成交類別'],
       Number(row['股數']), Number(row['成交價']), Number(row['成交金額']),
