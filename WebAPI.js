@@ -577,6 +577,26 @@ function api_setupWealthTrigger(type) {
 }
 
 /* ============================================================
+   股票代碼查名稱
+   ============================================================ */
+
+function api_lookupStockName(code) {
+  if (!code) return { ok: true, name: '' };
+  const C   = getCfg_();
+  const ss  = SpreadsheetApp.getActiveSpreadsheet();
+  const key = String(code).trim();
+  const sheetNames = [C.SHEET_HOLD, C.SHEET_TRADES, C.SHEET_OPENING];
+  for (const shName of sheetNames) {
+    const sh = ss.getSheetByName(shName);
+    if (!sh || sh.getLastRow() < 2) continue;
+    const rows = readSheetAsObjects_(sh);
+    const found = rows.find(r => String(r['股票代碼'] || '').trim().replace(/^'+/, '') === key);
+    if (found && found['股票名稱']) return { ok: true, name: String(found['股票名稱']).trim() };
+  }
+  return { ok: true, name: '' };
+}
+
+/* ============================================================
    手動新增交易
    ============================================================ */
 
@@ -607,22 +627,39 @@ function api_addManualTrade(trade) {
 
   const dateStr = String(trade.date || '').replace(/-/g, '/');
 
-  sh.appendRow([
-    dateStr,
-    trade.time   || '',
-    String(trade.code || '').trim(),
-    trade.name   || '',
-    type,
-    qty,
-    price,
-    amount,
-    '',
-    fee,
-    tax,
-    net,
-    trade.broker || '',
-    trade.note   || '手動新增',
-  ]);
+  // 按欄位名稱寫入，避免受現有試算表欄位順序影響
+  const lastCol = sh.getLastColumn();
+  const headers = lastCol > 0
+    ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h || '').trim())
+    : [];
+  const rowData = new Array(Math.max(lastCol, 14)).fill('');
+  const setCol  = (name, val) => {
+    const i = headers.indexOf(name);
+    if (i >= 0) rowData[i] = val;
+  };
+  setCol('成交日期',   dateStr);
+  setCol('成交時間',   trade.time   || '');
+  setCol('股票代碼',   String(trade.code || '').trim());
+  setCol('股票名稱',   trade.name   || '');
+  setCol('成交類別',   type);
+  setCol('股數',       qty);
+  setCol('成交價',     price);
+  setCol('成交金額',   amount);
+  setCol('委託單號',   '');
+  setCol('手續費',     fee);
+  setCol('交易稅',     tax);
+  setCol('淨收付金額', net);
+  setCol('證券商',     trade.broker || '');
+  setCol('備註',       trade.note   || '手動新增');
+
+  // 用 setValues 取代 appendRow，並在寫入前把股票代碼欄設為文字格式
+  // 防止 Google Sheets 把 "0056" 自動轉為數字 56
+  const newRow     = sh.getLastRow() + 1;
+  const codeColIdx = headers.indexOf('股票代碼');
+  if (codeColIdx >= 0) {
+    sh.getRange(newRow, codeColIdx + 1).setNumberFormat('@');
+  }
+  sh.getRange(newRow, 1, 1, rowData.length).setValues([rowData]);
 
   return { ok: true, msg: `${String(trade.code).trim()} ${type} ${qty}股 已新增至交易紀錄` };
 }
@@ -737,7 +774,7 @@ function doPost(e) {
       'runDividendsFullCycle_SAFE', 'appendDCAFromHoldings_SAFE',
       'rebuildRealizedPnL_FIFO_SAFE', 'rebuildDCADividends_SAFE',
       'api_getPendingTrades', 'api_confirmTrades', 'api_deletePendingTrade',
-      'api_addManualTrade',
+      'api_addManualTrade', 'api_lookupStockName',
     ]);
 
     if (!ALLOWED.has(action)) {
