@@ -1480,7 +1480,7 @@ createApp({
       pendingSelected.value = [];
       try {
         const res = await callGAS('api_getPendingTrades');
-        if (res.ok) pendingList.value = res.data;
+        if (res.ok) pendingList.value = res.rows || res.data || [];
       } catch(e) { console.error(e); }
       pendingLoading.value = false;
     };
