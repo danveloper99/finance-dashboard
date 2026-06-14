@@ -1,0 +1,12 @@
+# Clasp (contains Script ID — do not expose)
+.clasp.json
+
+# Dependencies
+node_modules/
+
+# Claude Code local memory
+.claude/
+
+# Environment / secrets
+.env
+*.env.local
