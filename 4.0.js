@@ -404,7 +404,7 @@ function consolidateByOrderNo_(rows) {
     const finalNet = calcNet_(o.side, o.amtSum, finalFee, finalTax);
 
     merged.push([
-      o.date, o.timeMax, "'" + o.sym, o.name, o.side,
+      o.date, o.timeMax, o.sym, o.name, o.side,
       o.qtySum, px, o.amtSum, o.orderNo, finalFee, finalTax, finalNet, '合併訂單'
     ]);
   }
