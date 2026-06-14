@@ -520,6 +520,12 @@
             <i :class="pendingConfirming?'ph ph-spinner spin':'ph ph-check'" style="font-size:15px"></i>
             確認寫入（{{ pendingSelected.length }} 筆）
           </button>
+          <button @click="deleteSelectedRows" :disabled="!pendingSelected.length || pendingDeleting"
+            style="background:white;color:#dc2626;padding:8px 18px;border-radius:12px;font-size:13px;font-weight:700;border:1.5px solid #fca5a5;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s"
+            :style="!pendingSelected.length?'opacity:.4;cursor:not-allowed':''">
+            <i :class="pendingDeleting?'ph ph-spinner spin':'ph ph-trash'" style="font-size:15px"></i>
+            批次刪除（{{ pendingSelected.length }} 筆）
+          </button>
           <div v-if="pendingMsg" :style="pendingError?'color:#dc2626':'color:#16a34a'" style="font-size:13px;font-weight:700">{{ pendingMsg }}</div>
         </div>
 
@@ -527,6 +533,7 @@
         <div v-for="(group, date) in pendingGrouped" :key="date" class="card" style="padding:0;overflow:hidden">
           <!-- 日期標題 -->
           <div style="background:#f0f4ee;padding:10px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #e8ece8">
+            <input type="checkbox" :checked="isGroupAllSelected(group)" @change="toggleSelectGroup(group, $event)" style="width:15px;height:15px;accent-color:#3a5a40;flex-shrink:0;cursor:pointer">
             <i class="ph ph-calendar" style="color:#588157"></i>
             <span style="font-weight:700;color:#3a5a40;font-size:14px">{{ date }}</span>
             <span style="font-size:12px;color:#888">{{ group.length }} 筆</span>
@@ -1555,6 +1562,45 @@ createApp({
         pendingSelected.value = pendingSelected.value.filter(i => i !== row._rowIndex);
       } catch(e) { alert('刪除失敗：' + e.message); }
     };
+
+    const pendingDeleting = ref(false);
+
+    const isGroupAllSelected = (group) =>
+      group.length > 0 && group.every(r => pendingSelected.value.includes(r._rowIndex));
+
+    const toggleSelectGroup = (group, e) => {
+      if (e.target.checked) {
+        const toAdd = group.map(r => r._rowIndex).filter(i => !pendingSelected.value.includes(i));
+        pendingSelected.value.push(...toAdd);
+      } else {
+        const remove = new Set(group.map(r => r._rowIndex));
+        pendingSelected.value = pendingSelected.value.filter(i => !remove.has(i));
+      }
+    };
+
+    const deleteSelectedRows = async () => {
+      if (!pendingSelected.value.length) return;
+      if (!confirm(`確定要刪除選取的 ${pendingSelected.value.length} 筆交易？`)) return;
+      pendingDeleting.value = true;
+      try {
+        const res = await callGAS('api_batchDeletePendingTrades', [pendingSelected.value]);
+        if (res.ok) {
+          const deleted = new Set(pendingSelected.value);
+          pendingList.value = pendingList.value.filter(r => !deleted.has(r._rowIndex));
+          pendingSelected.value = [];
+          pendingMsg.value = `🗑️ 已刪除 ${res.count} 筆`;
+          pendingError.value = false;
+          setTimeout(() => { pendingMsg.value = ''; }, 4000);
+        } else {
+          pendingMsg.value = '❌ 批次刪除失敗';
+          pendingError.value = true;
+        }
+      } catch(e) {
+        pendingMsg.value = '❌ ' + e.message;
+        pendingError.value = true;
+      }
+      pendingDeleting.value = false;
+    };
     // ════════════════════════════════════════════════
 
     // ── 手動新增交易 ──────────────────────────────────────────────
@@ -1677,8 +1723,9 @@ createApp({
       wealthReminderType,wealthChartFilter,wealthTimeRange,filteredWealthHistory,
       saveWealth,setupWealthTrigger,toggleWealthFilter,toggleAllWealthFilter,
       gasUrlInput,currentGasUrl,updateGasUrl,
-      pendingList,pendingSelected,pendingLoading,pendingConfirming,pendingMsg,pendingError,
+      pendingList,pendingSelected,pendingLoading,pendingConfirming,pendingMsg,pendingError,pendingDeleting,
       pendingGrouped,loadPending,toggleSelectAll,togglePendingRow,recalcTax,confirmSelected,deletePendingRow,
+      isGroupAllSelected,toggleSelectGroup,deleteSelectedRows,
       showAddTradeModal,addTradeForm,addTradeCalc,addTradeSubmitting,addTradeMsg,addTradeError,addTradeNameLoading,addTradeBrokerOptions,
       openAddTradeModal,closeAddTradeModal,submitManualTrade,
     };

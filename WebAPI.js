@@ -752,6 +752,13 @@ function api_deletePendingTrade(rowIndex) {
   return { ok: true };
 }
 
+function api_batchDeletePendingTrades(rowIndices) {
+  if (!Array.isArray(rowIndices) || !rowIndices.length) return { ok: true, count: 0 };
+  const sh = ensureStagingSheet_();
+  rowIndices.forEach(idx => sh.getRange(idx, 15).setValue('已刪除'));
+  return { ok: true, count: rowIndices.length };
+}
+
 /* ============================================================
    doPost — 統一 API 入口
    ============================================================ */
@@ -773,7 +780,7 @@ function doPost(e) {
       'ingestFromGmail_Plaintext_SAFE', 'rebuildAll_B_SAFE',
       'runDividendsFullCycle_SAFE', 'appendDCAFromHoldings_SAFE',
       'rebuildRealizedPnL_FIFO_SAFE', 'rebuildDCADividends_SAFE',
-      'api_getPendingTrades', 'api_confirmTrades', 'api_deletePendingTrade',
+      'api_getPendingTrades', 'api_confirmTrades', 'api_deletePendingTrade', 'api_batchDeletePendingTrades',
       'api_addManualTrade', 'api_lookupStockName',
     ]);
 
