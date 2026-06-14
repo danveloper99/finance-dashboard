@@ -738,15 +738,16 @@ function api_confirmTrades(confirmedRows) {
   if (lastRow < 2) return { ok: true, msg: '0 筆交易已確認寫入' };
   const allStaging = shStaging.getRange(2, 1, lastRow - 1, 15).getValues();
 
-  let count = 0;
+  // 整批收集要寫入的列，再一次 setValues 並預設代碼欄為文字格式
+  const toWrite   = [];
+  const confirmed = [];
   for (const row of (confirmedRows || [])) {
-    const idx = row._rowIndex - 2;            // 0-based index into allStaging
-    const sr  = allStaging[idx];              // staging row array [0..14]
+    const idx = row._rowIndex - 2;
+    const sr  = allStaging[idx];
     if (!sr) continue;
     const status = String(sr[14] || '');
     if (status === '已刪除' || status === '已確認') continue;
 
-    // 前端可能改了成交類別 & 交易稅，其餘欄位從 staging 讀
     const side   = String(row['成交類別'] || sr[4]);
     const amount = Number(sr[7]) || 0;
     const fee    = Number(sr[9]) || 0;
@@ -754,23 +755,28 @@ function api_confirmTrades(confirmedRows) {
                    ? Number(row['交易稅']) : Number(sr[10]) || 0;
     const net    = side.includes('賣') ? amount - fee - tax : -(amount + fee);
 
-    shTrades.appendRow([
-      sr[0], sr[1],           // 成交日期, 成交時間
-      String(sr[2]),          // 股票代碼（保持文字，避免前導零被截）
-      sr[3],                  // 股票名稱
-      side,                   // 成交類別（前端覆蓋）
-      Number(sr[5]),          // 股數
-      Number(sr[6]),          // 成交價
-      amount,                 // 成交金額
-      sr[8] || '',            // 委託單號
-      fee, tax, net,          // 手續費, 交易稅, 淨收付金額
-      sr[12] || '',           // 証券商
-      sr[13] || '',           // 備註
+    toWrite.push([
+      sr[0], sr[1],
+      String(sr[2]),   // 股票代碼：保持字串，避免 0056/00919 被截掉前導零
+      sr[3], side,
+      Number(sr[5]), Number(sr[6]), amount,
+      sr[8] || '',
+      fee, tax, net,
+      sr[12] || '', sr[13] || '',
     ]);
-    shStaging.getRange(row._rowIndex, 15).setValue('已確認');
-    count++;
+    confirmed.push(row._rowIndex);
   }
-  return { ok: true, msg: `${count} 筆交易已確認寫入` };
+
+  if (toWrite.length) {
+    const startRow = shTrades.getLastRow() + 1;
+    const n = toWrite.length;
+    // 先把代碼欄（col 3）與委託單號欄（col 9）設為文字格式，防止前導零被截
+    shTrades.getRange(startRow, 3, n, 1).setNumberFormat('@');
+    shTrades.getRange(startRow, 9, n, 1).setNumberFormat('@');
+    shTrades.getRange(startRow, 1, n, toWrite[0].length).setValues(toWrite);
+    confirmed.forEach(idx => shStaging.getRange(idx, 15).setValue('已確認'));
+  }
+  return { ok: true, msg: `${toWrite.length} 筆交易已確認寫入` };
 }
 
 function api_deletePendingTrade(rowIndex) {
