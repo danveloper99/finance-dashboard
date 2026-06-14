@@ -594,15 +594,27 @@ function ingestFromGmail_Plaintext() {
   const existedOrder = new Set();
   const existedNoOrd = new Set();
 
+  // 去重用的代碼正規化：若為非數字名稱且 nameToCodeMap 有對應，換成數字代碼
+  const normSymForDedup_ = (s) => {
+    const t = String(s||'').trim();
+    return (t && isNaN(Number(t)) && nameToCodeMap.has(t)) ? nameToCodeMap.get(t) : t;
+  };
+  // 去重用的類別正規化：現買/沖買/集買 → 買；現賣/沖賣 → 賣
+  // 避免同一筆交易因不同信件的類別標記不同（如「現買」vs「沖買」）而被當成兩筆
+  const normTypeForDedup_ = (type) => String(type||'').includes('賣') ? '賣' : '買';
+
   const loadDedup_ = (sh) => {
     if (!sh || sh.getLastRow() < 2) return;
     const data = sh.getRange(2, 1, sh.getLastRow()-1, sh.getLastColumn()).getValues();
     for (const r of data) {
-      const sym  = String(r[2]||'').trim();
+      const sym  = normSymForDedup_(r[2]);
       const ord  = normOrderNo_(r[8]);
       const date = String(r[0]||'').trim();
       if (ord) existedOrder.add(makeKey_Order_(date, ord, sym));
-      else      existedNoOrd.add(makeKey_NoOrder_(r));
+      else {
+        const typeNorm = normTypeForDedup_(r[4]);
+        existedNoOrd.add([date, normTime_(r[1]||''), sym, typeNorm, r[5], r[6]].join('|'));
+      }
     }
   };
   loadDedup_(shTrades);
@@ -672,6 +684,11 @@ function ingestFromGmail_Plaintext() {
   const toWrite = [];
 
   for (const r of consolidated) {
+    // 正規化代碼：若為非數字名稱且有對應，直接修正 r[2]，讓 staging 也拿到正確代碼
+    const rawSym = String(r[2]||'').trim();
+    if (rawSym && isNaN(Number(rawSym)) && nameToCodeMap.has(rawSym)) {
+      r[2] = nameToCodeMap.get(rawSym);
+    }
     const sym = String(r[2]||'').trim();
     const ord = normOrderNo_(r[8]);
     if (ord) {
@@ -680,7 +697,8 @@ function ingestFromGmail_Plaintext() {
       existedOrder.add(k);
       toWrite.push(r);
     } else {
-      const k = makeKey_NoOrder_(r);
+      const typeNorm = normTypeForDedup_(r[4]);
+      const k = [String(r[0]||'').trim(), normTime_(r[1]||''), sym, typeNorm, r[5], r[6]].join('|');
       if (existedNoOrd.has(k)) continue;
       existedNoOrd.add(k);
       toWrite.push(r);
