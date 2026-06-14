@@ -644,10 +644,12 @@ function ingestFromGmail_Plaintext() {
 
   let parsed = [];
   const logMsg = [];
-  // HTML 信件中出現過的委託單號，PDF 遇到相同單號時跳過，避免一般交易重複
+  // HTML 信件中出現過的委託單號
   const htmlOrderSet = new Set();
+  // HTML 信件中出現過的交易內容 key（date|normSym|qty|price），用於內容比對去重
+  const htmlContentSet = new Set();
 
-  // 1. 先處理 HTML 信件，建立已知委託單號集合
+  // 1. 先處理 HTML 信件，建立去重集合
   const labelHtml = (C.GMAIL_LABEL_HTML || '').trim();
   if (labelHtml) {
     const qHtml = `label:${labelHtml} after:${after}`;
@@ -657,12 +659,20 @@ function ingestFromGmail_Plaintext() {
       const body = m.getPlainBody();
       let rows = parseBrokerMailHTMLTable_CN_(html, m, tz);
       if (!rows.length) rows = parseBrokerMailPlainTable_CN_(body, m, tz);
-      rows.forEach(r => { const ord = normOrderNo_(r[8]); if (ord) htmlOrderSet.add(ord); });
+      rows.forEach(r => {
+        const ord = normOrderNo_(r[8]);
+        if (ord) htmlOrderSet.add(ord);
+        const ns = normSymForDedup_(String(r[2]||'').trim());
+        htmlContentSet.add([String(r[0]||'').trim(), ns, r[5], r[6]].join('|'));
+      });
       if (rows.length > 0) parsed = parsed.concat(rows);
     }));
   }
 
-  // 2. 再處理 PDF 附件，跳過委託單號已在 HTML 出現過的（一般交易），其餘全保留（定期定額等）
+  // 2. 再處理 PDF 附件
+  //    - 按委託單號去重：PDF 單號已在 HTML → 跳過
+  //    - 按內容去重：同日期＋代碼＋股數＋價格 → 跳過（處理 HTML「現買」= PDF「集買」的重複）
+  //    - 上述都沒中 → 定期定額或 PDF 獨有交易 → 保留
   const labelPdf = (C.GMAIL_LABEL_PDF || '').trim();
   if (labelPdf) {
     const qPdf = `label:${labelPdf} after:${after} has:attachment`;
@@ -681,14 +691,27 @@ function ingestFromGmail_Plaintext() {
               if (isNaN(Number(sym)) && nameToCodeMap.has(sym)) {
                 sym = nameToCodeMap.get(sym); r[2] = sym;
               }
-              // 退而求其次：從基金名稱提取 4~6 位數字代碼（如「國泰永續高股息00919」→「00919」）
+              // 從基金名稱提取 4~6 位數字代碼（如「國泰永續高股息00919」→「00919」）
               if (isNaN(Number(sym))) {
                 const codeMatch = sym.match(/(\d{4,6})/);
                 if (codeMatch) { sym = codeMatch[1]; r[2] = sym; }
               }
+              // 若 sym 仍為非數字且與 r[3] 相同（PDF 只有商品名稱欄），清空 r[2]
+              // 讓名稱只顯示在「股票名稱」欄，避免代碼欄重複顯示同一文字
+              if (isNaN(Number(sym)) && sym === String(r[3]||'').trim().replace(/\s+/g,'')) {
+                r[2] = '';
+              }
+              // 按委託單號去重
               const ord = normOrderNo_(r[8]);
               if (ord && htmlOrderSet.has(ord)) {
-                Logger.log(`[PDF skip] 委託單號="${ord}" 已在 HTML 信件中，跳過`);
+                Logger.log(`[PDF skip] 委託單號="${ord}" 已在 HTML，跳過`);
+                return;
+              }
+              // 按內容去重（日期＋代碼＋股數＋價格）
+              const ns = normSymForDedup_(sym || String(r[3]||'').trim());
+              const ck = [String(r[0]||'').trim(), ns, r[5], r[6]].join('|');
+              if (htmlContentSet.has(ck)) {
+                Logger.log(`[PDF skip] 內容重複 ${ck}，已在 HTML，跳過`);
                 return;
               }
               r[12] = 'CloudRun_SIP';
