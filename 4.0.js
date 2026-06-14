@@ -644,7 +644,25 @@ function ingestFromGmail_Plaintext() {
 
   let parsed = [];
   const logMsg = [];
+  // HTML 信件中出現過的委託單號，PDF 遇到相同單號時跳過，避免一般交易重複
+  const htmlOrderSet = new Set();
 
+  // 1. 先處理 HTML 信件，建立已知委託單號集合
+  const labelHtml = (C.GMAIL_LABEL_HTML || '').trim();
+  if (labelHtml) {
+    const qHtml = `label:${labelHtml} after:${after}`;
+    const threadsHtml = GmailApp.search(qHtml, 0, 30);
+    threadsHtml.forEach(t => t.getMessages().forEach(m => {
+      const html = m.getBody();
+      const body = m.getPlainBody();
+      let rows = parseBrokerMailHTMLTable_CN_(html, m, tz);
+      if (!rows.length) rows = parseBrokerMailPlainTable_CN_(body, m, tz);
+      rows.forEach(r => { const ord = normOrderNo_(r[8]); if (ord) htmlOrderSet.add(ord); });
+      if (rows.length > 0) parsed = parsed.concat(rows);
+    }));
+  }
+
+  // 2. 再處理 PDF 附件，跳過委託單號已在 HTML 出現過的（一般交易），其餘全保留（定期定額等）
   const labelPdf = (C.GMAIL_LABEL_PDF || '').trim();
   if (labelPdf) {
     const qPdf = `label:${labelPdf} after:${after} has:attachment`;
@@ -658,19 +676,23 @@ function ingestFromGmail_Plaintext() {
             const rows = parseCloudRunData_(rawTable, tz);
             const keptRows = [];
             rows.forEach(r => {
-              let [d, tm, sym, nm, side, qty, px, amt, ord, fee, tax, net, rem] = r;
+              let sym = String(r[2]||'').trim();
+              // 嘗試 nameToCodeMap 對應（如 DCA_i_NAME 設定）
               if (isNaN(Number(sym)) && nameToCodeMap.has(sym)) {
-                sym = nameToCodeMap.get(sym);
-                r[2] = sym;
+                sym = nameToCodeMap.get(sym); r[2] = sym;
               }
-              if (dcaWhitelist.has(sym)) {
-                r[12] = 'CloudRun_SIP';
-                keptRows.push(r);
-              } else {
-                // PDF 路徑只保留定期定額（DCA 白名單）股票
-                // 一般股票已由 HTML 信件處理，此處跳過以避免重複與代碼錯誤
-                Logger.log(`[PDF skip] sym="${sym}" 非 DCA 白名單，由 HTML 信件負責`);
+              // 退而求其次：從基金名稱提取 4~6 位數字代碼（如「國泰永續高股息00919」→「00919」）
+              if (isNaN(Number(sym))) {
+                const codeMatch = sym.match(/(\d{4,6})/);
+                if (codeMatch) { sym = codeMatch[1]; r[2] = sym; }
               }
+              const ord = normOrderNo_(r[8]);
+              if (ord && htmlOrderSet.has(ord)) {
+                Logger.log(`[PDF skip] 委託單號="${ord}" 已在 HTML 信件中，跳過`);
+                return;
+              }
+              r[12] = 'CloudRun_SIP';
+              keptRows.push(r);
             });
             if (keptRows.length > 0) {
               parsed = parsed.concat(keptRows);
@@ -681,19 +703,6 @@ function ingestFromGmail_Plaintext() {
           }
         }
       });
-    }));
-  }
-
-  const labelHtml = (C.GMAIL_LABEL_HTML || '').trim();
-  if (labelHtml) {
-    const qHtml = `label:${labelHtml} after:${after}`;
-    const threadsHtml = GmailApp.search(qHtml, 0, 30);
-    threadsHtml.forEach(t => t.getMessages().forEach(m => {
-      const html = m.getBody();
-      const body = m.getPlainBody();
-      let rows = parseBrokerMailHTMLTable_CN_(html, m, tz);
-      if (!rows.length) rows = parseBrokerMailPlainTable_CN_(body, m, tz);
-      if (rows.length > 0) parsed = parsed.concat(rows);
     }));
   }
 
