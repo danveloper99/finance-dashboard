@@ -668,6 +668,12 @@ function ingestFromGmail_Plaintext() {
       if (rows.length > 0) parsed = parsed.concat(rows);
     }));
   }
+  // HTML 行的名稱→代碼學入 nameToCodeMap，讓 PDF 解析時能將「國巨*」對應到「2327」
+  parsed.forEach(r => {
+    const c = String(r[2]||'').trim();
+    const n = String(r[3]||'').trim().replace(/\s+/g,'');
+    if (c && n && !isNaN(Number(c)) && !nameToCodeMap.has(n)) nameToCodeMap.set(n, c);
+  });
 
   // 2. 再處理 PDF 附件
   //    - 按委託單號去重：PDF 單號已在 HTML → 跳過
