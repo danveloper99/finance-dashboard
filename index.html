@@ -273,9 +273,36 @@
         <div><h2 class="page-title">庫存紀錄</h2><p style="color:#588157;font-size:13px;margin-top:4px">目前持有資產概況</p></div>
         <div style="display:flex;align-items:center;gap:8px"><div class="stat-badge"><div style="width:36px;height:36px;border-radius:50%;background:rgba(188,108,37,.1);display:flex;align-items:center;justify-content:center;color:#bc6c25;flex-shrink:0"><i class="ph-fill ph-piggy-bank" style="font-size:20px"></i></div><div><div style="font-size:11px;font-weight:700;color:#588157">帳面獲利</div><div class="font-bold num-font" :class="totalHoldingsProfit>0?'val-pos':'val-neg'" style="font-size:20px">{{ fmtInt(totalHoldingsProfit) }}</div></div></div><button @click="loadData(currentTab)" :disabled="listLoading" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:12px;font-size:13px;font-weight:700;background:white;border:1.5px solid #dad7cd;color:#3a5a40;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='#f0f4ee'" onmouseout="this.style.background='white'"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'" style="font-size:15px"></i> 更新</button></div>
       </div>
-      <div class="filter-bar">
-        <div style="display:flex;align-items:center;gap:8px;flex:1"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px">搜尋</label><input v-model="searchText" type="text" class="input-custom" placeholder="代碼或名稱..."></div>
-        <button @click="exportCSV" class="btn btn-outline" style="font-size:13px;padding:8px 14px;white-space:nowrap">匯出 CSV</button>
+      <div class="filter-bar" style="flex-direction:column!important;gap:10px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:160px"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px">搜尋</label><input v-model="searchText" type="text" class="input-custom" placeholder="代碼或名稱..."></div>
+          <button @click="holdingsFilterOpen=!holdingsFilterOpen"
+            :style="holdingsFilterSelected!==null?'background:#3a5a40;color:white;border-color:#3a5a40':''"
+            style="flex-shrink:0;display:flex;align-items:center;gap:5px;padding:8px 13px;border-radius:10px;border:1.5px solid #dad7cd;font-size:13px;font-weight:700;cursor:pointer;background:white;color:#3a5a40;white-space:nowrap">
+            <i class="ph ph-funnel" style="font-size:15px"></i>篩選
+            <span v-if="holdingsFilterSelected!==null" style="background:rgba(255,255,255,.25);border-radius:20px;padding:0 7px;font-size:11px;font-weight:700">{{ holdingsFilterSelected.size }}/{{ holdingsAllStockOptions.length }}</span>
+          </button>
+          <button @click="exportCSV" class="btn btn-outline" style="font-size:13px;padding:8px 14px;white-space:nowrap">匯出 CSV</button>
+        </div>
+        <!-- 篩選面板 -->
+        <div v-if="holdingsFilterOpen" style="border-top:1px solid #f0f0ee;padding-top:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:12px;font-weight:700;color:#588157">已勾選 {{ holdingsFilterSelected===null ? holdingsAllStockOptions.length : holdingsFilterSelected.size }} / {{ holdingsAllStockOptions.length }} 檔</span>
+            <div style="display:flex;gap:6px">
+              <button @click="holdingsFilterSelectAll" style="font-size:12px;font-weight:700;color:#3a5a40;background:#f0f4ee;border:1px solid #c5d9c5;border-radius:8px;padding:4px 12px;cursor:pointer">全選</button>
+              <button @click="holdingsFilterDeselectAll" style="font-size:12px;font-weight:700;color:#888;background:#f5f5f5;border:1px solid #ddd;border-radius:8px;padding:4px 12px;cursor:pointer">全部取消</button>
+            </div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;max-height:160px;overflow-y:auto">
+            <label v-for="opt in holdingsAllStockOptions" :key="opt.symbol"
+              :style="holdingsFilterIsSelected(opt.symbol)?'background:#3a5a40;color:white;border-color:#3a5a40':'background:white;color:#555;border-color:#dad7cd'"
+              style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border:1.5px solid;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;user-select:none;transition:all .15s">
+              <input type="checkbox" :checked="holdingsFilterIsSelected(opt.symbol)" @change="holdingsFilterToggle(opt.symbol)" style="display:none">
+              <i class="ph" :class="holdingsFilterIsSelected(opt.symbol)?'ph-check-square':'ph-square'" style="font-size:13px"></i>
+              {{ opt.symbol }} {{ opt.name }}
+            </label>
+          </div>
+        </div>
       </div>
       <div class="table-wrap">
         <div v-if="listLoading" style="padding:48px;text-align:center;color:#588157"><i class="ph ph-spinner spin" style="font-size:28px;display:block;margin-bottom:8px"></i>讀取中...</div>
@@ -1249,11 +1276,51 @@ createApp({
         const km={'股票代碼':'symbol','股票名稱':'name','持有股數':'qty','買入均價':'avgPrice','現價':'currPrice','獲利金額':'profit','獲利比例':'profitPct'};
         result.sort((a,b)=>{const va=a[km[holdingsSortKey.value]||holdingsSortKey.value],vb=b[km[holdingsSortKey.value]||holdingsSortKey.value];const na=parseFloat(String(va).replace(/,/g,'')),nb=parseFloat(String(vb).replace(/,/g,''));if(!isNaN(na)&&!isNaN(nb))return(na-nb)*holdingsSortOrder.value;return String(va).localeCompare(String(vb))*holdingsSortOrder.value;});
       }
+      if(holdingsFilterSelected.value!==null){
+        result=result.filter(r=>holdingsFilterSelected.value.has(r.symbol));
+      }
       return result;
     });
     const totalHoldingsProfit = computed(() => groupedHoldingsList.value.reduce((a,c)=>a+(c.profit||0),0));
     const sortHoldingsBy = k => { holdingsSortKey.value===k?holdingsSortOrder.value*=-1:(holdingsSortKey.value=k,holdingsSortOrder.value=-1); };
     const openHoldingsModal = r => { currentDetailStock.value={symbol:r.symbol,name:r.name}; currentDetailList.value=r.details; detailType.value='holdings'; showDetailModal.value=true; };
+
+    // ── 庫存篩選 ──────────────────────────────────────────────────
+    const holdingsFilterOpen     = ref(false);
+    const holdingsFilterSelected = ref(null); // null = 全選（未篩選）；Set<symbol> = 指定顯示
+
+    const holdingsAllStockOptions = computed(() => {
+      if (currentTab.value !== 'holdings') return [];
+      const kSym  = findKey(['股票代碼','代碼','Symbol']);
+      const kName = findKey(['股票名稱','名稱','Name']);
+      const seen = new Set(); const opts = [];
+      listData.value.forEach(r => {
+        const sym = String(r[kSym]||'').trim(); if (!sym || seen.has(sym)) return;
+        seen.add(sym);
+        opts.push({ symbol: sym, name: String(r[kName]||'') });
+      });
+      return opts.sort((a,b)=>a.symbol.localeCompare(b.symbol));
+    });
+
+    const holdingsFilterIsSelected = (sym) => {
+      const s = holdingsFilterSelected.value;
+      return s === null || s.has(sym);
+    };
+    const holdingsFilterSelectAll = () => { holdingsFilterSelected.value = null; };
+    const holdingsFilterDeselectAll = () => { holdingsFilterSelected.value = new Set(); };
+    const holdingsFilterToggle = (sym) => {
+      if (holdingsFilterSelected.value === null) {
+        // 從全選狀態取消其中一個
+        const s = new Set(holdingsAllStockOptions.value.map(o => o.symbol));
+        s.delete(sym);
+        holdingsFilterSelected.value = s.size === holdingsAllStockOptions.value.length ? null : s;
+      } else {
+        const s = new Set(holdingsFilterSelected.value);
+        s.has(sym) ? s.delete(sym) : s.add(sym);
+        holdingsFilterSelected.value = s.size === holdingsAllStockOptions.value.length ? null : s;
+      }
+    };
+    // ════════════════════════════════════════════════
 
     const realizedHeaders = computed(() => {
       if (!listData.value.length) return [];
@@ -1891,6 +1958,7 @@ createApp({
       tabs,bottomTabs,actionFunctions,selectTab,loadData,
       realizedFilter,realizedHeaders,uniqueYears,filteredRealizedList,filteredRealizedTotal,sortBy,sortKey,sortOrder,realizedColAlign,
       holdingsSortKey,holdingsSortOrder,groupedHoldingsList,totalHoldingsProfit,sortHoldingsBy,openHoldingsModal,
+      holdingsFilterOpen,holdingsFilterSelected,holdingsAllStockOptions,holdingsFilterIsSelected,holdingsFilterSelectAll,holdingsFilterDeselectAll,holdingsFilterToggle,
       dividendFilter,uniqueDividendYears,dividendHeaders,filteredDividendList,totalDividendAmount,
       groupedDcaList,dcaSummary,openDcaDetailModal,
       fmtInt,fmtDec,fmtCell,exportCSV,
