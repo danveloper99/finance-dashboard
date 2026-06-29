@@ -395,6 +395,46 @@
         <div v-if="listLoading" style="padding:48px;text-align:center;color:#588157">讀取中...</div>
         <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th v-for="h in dividendHeaders" :key="h" class="table-th" :style="['現金股利 (元/股)','除息日持股數','實際領取金額','平均成交價','單次殖利率 (現金/買入價)'].includes(h)?'text-align:right':''">{{ h }}</th></tr></thead><tbody><tr v-for="(row,idx) in filteredDividendList" :key="idx"><td class="table-td">{{ row['股票代碼'] }}</td><td class="table-td">{{ row['股票名稱'] }}</td><td class="table-td">{{ row['股利年度'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['現金股利 (元/股)'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['除息日持股數'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['實際領取金額'] }}</td><td class="table-td">{{ row['除息日'] }}</td><td class="table-td">{{ row['發放日'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['平均成交價'] }}</td><td class="table-td num-font font-bold val-pos" style="text-align:right">{{ row['單次殖利率 (現金/買入價)'] }}</td></tr><tr v-if="!filteredDividendList.length"><td :colspan="dividendHeaders.length" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合篩選條件的資料</td></tr></tbody></table></div>
       </div>
+
+      <!-- ── 年度股利圖表 ── -->
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px 0">
+          <div style="display:flex;align-items:center;gap:8px;color:#3a5a40"><i class="ph ph-plant" style="font-size:20px;color:#dda15e"></i><span class="font-bold section-title">年度股利分布</span></div>
+          <button @click="divChartFilterOpen=!divChartFilterOpen"
+            :style="divChartSymbolSet!==null?'background:#3a5a40;color:white;border-color:#3a5a40':''"
+            style="display:flex;align-items:center;gap:5px;padding:7px 13px;border-radius:10px;border:1.5px solid #dad7cd;font-size:12px;font-weight:700;cursor:pointer;background:white;color:#3a5a40;transition:all .15s">
+            <i class="ph ph-funnel" style="font-size:14px"></i>篩選股票
+            <span v-if="divChartSymbolSet!==null" style="background:rgba(255,255,255,.25);border-radius:20px;padding:0 6px;font-size:10px;font-weight:700">已套用</span>
+          </button>
+        </div>
+        <div v-if="divChartFilterOpen" style="margin:12px 20px;padding:14px;background:#f7f9f4;border-radius:1rem;border:1px solid rgba(88,129,87,.12)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:12px;font-weight:700;color:#588157"><i class="ph ph-tag" style="font-size:13px;margin-right:4px"></i>股票代碼</span>
+            <div style="display:flex;gap:5px">
+              <button @click="divChartSymbolSet=null" style="font-size:11px;font-weight:700;color:#3a5a40;background:#f0f4ee;border:1px solid #c5d9c5;border-radius:7px;padding:3px 10px;cursor:pointer">全選</button>
+              <button @click="divChartSymbolSet=new Set()" style="font-size:11px;font-weight:700;color:#888;background:#f5f5f5;border:1px solid #ddd;border-radius:7px;padding:3px 10px;cursor:pointer">全清</button>
+            </div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;max-height:130px;overflow-y:auto">
+            <label v-for="sym in divAllSymbols" :key="sym"
+              :style="dcSymActive(sym)?'background:#dda15e;color:white;border-color:#dda15e':'background:white;color:#555;border-color:#dad7cd'"
+              style="display:inline-flex;align-items:center;gap:4px;padding:4px 11px;border:1.5px solid;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;user-select:none;transition:all .15s"
+              @click="dcToggleSym(sym)">
+              <i class="ph" :class="dcSymActive(sym)?'ph-check-square':'ph-square'" style="font-size:12px"></i>
+              {{ sym }}
+            </label>
+          </div>
+          <div v-if="!divChartHasData" style="margin-top:8px;font-size:12px;color:#aaa;text-align:center">無符合資料</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;padding:8px 20px 0;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#dda15e"><span style="width:12px;height:12px;border-radius:3px;background:#dda15e;display:inline-block"></span>實際領取</div>
+          <div v-if="divChartHasData" style="margin-left:auto;font-size:11px;color:#aaa">共 {{ divChartYears }} 年 · 合計 <span class="val-pos font-bold num-font">{{ fmtInt(divChartTotal) }}</span></div>
+        </div>
+        <div style="padding:12px 16px 20px;height:280px;position:relative">
+          <div v-if="!divChartHasData" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#bbb;font-size:14px;font-weight:700"><i class="ph ph-plant" style="font-size:32px;margin-bottom:8px;opacity:.3"></i>尚無股利資料</div>
+          <canvas id="divYearChart"></canvas>
+        </div>
+      </div>
     </div>
 
     <!-- ══ 定期定額 ══ -->
@@ -1265,6 +1305,69 @@ createApp({
     });
     const totalDividendAmount = computed(() => filteredDividendList.value.reduce((s,r)=>s+(parseFloat(String(r['實際領取金額']).replace(/,/g,''))||0),0));
 
+    // ── 年度股利圖表 ──
+    const divChartFilterOpen = ref(false);
+    const divChartSymbolSet  = ref(null); // null = 全部
+    const divAllSymbols = computed(()=>{
+      if(currentTab.value!=='dividends'||!listData.value.length) return [];
+      const kS=findKey(['代碼','Symbol']);
+      if(!kS) return [];
+      return [...new Set(listData.value.map(r=>String(r[kS]||'')).filter(Boolean))].sort();
+    });
+    const divChartData = computed(()=>{
+      if(currentTab.value!=='dividends'||!listData.value.length) return {labels:[],data:[]};
+      const kS=findKey(['代碼','Symbol']);
+      const kY=findKey(['年度','Year']);
+      const kA=findKey(['金額','Amount','Total']);
+      if(!kY||!kA) return {labels:[],data:[]};
+      const map={};
+      listData.value.forEach(r=>{
+        const sym=String(r[kS]||''), yr=String(r[kY]||'').trim();
+        if(!yr) return;
+        if(divChartSymbolSet.value!==null&&!divChartSymbolSet.value.has(sym)) return;
+        const v=parseFloat(String(r[kA]||'').replace(/,/g,''))||0;
+        map[yr]=(map[yr]||0)+v;
+      });
+      const labels=Object.keys(map).sort();
+      return {labels,data:labels.map(l=>Math.round(map[l]))};
+    });
+    const divChartHasData = computed(()=>(divChartData.value?.labels?.length||0)>0);
+    const divChartTotal   = computed(()=>divChartData.value?.data?.reduce((a,b)=>a+b,0)||0);
+    const divChartYears   = computed(()=>divChartData.value?.labels?.length||0);
+    const dcToggleSym = sym => {
+      const all=divAllSymbols.value;
+      if(divChartSymbolSet.value===null){const s=new Set(all);s.delete(sym);divChartSymbolSet.value=s.size===all.length?null:s;}
+      else{const s=new Set(divChartSymbolSet.value);s.has(sym)?s.delete(sym):s.add(sym);divChartSymbolSet.value=s.size===all.length?null:s;}
+    };
+    const dcSymActive = sym => divChartSymbolSet.value===null||divChartSymbolSet.value.has(sym);
+    let divChart=null;
+    const renderDivChart=()=>{
+      if(currentTab.value!=='dividends') return;
+      const canvasEl=document.getElementById('divYearChart'); if(!canvasEl) return;
+      if(divChart){divChart.destroy();divChart=null;}
+      const {labels,data}=divChartData.value;
+      if(!labels.length) return;
+      const isMob=window.innerWidth<640;
+      divChart=new Chart(canvasEl,{
+        type:'bar',
+        data:{labels,datasets:[{label:'年度股利',data,backgroundColor:'#dda15e',borderColor:'#dda15e',borderRadius:6,barPercentage:.6}]},
+        options:{responsive:true,maintainAspectRatio:false,
+          plugins:{
+            datalabels:{display:!isMob,anchor:'end',align:'end',color:'#bc6c25',font:{size:9,weight:'bold'},formatter:v=>v?new Intl.NumberFormat('en-US').format(v):''},
+            legend:{display:false},
+            tooltip:{callbacks:{label:c=>'股利：'+fmtInt(c.parsed.y)}}
+          },
+          scales:{
+            y:{beginAtZero:true,grid:{color:'rgba(240,240,235,.8)'},ticks:{callback:v=>v===0?'0':(Math.abs(Math.round(v/1000))+'K'),font:{size:10}},afterFit:a=>a.width=52},
+            x:{grid:{display:false},ticks:{font:{size:10}}}
+          }
+        },
+        plugins:[ChartDataLabels],
+      });
+    };
+    Vue.watch(()=>divChartData.value,()=>{Vue.nextTick(renderDivChart);},{deep:true});
+    Vue.watch(()=>currentTab.value,t=>{if(t==='dividends')Vue.nextTick(()=>setTimeout(renderDivChart,150));});
+
     const groupedDcaList = computed(() => {
       if (currentTab.value!=='dca'||!listData.value.length) return [];
       const map=new Map(); let source=[...listData.value];
@@ -2125,6 +2228,7 @@ createApp({
       holdingsSortKey,holdingsSortOrder,groupedHoldingsList,totalHoldingsProfit,sortHoldingsBy,openHoldingsModal,
       holdingsFilterOpen,holdingsFilterSelected,holdingsAllStockOptions,holdingsFilterIsSelected,holdingsFilterSelectAll,holdingsFilterDeselectAll,holdingsFilterToggle,
       dividendFilter,uniqueDividendYears,dividendHeaders,filteredDividendList,totalDividendAmount,
+      divChartFilterOpen,divChartSymbolSet,divAllSymbols,divChartHasData,divChartTotal,divChartYears,dcToggleSym,dcSymActive,
       groupedDcaList,dcaSummary,openDcaDetailModal,
       fmtInt,fmtDec,fmtCell,exportCSV,
       saveSettings,functionRunning,functionMsg,functionError,runFunction,
