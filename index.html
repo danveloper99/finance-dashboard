@@ -319,19 +319,19 @@
             </div>
           </div>
           <!-- 套用狀態提示 -->
-          <div v-if="realizedMonthlyChartData.labels.length===0" style="margin-top:10px;font-size:12px;color:#aaa;text-align:center">無符合資料</div>
+          <div v-if="!realizedChartHasData" style="margin-top:10px;font-size:12px;color:#aaa;text-align:center">無符合資料</div>
         </div>
 
         <!-- 圖例與說明 -->
         <div style="display:flex;align-items:center;gap:14px;padding:8px 20px 0;flex-wrap:wrap">
           <div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#bc6c25"><span style="width:12px;height:12px;border-radius:3px;background:#bc6c25;display:inline-block"></span>獲利月</div>
           <div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#588157"><span style="width:12px;height:12px;border-radius:3px;background:#588157;display:inline-block"></span>虧損月</div>
-          <div v-if="realizedMonthlyChartData.labels.length" style="margin-left:auto;font-size:11px;color:#aaa">共 {{ realizedMonthlyChartData.labels.length }} 個月 · 合計 <span :class="realizedMonthlyChartData.data.reduce((a,b)=>a+b,0)>=0?'val-pos':'val-neg'" class="font-bold num-font">{{ fmtInt(realizedMonthlyChartData.data.reduce((a,b)=>a+b,0)) }}</span></div>
+          <div v-if="realizedChartHasData" style="margin-left:auto;font-size:11px;color:#aaa">共 {{ realizedChartMonths }} 個月 · 合計 <span :class="realizedChartTotal>=0?'val-pos':'val-neg'" class="font-bold num-font">{{ fmtInt(realizedChartTotal) }}</span></div>
         </div>
 
         <!-- 圖表 canvas -->
         <div style="padding:12px 16px 20px;height:300px;position:relative">
-          <div v-if="!realizedMonthlyChartData.labels.length" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:14px;font-weight:700"><i class="ph ph-chart-bar" style="font-size:32px;display:block;margin:0 auto 8px;opacity:.3"></i></div>
+          <div v-if="!realizedChartHasData" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:14px;font-weight:700"><i class="ph ph-chart-bar" style="font-size:32px;display:block;margin:0 auto 8px;opacity:.3"></i></div>
           <canvas id="realizedMonthChart"></canvas>
         </div>
       </div>
@@ -1452,6 +1452,7 @@ createApp({
     });
     let realizedChart=null;
     const renderRealizedChart=()=>{
+      if(currentTab.value!=='realized') return;
       const canvasEl=document.getElementById('realizedMonthChart'); if(!canvasEl) return;
       if(realizedChart){realizedChart.destroy();realizedChart=null;}
       const {labels,data}=realizedMonthlyChartData.value;
@@ -1491,6 +1492,9 @@ createApp({
     };
     const rcYearActive = y => realizedChartYearSet.value===null||realizedChartYearSet.value.has(y);
     const rcSymActive = sym => realizedChartSymbolSet.value===null||realizedChartSymbolSet.value.has(sym);
+    const realizedChartHasData = computed(()=>(realizedMonthlyChartData.value?.labels?.length||0)>0);
+    const realizedChartTotal   = computed(()=>realizedMonthlyChartData.value?.data?.reduce((a,b)=>a+b,0)||0);
+    const realizedChartMonths  = computed(()=>realizedMonthlyChartData.value?.labels?.length||0);
 
     const filteredRealizedList = computed(() => {
       if (currentTab.value!=='realized') return [];
@@ -2117,7 +2121,7 @@ createApp({
       tabs,bottomTabs,actionFunctions,selectTab,loadData,
       realizedFilter,realizedHeaders,uniqueYears,uniqueMonths,filteredRealizedList,filteredRealizedTotal,sortBy,sortKey,sortOrder,realizedColAlign,
       realizedChartFilterOpen,realizedChartSymbolSet,realizedChartYearSet,realizedAllSymbols,realizedAllChartYears,realizedMonthlyChartData,
-      rcToggleYear,rcToggleSym,rcYearActive,rcSymActive,
+      rcToggleYear,rcToggleSym,rcYearActive,rcSymActive,realizedChartHasData,realizedChartTotal,realizedChartMonths,
       holdingsSortKey,holdingsSortOrder,groupedHoldingsList,totalHoldingsProfit,sortHoldingsBy,openHoldingsModal,
       holdingsFilterOpen,holdingsFilterSelected,holdingsAllStockOptions,holdingsFilterIsSelected,holdingsFilterSelectAll,holdingsFilterDeselectAll,holdingsFilterToggle,
       dividendFilter,uniqueDividendYears,dividendHeaders,filteredDividendList,totalDividendAmount,
