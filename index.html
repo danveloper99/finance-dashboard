@@ -257,13 +257,89 @@
         <div style="display:flex;align-items:center;gap:8px"><div class="stat-badge"><div style="width:36px;height:36px;border-radius:50%;background:rgba(188,108,37,.1);display:flex;align-items:center;justify-content:center;color:#bc6c25;flex-shrink:0"><i class="ph-fill ph-coins" style="font-size:18px"></i></div><div><div style="font-size:11px;font-weight:700;color:#588157">篩選後總淨獲利</div><div class="font-bold num-font" :class="filteredRealizedTotal>0?'val-pos':'val-neg'" style="font-size:20px">{{ fmtInt(filteredRealizedTotal) }}</div></div></div><button @click="loadData(currentTab)" :disabled="listLoading" style="display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:12px;font-size:13px;font-weight:700;background:white;border:1.5px solid #dad7cd;color:#3a5a40;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='#f0f4ee'" onmouseout="this.style.background='white'"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'" style="font-size:15px"></i> 更新</button></div>
       </div>
       <div class="filter-bar">
-        <div style="display:flex;align-items:center;gap:8px;min-width:160px"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px">年份</label><select v-model="realizedFilter.year" class="input-custom"><option value="ALL">全部年份</option><option v-for="y in uniqueYears" :key="y" :value="y">{{ y }}</option></select></div>
+        <div style="display:flex;align-items:center;gap:8px;min-width:130px"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px">年份</label><select v-model="realizedFilter.year" class="input-custom"><option value="ALL">全部年份</option><option v-for="y in uniqueYears" :key="y" :value="y">{{ y }}</option></select></div>
+        <div style="display:flex;align-items:center;gap:8px;min-width:110px"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px">月份</label><select v-model="realizedFilter.month" class="input-custom" :disabled="realizedFilter.year==='ALL'"><option value="ALL">全部月份</option><option v-for="m in uniqueMonths" :key="m" :value="m">{{ m }} 月</option></select></div>
         <div style="display:flex;align-items:center;gap:8px;flex:1"><label class="font-bold whitespace-nowrap" style="color:#3a5a40;font-size:13px">股票</label><input v-model="realizedFilter.name" type="text" class="input-custom" placeholder="代碼或名稱..."></div>
         <button @click="exportCSV" class="btn btn-outline" style="font-size:13px;padding:8px 14px;white-space:nowrap">匯出 CSV</button>
       </div>
       <div class="table-wrap">
         <div v-if="listLoading" style="padding:48px;text-align:center;color:#588157"><i class="ph ph-spinner spin" style="font-size:28px;display:block;margin-bottom:8px"></i>讀取資料中...</div>
         <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th v-for="h in realizedHeaders" :key="h" @click="sortBy(h)" class="table-th" :style="'cursor:pointer;'+realizedColAlign(h)">{{ h }}<span v-if="sortKey===h" style="margin-left:4px;color:#bc6c25"><i :class="sortOrder===1?'ph-bold ph-arrow-up':'ph-bold ph-arrow-down'"></i></span></th></tr></thead><tbody><tr v-for="(row,idx) in filteredRealizedList" :key="idx"><td v-for="h in realizedHeaders" :key="h" class="table-td" :style="realizedColAlign(h)" v-html="fmtCell(h,row[h])"></td></tr><tr v-if="!filteredRealizedList.length"><td :colspan="realizedHeaders.length" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合篩選條件的資料</td></tr></tbody></table></div>
+      </div>
+
+      <!-- ── 月度損益圖表 ── -->
+      <div class="card" style="padding:0;overflow:hidden">
+        <!-- 圖表標題列 -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px 0">
+          <div style="display:flex;align-items:center;gap:8px;color:#3a5a40"><i class="ph ph-chart-bar" style="font-size:20px"></i><span class="font-bold section-title">月度已實現損益</span></div>
+          <button @click="realizedChartFilterOpen=!realizedChartFilterOpen"
+            :style="(realizedChartSymbolSet!==null||realizedChartYearSet!==null)?'background:#3a5a40;color:white;border-color:#3a5a40':''"
+            style="display:flex;align-items:center;gap:5px;padding:7px 13px;border-radius:10px;border:1.5px solid #dad7cd;font-size:12px;font-weight:700;cursor:pointer;background:white;color:#3a5a40;transition:all .15s">
+            <i class="ph ph-funnel" style="font-size:14px"></i>篩選
+            <span v-if="realizedChartSymbolSet!==null||realizedChartYearSet!==null" style="background:rgba(255,255,255,.25);border-radius:20px;padding:0 6px;font-size:10px;font-weight:700">已套用</span>
+          </button>
+        </div>
+
+        <!-- 圖表篩選面板 -->
+        <div v-if="realizedChartFilterOpen" style="margin:12px 20px;padding:14px;background:#f7f9f4;border-radius:1rem;border:1px solid rgba(88,129,87,.12)">
+          <!-- 年份篩選 -->
+          <div style="margin-bottom:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <span style="font-size:12px;font-weight:700;color:#588157"><i class="ph ph-calendar" style="font-size:13px;margin-right:4px"></i>年份</span>
+              <div style="display:flex;gap:5px">
+                <button @click="realizedChartYearSet=null" style="font-size:11px;font-weight:700;color:#3a5a40;background:#f0f4ee;border:1px solid #c5d9c5;border-radius:7px;padding:3px 10px;cursor:pointer">全部</button>
+              </div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <label v-for="y in realizedAllChartYears" :key="y"
+                :style="(realizedChartYearSet===null||realizedChartYearSet.has(y))?'background:#3a5a40;color:white;border-color:#3a5a40':'background:white;color:#555;border-color:#dad7cd'"
+                style="display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border:1.5px solid;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;user-select:none;transition:all .15s"
+                @click="()=>{
+                  if(realizedChartYearSet===null){realizedChartYearSet=new Set(realizedAllChartYears.filter(x=>x!==y));}
+                  else{const s=new Set(realizedChartYearSet);s.has(y)?s.delete(y):s.add(y);realizedChartYearSet=s.size===realizedAllChartYears.length?null:s;}
+                }">
+                {{ y }}
+              </label>
+            </div>
+          </div>
+          <!-- 股票代碼篩選 -->
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <span style="font-size:12px;font-weight:700;color:#588157"><i class="ph ph-tag" style="font-size:13px;margin-right:4px"></i>股票代碼</span>
+              <div style="display:flex;gap:5px">
+                <button @click="realizedChartSymbolSet=null" style="font-size:11px;font-weight:700;color:#3a5a40;background:#f0f4ee;border:1px solid #c5d9c5;border-radius:7px;padding:3px 10px;cursor:pointer">全選</button>
+                <button @click="realizedChartSymbolSet=new Set()" style="font-size:11px;font-weight:700;color:#888;background:#f5f5f5;border:1px solid #ddd;border-radius:7px;padding:3px 10px;cursor:pointer">全清</button>
+              </div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;max-height:140px;overflow-y:auto">
+              <label v-for="sym in realizedAllSymbols" :key="sym"
+                :style="(realizedChartSymbolSet===null||realizedChartSymbolSet.has(sym))?'background:#bc6c25;color:white;border-color:#bc6c25':'background:white;color:#555;border-color:#dad7cd'"
+                style="display:inline-flex;align-items:center;gap:4px;padding:4px 11px;border:1.5px solid;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;user-select:none;transition:all .15s"
+                @click="()=>{
+                  if(realizedChartSymbolSet===null){realizedChartSymbolSet=new Set(realizedAllSymbols.filter(x=>x!==sym));}
+                  else{const s=new Set(realizedChartSymbolSet);s.has(sym)?s.delete(sym):s.add(sym);realizedChartSymbolSet=s.size===realizedAllSymbols.length?null:s;}
+                }">
+                <i class="ph" :class="(realizedChartSymbolSet===null||realizedChartSymbolSet.has(sym))?'ph-check-square':'ph-square'" style="font-size:12px"></i>
+                {{ sym }}
+              </label>
+            </div>
+          </div>
+          <!-- 套用狀態提示 -->
+          <div v-if="realizedMonthlyChartData.labels.length===0" style="margin-top:10px;font-size:12px;color:#aaa;text-align:center">無符合資料</div>
+        </div>
+
+        <!-- 圖例與說明 -->
+        <div style="display:flex;align-items:center;gap:14px;padding:8px 20px 0;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#bc6c25"><span style="width:12px;height:12px;border-radius:3px;background:#bc6c25;display:inline-block"></span>獲利月</div>
+          <div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#588157"><span style="width:12px;height:12px;border-radius:3px;background:#588157;display:inline-block"></span>虧損月</div>
+          <div v-if="realizedMonthlyChartData.labels.length" style="margin-left:auto;font-size:11px;color:#aaa">共 {{ realizedMonthlyChartData.labels.length }} 個月 · 合計 <span :class="realizedMonthlyChartData.data.reduce((a,b)=>a+b,0)>=0?'val-pos':'val-neg'" class="font-bold num-font">{{ fmtInt(realizedMonthlyChartData.data.reduce((a,b)=>a+b,0)) }}</span></div>
+        </div>
+
+        <!-- 圖表 canvas -->
+        <div style="padding:12px 16px 20px;height:300px;position:relative">
+          <div v-if="!realizedMonthlyChartData.labels.length" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:14px;font-weight:700"><i class="ph ph-chart-bar" style="font-size:32px;display:block;margin:0 auto 8px;opacity:.3"></i></div>
+          <canvas id="realizedMonthChart"></canvas>
+        </div>
       </div>
     </div>
 
@@ -1141,7 +1217,7 @@ createApp({
     };
 
     // ── 資料表 ──
-    const realizedFilter = ref({ year:'ALL', name:'' });
+    const realizedFilter = ref({ year:'ALL', month:'ALL', name:'' });
     const sortKey = ref(''), sortOrder = ref(1);
     const holdingsSortKey = ref(''), holdingsSortOrder = ref(1);
     const dividendFilter = ref({ year:'ALL' });
@@ -1334,10 +1410,89 @@ createApp({
       listData.value.forEach(r=>{const k=Object.keys(r).find(x=>x.includes('賣出')&&(x.includes('日期')||x.includes('Date')));if(k&&r[k]){const y=String(r[k]).substring(0,4);if(!isNaN(y))s.add(y);}});
       return Array.from(s).sort().reverse();
     });
+    const uniqueMonths = computed(() => {
+      if (currentTab.value!=='realized'||!listData.value.length||realizedFilter.value.year==='ALL') return [];
+      const kD=Object.keys(listData.value[0]).find(x=>x.includes('賣出')&&(x.includes('日期')||x.includes('Date')));
+      if(!kD) return [];
+      const s=new Set();
+      listData.value.forEach(r=>{const d=String(r[kD]||'');if(d.startsWith(realizedFilter.value.year)&&d.length>=7)s.add(d.substring(5,7));});
+      return Array.from(s).sort();
+    });
+    Vue.watch(()=>realizedFilter.value.year,()=>{realizedFilter.value.month='ALL';});
+
+    // ── 已實現損益月度圖表 ──
+    const realizedChartFilterOpen = ref(false);
+    const realizedChartSymbolSet  = ref(null); // null = 全部
+    const realizedChartYearSet    = ref(null); // null = 全部
+    const realizedAllSymbols = computed(()=>{
+      if(!listData.value.length) return [];
+      const kS=Object.keys(listData.value[0]).find(x=>x.includes('代碼')||x.includes('Symbol'));
+      if(!kS) return [];
+      return [...new Set(listData.value.map(r=>String(r[kS]||'')).filter(Boolean))].sort();
+    });
+    const realizedAllChartYears = computed(()=>{
+      if(!listData.value.length) return [];
+      const kD=Object.keys(listData.value[0]).find(x=>x.includes('賣出')&&(x.includes('日期')||x.includes('Date')));
+      if(!kD) return [];
+      return [...new Set(listData.value.map(r=>String(r[kD]||'').substring(0,4)).filter(y=>y&&!isNaN(y)))].sort().reverse();
+    });
+    const realizedMonthlyChartData = computed(()=>{
+      if(!listData.value.length) return {labels:[],data:[]};
+      const keys=Object.keys(listData.value[0]);
+      const kS=keys.find(x=>x.includes('代碼')||x.includes('Symbol'));
+      const kD=keys.find(x=>x.includes('賣出')&&(x.includes('日期')||x.includes('Date')));
+      const kP=keys.find(k=>k==='淨獲利'||k==='NetProfit')||keys.find(k=>(k.includes('損益')||k.includes('Profit')||k.includes('獲利'))&&!k.includes('率')&&!k.includes('%'));
+      if(!kD||!kP) return {labels:[],data:[]};
+      const map={};
+      listData.value.forEach(r=>{
+        const sym=String(r[kS]||''), dateStr=String(r[kD]||'');
+        if(!dateStr||dateStr.length<7) return;
+        const yr=dateStr.substring(0,4), ym=dateStr.substring(0,7);
+        if(realizedChartSymbolSet.value&&!realizedChartSymbolSet.value.has(sym)) return;
+        if(realizedChartYearSet.value&&!realizedChartYearSet.value.has(yr)) return;
+        const v=parseFloat(String(r[kP]||'').replace(/,/g,''))||0;
+        map[ym]=(map[ym]||0)+v;
+      });
+      const labels=Object.keys(map).sort();
+      return {labels,data:labels.map(l=>Math.round(map[l]))};
+    });
+    let realizedChart=null;
+    const renderRealizedChart=()=>{
+      const ctx=document.getElementById('realizedMonthChart'); if(!ctx) return;
+      if(realizedChart){realizedChart.destroy();realizedChart=null;}
+      const {labels,data}=realizedMonthlyChartData.value;
+      if(!labels.length) return;
+      const isMob=window.innerWidth<640;
+      const colors=data.map(v=>v>=0?'#bc6c25':'#588157');
+      const colorsAlpha=data.map(v=>v>=0?'rgba(188,108,37,.15)':'rgba(88,129,87,.15)');
+      realizedChart=new Chart(ctx,{
+        type:'bar',
+        data:{labels,datasets:[{
+          label:'月淨獲利',data,
+          backgroundColor:colors,
+          borderColor:colors,
+          borderRadius:6,barPercentage:.65,
+          datalabels:{display:!isMob,anchor:'end',align:ctx2=>ctx2.dataset.data[ctx2.dataIndex]>=0?'end':'start',color:d=>d.dataset.data[d.dataIndex]>=0?'#bc6c25':'#588157',font:{size:9,weight:'bold'},formatter:v=>v?new Intl.NumberFormat('en-US').format(v):''}
+        }]},
+        options:{responsive:true,maintainAspectRatio:false,
+          plugins:{datalabels:{},legend:{display:false},
+            tooltip:{callbacks:{label:c=>'淨獲利：'+fmtInt(c.parsed.y)}}},
+          scales:{
+            y:{beginAtZero:true,grid:{color:'rgba(240,240,235,.8)'},ticks:{callback:v=>v===0?'0':(Math.abs(v)/1000).toFixed(0)+(v<0?'-':'')+'K',font:{size:10}},afterFit:a=>a.width=56},
+            x:{grid:{display:false},ticks:{font:{size:10},maxRotation:45}}
+          }
+        },
+        plugins:[ChartDataLabels],
+      });
+    };
+    Vue.watch(realizedMonthlyChartData,()=>{Vue.nextTick(renderRealizedChart);},{deep:true});
+    Vue.watch(()=>currentTab.value,t=>{if(t==='realized')Vue.nextTick(()=>setTimeout(renderRealizedChart,80));});
+
     const filteredRealizedList = computed(() => {
       if (currentTab.value!=='realized') return [];
       let d=listData.value;
       if(realizedFilter.value.year!=='ALL') d=d.filter(r=>{const k=Object.keys(r).find(x=>x.includes('賣出')&&(x.includes('日期')||x.includes('Date')));return k&&r[k]&&String(r[k]).startsWith(realizedFilter.value.year);});
+      if(realizedFilter.value.month!=='ALL') d=d.filter(r=>{const k=Object.keys(r).find(x=>x.includes('賣出')&&(x.includes('日期')||x.includes('Date')));return k&&r[k]&&String(r[k]).length>=7&&String(r[k]).substring(5,7)===realizedFilter.value.month;});
       if(realizedFilter.value.name) d=d.filter(r=>multiSearch(r,realizedFilter.value.name));
       if(sortKey.value){d=[...d].sort((a,b)=>{const va=a[sortKey.value],vb=b[sortKey.value];const na=parseFloat(String(va).replace(/,/g,'')),nb=parseFloat(String(vb).replace(/,/g,''));if(!isNaN(na)&&!isNaN(nb))return(na-nb)*sortOrder.value;return String(va).localeCompare(String(vb))*sortOrder.value;});}
       return d;
@@ -1956,7 +2111,8 @@ createApp({
       dashboard,listData,holdingsConfig,settingsData,settingsSchema,settingsLoading,
       showDetailModal,currentDetailStock,currentDetailList,detailType,
       tabs,bottomTabs,actionFunctions,selectTab,loadData,
-      realizedFilter,realizedHeaders,uniqueYears,filteredRealizedList,filteredRealizedTotal,sortBy,sortKey,sortOrder,realizedColAlign,
+      realizedFilter,realizedHeaders,uniqueYears,uniqueMonths,filteredRealizedList,filteredRealizedTotal,sortBy,sortKey,sortOrder,realizedColAlign,
+      realizedChartFilterOpen,realizedChartSymbolSet,realizedChartYearSet,realizedAllSymbols,realizedAllChartYears,realizedMonthlyChartData,
       holdingsSortKey,holdingsSortOrder,groupedHoldingsList,totalHoldingsProfit,sortHoldingsBy,openHoldingsModal,
       holdingsFilterOpen,holdingsFilterSelected,holdingsAllStockOptions,holdingsFilterIsSelected,holdingsFilterSelectAll,holdingsFilterDeselectAll,holdingsFilterToggle,
       dividendFilter,uniqueDividendYears,dividendHeaders,filteredDividendList,totalDividendAmount,
