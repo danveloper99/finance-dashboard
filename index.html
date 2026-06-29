@@ -292,12 +292,9 @@
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:6px">
               <label v-for="y in realizedAllChartYears" :key="y"
-                :style="(realizedChartYearSet===null||realizedChartYearSet.has(y))?'background:#3a5a40;color:white;border-color:#3a5a40':'background:white;color:#555;border-color:#dad7cd'"
+                :style="rcYearActive(y)?'background:#3a5a40;color:white;border-color:#3a5a40':'background:white;color:#555;border-color:#dad7cd'"
                 style="display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border:1.5px solid;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;user-select:none;transition:all .15s"
-                @click="()=>{
-                  if(realizedChartYearSet===null){realizedChartYearSet=new Set(realizedAllChartYears.filter(x=>x!==y));}
-                  else{const s=new Set(realizedChartYearSet);s.has(y)?s.delete(y):s.add(y);realizedChartYearSet=s.size===realizedAllChartYears.length?null:s;}
-                }">
+                @click="rcToggleYear(y)">
                 {{ y }}
               </label>
             </div>
@@ -313,13 +310,10 @@
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:6px;max-height:140px;overflow-y:auto">
               <label v-for="sym in realizedAllSymbols" :key="sym"
-                :style="(realizedChartSymbolSet===null||realizedChartSymbolSet.has(sym))?'background:#bc6c25;color:white;border-color:#bc6c25':'background:white;color:#555;border-color:#dad7cd'"
+                :style="rcSymActive(sym)?'background:#bc6c25;color:white;border-color:#bc6c25':'background:white;color:#555;border-color:#dad7cd'"
                 style="display:inline-flex;align-items:center;gap:4px;padding:4px 11px;border:1.5px solid;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;user-select:none;transition:all .15s"
-                @click="()=>{
-                  if(realizedChartSymbolSet===null){realizedChartSymbolSet=new Set(realizedAllSymbols.filter(x=>x!==sym));}
-                  else{const s=new Set(realizedChartSymbolSet);s.has(sym)?s.delete(sym):s.add(sym);realizedChartSymbolSet=s.size===realizedAllSymbols.length?null:s;}
-                }">
-                <i class="ph" :class="(realizedChartSymbolSet===null||realizedChartSymbolSet.has(sym))?'ph-check-square':'ph-square'" style="font-size:12px"></i>
+                @click="rcToggleSym(sym)">
+                <i class="ph" :class="rcSymActive(sym)?'ph-check-square':'ph-square'" style="font-size:12px"></i>
                 {{ sym }}
               </label>
             </div>
@@ -1458,35 +1452,45 @@ createApp({
     });
     let realizedChart=null;
     const renderRealizedChart=()=>{
-      const ctx=document.getElementById('realizedMonthChart'); if(!ctx) return;
+      const canvasEl=document.getElementById('realizedMonthChart'); if(!canvasEl) return;
       if(realizedChart){realizedChart.destroy();realizedChart=null;}
       const {labels,data}=realizedMonthlyChartData.value;
       if(!labels.length) return;
       const isMob=window.innerWidth<640;
       const colors=data.map(v=>v>=0?'#bc6c25':'#588157');
-      const colorsAlpha=data.map(v=>v>=0?'rgba(188,108,37,.15)':'rgba(88,129,87,.15)');
-      realizedChart=new Chart(ctx,{
+      realizedChart=new Chart(canvasEl,{
         type:'bar',
-        data:{labels,datasets:[{
-          label:'月淨獲利',data,
-          backgroundColor:colors,
-          borderColor:colors,
-          borderRadius:6,barPercentage:.65,
-          datalabels:{display:!isMob,anchor:'end',align:ctx2=>ctx2.dataset.data[ctx2.dataIndex]>=0?'end':'start',color:d=>d.dataset.data[d.dataIndex]>=0?'#bc6c25':'#588157',font:{size:9,weight:'bold'},formatter:v=>v?new Intl.NumberFormat('en-US').format(v):''}
-        }]},
+        data:{labels,datasets:[{label:'月淨獲利',data,backgroundColor:colors,borderColor:colors,borderRadius:6,barPercentage:.65}]},
         options:{responsive:true,maintainAspectRatio:false,
-          plugins:{datalabels:{},legend:{display:false},
-            tooltip:{callbacks:{label:c=>'淨獲利：'+fmtInt(c.parsed.y)}}},
+          plugins:{
+            datalabels:{display:!isMob,anchor:'end',align:'end',color:ctx=>ctx.dataset.data[ctx.dataIndex]>=0?'#bc6c25':'#588157',font:{size:9,weight:'bold'},formatter:v=>v?new Intl.NumberFormat('en-US').format(Math.abs(v)):''},
+            legend:{display:false},
+            tooltip:{callbacks:{label:c=>'淨獲利：'+fmtInt(c.parsed.y)}}
+          },
           scales:{
-            y:{beginAtZero:true,grid:{color:'rgba(240,240,235,.8)'},ticks:{callback:v=>v===0?'0':(Math.abs(v)/1000).toFixed(0)+(v<0?'-':'')+'K',font:{size:10}},afterFit:a=>a.width=56},
+            y:{beginAtZero:true,grid:{color:'rgba(240,240,235,.8)'},ticks:{callback:v=>v===0?'0':((v>=0?'':'-')+Math.abs(Math.round(v/1000))+'K'),font:{size:10}},afterFit:a=>a.width=52},
             x:{grid:{display:false},ticks:{font:{size:10},maxRotation:45}}
           }
         },
         plugins:[ChartDataLabels],
       });
     };
-    Vue.watch(realizedMonthlyChartData,()=>{Vue.nextTick(renderRealizedChart);},{deep:true});
-    Vue.watch(()=>currentTab.value,t=>{if(t==='realized')Vue.nextTick(()=>setTimeout(renderRealizedChart,80));});
+    Vue.watch(()=>realizedMonthlyChartData.value,()=>{Vue.nextTick(renderRealizedChart);},{deep:true});
+    Vue.watch(()=>currentTab.value,t=>{if(t==='realized')Vue.nextTick(()=>setTimeout(renderRealizedChart,150));});
+
+    // ── 圖表篩選 methods（避免 template inline 複雜表達式）──
+    const rcToggleYear = y => {
+      const all=realizedAllChartYears.value;
+      if(realizedChartYearSet.value===null){const s=new Set(all);s.delete(y);realizedChartYearSet.value=s.size===all.length?null:s;}
+      else{const s=new Set(realizedChartYearSet.value);s.has(y)?s.delete(y):s.add(y);realizedChartYearSet.value=s.size===all.length?null:s;}
+    };
+    const rcToggleSym = sym => {
+      const all=realizedAllSymbols.value;
+      if(realizedChartSymbolSet.value===null){const s=new Set(all);s.delete(sym);realizedChartSymbolSet.value=s.size===all.length?null:s;}
+      else{const s=new Set(realizedChartSymbolSet.value);s.has(sym)?s.delete(sym):s.add(sym);realizedChartSymbolSet.value=s.size===all.length?null:s;}
+    };
+    const rcYearActive = y => realizedChartYearSet.value===null||realizedChartYearSet.value.has(y);
+    const rcSymActive = sym => realizedChartSymbolSet.value===null||realizedChartSymbolSet.value.has(sym);
 
     const filteredRealizedList = computed(() => {
       if (currentTab.value!=='realized') return [];
@@ -2113,6 +2117,7 @@ createApp({
       tabs,bottomTabs,actionFunctions,selectTab,loadData,
       realizedFilter,realizedHeaders,uniqueYears,uniqueMonths,filteredRealizedList,filteredRealizedTotal,sortBy,sortKey,sortOrder,realizedColAlign,
       realizedChartFilterOpen,realizedChartSymbolSet,realizedChartYearSet,realizedAllSymbols,realizedAllChartYears,realizedMonthlyChartData,
+      rcToggleYear,rcToggleSym,rcYearActive,rcSymActive,
       holdingsSortKey,holdingsSortOrder,groupedHoldingsList,totalHoldingsProfit,sortHoldingsBy,openHoldingsModal,
       holdingsFilterOpen,holdingsFilterSelected,holdingsAllStockOptions,holdingsFilterIsSelected,holdingsFilterSelectAll,holdingsFilterDeselectAll,holdingsFilterToggle,
       dividendFilter,uniqueDividendYears,dividendHeaders,filteredDividendList,totalDividendAmount,
