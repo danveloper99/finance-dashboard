@@ -1607,8 +1607,12 @@ function rebuildRealizedPnL_FIFO() {
 
         lot.remainQty -= part; remain -= part;
       }
-      if (!isNew && q.length === 0 && remain > 0.001) {
-        Logger.log(`⚠ [Warning] 已實現損益快進：${sell.date} ${sym} 賣出 ${remain} 股時庫存不足（已忽略短缺部分）`);
+      if (q.length === 0 && remain > 0.001) {
+        if (isNew) {
+          Logger.log(`⚠ [Warning] 已實現損益：${sell.date} ${sym} 賣出 ${remain} 股時庫存不足，這筆（或其中一部分）不會產生已實現損益列，請檢查〈期初庫存〉或〈交易紀錄〉是否漏記買進`);
+        } else {
+          Logger.log(`⚠ [Warning] 已實現損益快進：${sell.date} ${sym} 賣出 ${remain} 股時庫存不足（已忽略短缺部分）`);
+        }
       }
     });
   }
