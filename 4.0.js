@@ -337,6 +337,10 @@ function ingestFromGmail_Plaintext_SAFE(){ return runWithAlert_(ingestFromGmail_
 function rebuildAll_B_SAFE(){ return runWithAlert_(rebuildAll_B,'rebuildAll_B'); }
 function updateDividendsFromFinMind_SAFE(){ return runWithAlert_(updateDividendsFromFinMind,'updateDividendsFromFinMind'); }
 function rebuildRealizedPnL_FIFO_SAFE(){ return runWithAlert_(rebuildRealizedPnL_FIFO,'rebuildRealizedPnL_FIFO'); }
+// ★ 完整重建版：清空《已實現損益》既有資料，用目前的交易紀錄/期初庫存/股利狀況從頭整批重算。
+//   跟上面那個「只算上次處理時間點之後」的增量版是分開的兩個入口，平常自動排程請維持用增量版，
+//   這個只在你改過期初庫存、修正過交易紀錄分類、或想整批重算時手動執行。
+function rebuildRealizedPnL_FIFO_FullRebuild_SAFE(){ return runWithAlert_(()=>rebuildRealizedPnL_FIFO(true), 'rebuildRealizedPnL_FIFO_FullRebuild'); }
 function appendDCAFromHoldings_SAFE(){ return runWithAlert_(appendDCAFromHoldings, 'appendDCAFromHoldings'); }
 function runDividendsFullCycle_SAFE() { return runWithAlert_(runDividendsFullCycle_, 'runDividendsFullCycle'); }
 function rebuildDCADividends_SAFE() { return runWithAlert_(appendDCAFromHoldings, 'appendDCAFromHoldings'); }
@@ -1493,7 +1497,7 @@ function avgBuyOnDate_(sym, cutoffDate, openRows, tradeRows) {
  * - 若工作表為空，執行完整重建
  * - 想強制完整重建：手動清空《已實現損益》工作表後再執行
  */
-function rebuildRealizedPnL_FIFO() {
+function rebuildRealizedPnL_FIFO(fullRebuild) {
   const C = getCfg_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const shOpen = ensureSheetWithHeader_(C.SHEET_OPENING, []);
@@ -1510,6 +1514,14 @@ function rebuildRealizedPnL_FIFO() {
       out.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
       Logger.log('已實現損益：偵測到舊格式，已清空並更新表頭，執行完整重建');
     }
+  }
+
+  // ★ 完整重建模式：先清空既有資料列（保留表頭），這樣下面「每股票各自最後
+  //   處理日期」會全部變成空白，等同於把所有股票的所有賣出都當成新的，
+  //   用目前的〈交易紀錄〉〈期初庫存〉〈股利狀況〉從頭整批重算一次。
+  if (fullRebuild && out.getLastRow() > 1) {
+    out.getRange(2, 1, out.getLastRow() - 1, out.getLastColumn()).clearContent();
+    Logger.log('已實現損益：完整重建模式，已清空既有資料，重新計算全部歷史');
   }
 
   // 載入股利資料：code -> [{exDate, cashPerShare}]
