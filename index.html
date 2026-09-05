@@ -97,6 +97,10 @@
     .chart-area{height:280px;position:relative}
     @media(min-width:640px){.chart-area{height:340px}}
     @media(min-width:1024px){.chart-area{height:400px}}
+    /* 資產趨勢圖：手機也給足夠高度，數字才看得清楚 */
+    .wealth-chart-area{height:320px}
+    @media(min-width:640px){.wealth-chart-area{height:360px}}
+    @media(min-width:1024px){.wealth-chart-area{height:420px}}
     .table-wrap{background:white;border-radius:1.5rem;border:1px solid rgba(240,240,235,.9);box-shadow:var(--shadow-card);overflow:hidden;display:flex;flex-direction:column;max-height:62vh}
     .table-scroll{overflow:auto;flex:1;-webkit-overflow-scrolling:touch}
     .settings-group{background:rgba(255,255,255,.88);border-radius:1.5rem;padding:20px;border:1px solid rgba(255,255,255,.95);box-shadow:0 2px 12px rgba(58,90,64,.07);transition:all .22s}
@@ -577,18 +581,27 @@
         <!-- 趨勢圖 -->
         <div v-if="wealthHistory.length" class="card">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;color:#3a5a40"><i class="ph ph-chart-bar" style="font-size:20px"></i><span class="font-bold section-title">資產趨勢</span></div>
-          <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px">
+          <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px">
             <div style="display:flex;gap:4px;background:#f5f7f5;border-radius:10px;padding:3px">
               <button v-for="opt in [{v:'all',l:'全部'},{v:'3y',l:'3年'},{v:'2y',l:'2年'},{v:'1y',l:'1年'}]" :key="opt.v" @click="wealthTimeRange=opt.v" :style="wealthTimeRange===opt.v?'background:white;color:#3a5a40;box-shadow:0 1px 4px rgba(0,0,0,.1)':'color:#aaa'" style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;border:none;cursor:pointer;transition:all .15s">{{ opt.l }}</button>
             </div>
             <button @click="toggleAllWealthFilter" style="font-size:11px;font-weight:700;color:#588157;background:rgba(88,129,87,.08);border:1.5px solid rgba(88,129,87,.3);border-radius:8px;padding:4px 10px;cursor:pointer;margin-left:auto">{{ wealthChartFilter.length===WEALTH_ACCTS.length?'取消全選':'全選' }}</button>
           </div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px">
+            <span style="font-size:11px;color:#aaa;font-weight:700">顯示筆數</span>
+            <div style="display:flex;gap:4px;background:#f5f7f5;border-radius:10px;padding:3px">
+              <button v-for="opt in [{v:'6',l:'6筆'},{v:'12',l:'12筆'},{v:'20',l:'20筆'},{v:'all',l:'全部'}]" :key="opt.v" @click="wealthPointLimit=opt.v" :style="wealthPointLimit===opt.v?'background:white;color:#3a5a40;box-shadow:0 1px 4px rgba(0,0,0,.1)':'color:#aaa'" style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;border:none;cursor:pointer;transition:all .15s">{{ opt.l }}</button>
+            </div>
+          </div>
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
             <button v-for="inst in WEALTH_ACCTS" :key="inst.key" @click="toggleWealthFilter(inst.key)" :style="wealthChartFilter.includes(inst.key)?'background:'+inst.color+';color:white;border-color:'+inst.color:'background:white;color:#bbb;border-color:#e0ddd8'" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;border:1.5px solid;cursor:pointer;transition:all .15s"><i :class="['ph-bold',inst.icon]" style="font-size:12px"></i>{{ inst.name }}</button>
           </div>
-          <div v-if="!filteredWealthHistory.length" style="text-align:center;padding:32px;color:#aaa;font-size:13px">此時間範圍無紀錄</div>
-          <!-- ★ padding-top 加大，避免 datalabels 與圖例重疊 -->
-          <div v-else class="chart-area" style="height:340px"><canvas id="wealthChart"></canvas></div>
+          <div v-if="!filteredWealthHistory.length" style="text-align:center;padding:32px;color:#aaa;font-size:13px">此範圍無紀錄</div>
+          <!-- ★ 手機版可橫向捲動：長條數多時每筆維持最小寬度，避免擠成一團 -->
+          <div v-else style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+            <div class="chart-area wealth-chart-area" :style="{minWidth:wealthChartMinWidth}"><canvas id="wealthChart"></canvas></div>
+          </div>
+          <p v-if="filteredWealthHistory.length>8" style="text-align:center;font-size:10px;color:#c9c4b8;margin-top:6px">← 左右滑動查看更多 →</p>
         </div>
         <!-- 歷史表 -->
         <div v-if="wealthHistory.length" class="card" style="padding:0;overflow:hidden">
@@ -1731,14 +1744,26 @@ createApp({
     const wealthChartInst   = ref(null);
     const wealthChartFilter = ref(WEALTH_ACCTS.map(i=>i.key));
     const wealthTimeRange   = ref('all');
+    const wealthPointLimit  = ref('all'); // '6' | '12' | '20' | 'all' — 手機上減少長條數量用
 
     const filteredWealthHistory = computed(() => {
-      const all = wealthHistory.value;
-      if (wealthTimeRange.value === 'all') return all;
-      const years = parseInt(wealthTimeRange.value);
-      const cutoff = new Date();
-      cutoff.setFullYear(cutoff.getFullYear() - years);
-      return all.filter(d => new Date(String(d.date).slice(0,10)) >= cutoff);
+      let out = wealthHistory.value;
+      if (wealthTimeRange.value !== 'all') {
+        const years = parseInt(wealthTimeRange.value);
+        const cutoff = new Date();
+        cutoff.setFullYear(cutoff.getFullYear() - years);
+        out = out.filter(d => new Date(String(d.date).slice(0,10)) >= cutoff);
+      }
+      const sorted = [...out].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+      if (wealthPointLimit.value === 'all') return sorted;
+      const n = parseInt(wealthPointLimit.value);
+      return sorted.slice(-n);
+    });
+
+    // 手機上長條數多時，讓圖表容器變寬以便橫向捲動，每筆維持最小寬度
+    const wealthChartMinWidth = computed(() => {
+      const n = filteredWealthHistory.value.length;
+      return Math.max(n * 52, 0) + 'px';
     });
 
     const toTWD_ = (val, currency) => {
@@ -1797,6 +1822,15 @@ createApp({
     };
 
     let _wRows = [];
+    let _wealthActiveIdx = null; // 記錄目前被點擊顯示數字的長條索引，供再次點擊時取消
+    const dismissWealthTooltip_ = () => {
+      const chart = wealthChartInst.value;
+      if (!chart) return;
+      chart.setActiveElements([]);
+      chart.tooltip?.setActiveElements([], {x:0,y:0});
+      chart.update();
+      _wealthActiveIdx = null;
+    };
     const renderWealthChart = () => {
       try {
         const canvas = document.getElementById('wealthChart');
@@ -1804,6 +1838,7 @@ createApp({
         const stale = Chart.getChart(canvas);
         if (stale) stale.destroy();
         wealthChartInst.value = null;
+        _wealthActiveIdx = null;
 
         const hist = filteredWealthHistory.value;
         if (!hist.length) return;
@@ -1832,7 +1867,8 @@ createApp({
         const fmtL = v => v>=10000?(v/10000).toFixed(0)+'萬':fmtInt(v);
 
         // ★ 修正：padding-top 加大到 52，讓 line datalabels 不蓋到圖例
-        const barDlBase = { color:'white', anchor:'center', align:'center', font:{size:10,weight:'bold'} };
+        // ★ 字級加大到 11，手機橫向捲動後每筆有足夠寬度可以看清楚
+        const barDlBase = { color:'white', anchor:'center', align:'center', font:{size:11,weight:'bold'} };
         wealthChartInst.value = new Chart(canvas, {
           type:'bar',
           data:{ labels, datasets:[
@@ -1856,25 +1892,32 @@ createApp({
               tension:.3, fill:false, order:1,
               // ★ 修正：offset 加大到 12，避免數字蓋到折線點
               datalabels:{ display:true, color:'#344e41', anchor:'end', align:'top', offset:12,
-                font:{size:10,weight:'bold'}, formatter:v=>fmtL(v) }
+                font:{size:11,weight:'bold'}, formatter:v=>fmtL(v) }
             },
           ]},
           options:{ responsive:true, maintainAspectRatio:false,
             // ★ 修正：padding-top 加大到 52
             layout:{ padding:{top:24, bottom:4} },
             interaction:{mode:'index', intersect:false},
+            // ★ 點一下長條顯示數字，再點一次（同一筆）就取消，點圖表以外的地方也會自動取消
+            onClick:(evt, elements, chart) => {
+              if (!elements.length) { dismissWealthTooltip_(); return; }
+              const idx = elements[0].index;
+              if (_wealthActiveIdx === idx) { dismissWealthTooltip_(); }
+              else { _wealthActiveIdx = idx; }
+            },
             plugins:{
               legend:{ display:true, position:'bottom', align:'center',
-                labels:{usePointStyle:true, pointStyle:'circle', boxWidth:8, padding:14, color:'#588157', font:{size:11,weight:'bold'}} },
+                labels:{usePointStyle:true, pointStyle:'circle', boxWidth:8, padding:14, color:'#588157', font:{size:12,weight:'bold'}} },
               tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmtInt(c.parsed.y)+' 元'}},
               datalabels:{}
             },
             scales:{
-              x:{ stacked:true, grid:{display:false}, ticks:{font:{size:11}}, offset:true,
+              x:{ stacked:true, grid:{display:false}, ticks:{font:{size:12}}, offset:true,
                   afterFit: s=>{ if(sorted.length===1) s.paddingRight=s.chart.width*0.6; }
               },
               y:{ stacked:true, min:0, grid:{color:'#f0f0f0'},
-                  ticks:{callback:v=>v===0?'0':(v/10000).toFixed(0)+'萬', font:{size:11}},
+                  ticks:{callback:v=>v===0?'0':(v/10000).toFixed(0)+'萬', font:{size:12}},
                   afterDataLimits:s=>{ if(s.max===0) s.max=1; }
               }
             }
@@ -1885,6 +1928,15 @@ createApp({
     };
 
     watch(wealthTimeRange, scheduleRender_);
+    watch(wealthPointLimit, scheduleRender_);
+
+    // ★ 點擊圖表卡片以外的地方，自動取消已顯示的長條數字
+    onMounted(() => {
+      document.addEventListener('click', (e) => {
+        if (_wealthActiveIdx === null) return;
+        if (!e.target.closest('#wealthChart')) dismissWealthTooltip_();
+      }, true);
+    });
 
     // ══ 待確認交易 ══════════════════════════════════
     const pendingList      = ref([]);
@@ -2239,7 +2291,7 @@ createApp({
       saveGeminiKey,runAnalysis,
       WEALTH_ACCTS,wealthForm,wealthRates,wealthHistory,wealthLoading,wealthSaving,wealthMsg,wealthError,
       wealthTotalTWD,wealthBreakdown,
-      wealthReminderType,wealthChartFilter,wealthTimeRange,filteredWealthHistory,
+      wealthReminderType,wealthChartFilter,wealthTimeRange,wealthPointLimit,wealthChartMinWidth,filteredWealthHistory,
       saveWealth,setupWealthTrigger,toggleWealthFilter,toggleAllWealthFilter,
       gasUrlInput,currentGasUrl,updateGasUrl,
       pendingList,pendingSelected,pendingLoading,pendingConfirming,pendingMsg,pendingError,pendingDeleting,
