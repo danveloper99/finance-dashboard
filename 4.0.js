@@ -1526,12 +1526,21 @@ function rebuildRealizedPnL_FIFO() {
     });
   }
 
-  // 找出已處理的最新賣出日期
-  let lastDate = '';
+  // 找出「每支股票各自」已處理的最新賣出日期
+  // ★ 修正：原本用整張表（所有股票混在一起）算出單一個 lastDate，
+  //   會導致某支股票只要比較晚才有賣出紀錄被寫入，其他股票只要賣出日期比它舊，
+  //   就會被「快進」邏輯永遠當成已處理過而跳過、永遠不會產生已實現損益列。
+  //   改成「每支股票代碼各自記錄自己的最後處理日期」，股票之間互不影響。
+  const lastDateBySym = new Map();
   if (out.getLastRow() > 1) {
-    const existingDates = out.getRange(2, 7, out.getLastRow() - 1, 1)
-      .getValues().flat().map(v => toYMDslash_(String(v || ''))).filter(Boolean);
-    if (existingDates.length) lastDate = existingDates.reduce((a, b) => a > b ? a : b);
+    const existingRows = out.getRange(2, 1, out.getLastRow() - 1, 7).getValues(); // 股票代碼(1) ~ 賣出日期(7)
+    existingRows.forEach(r => {
+      const sym = String(r[0] || '').trim();
+      const d   = toYMDslash_(String(r[6] || ''));
+      if (!sym || !d) return;
+      const prev = lastDateBySym.get(sym);
+      if (!prev || d > prev) lastDateBySym.set(sym, d);
+    });
   }
 
   const allTx = readTableAsObjects_(shT).map(r => ({
@@ -1547,71 +1556,59 @@ function rebuildRealizedPnL_FIFO() {
   const sells = allTx.filter(x => x.side.includes('賣') && !isDayLoopSide_(x.side))
     .sort((a, b) => a.sym.localeCompare(b.sym) || a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
 
-  // 快進：消耗所有「已處理日期以前」的賣出，讓 queue 到達正確狀態
-  if (lastDate) {
-    let j = 0;
-    while (j < sells.length) {
-      const sym = sells[j].sym;
-      const group = [];
-      while (j < sells.length && sells[j].sym === sym) { group.push(sells[j]); j++; }
-      const q = buyQueues.get(sym) || [];
-      group.filter(s => s.date <= lastDate).forEach(sell => {
-        let remain = sell.qty;
-        while (remain > 0) {
-          while (q.length && q[0].remainQty <= 0) q.shift();
-          if (!q.length) break;
-          const part = Math.min(remain, q[0].remainQty);
-          q[0].remainQty -= part;
-          remain -= part;
-        }
-      });
-    }
-  }
-
-  // 只計算新賣出（lastDate 之後）
-  const newSells = lastDate ? sells.filter(s => s.date > lastDate) : sells;
-  if (!newSells.length) {
-    Logger.log(`已實現損益：無新賣出資料（最新已處理：${lastDate || '尚無'}）`);
-    return;
-  }
-
+  // 依股票代碼分組，各自用「自己的」lastDate 判斷：
+  // 早於等於自己 lastDate 的賣出只用來墊 queue 狀態（快進，不產生新列）；
+  // 晚於自己 lastDate 的賣出才是「新賣出」，會產生已實現損益列。
   const rows = [];
-  let i = 0;
-  while (i < newSells.length) {
-    const sym = newSells[i].sym;
+  let newCount = 0, ffCount = 0;
+  let j = 0;
+  while (j < sells.length) {
+    const sym = sells[j].sym;
     const group = [];
-    while (i < newSells.length && newSells[i].sym === sym) { group.push(newSells[i]); i++; }
+    while (j < sells.length && sells[j].sym === sym) { group.push(sells[j]); j++; }
     const q = buyQueues.get(sym) || [];
+    const symLastDate = lastDateBySym.get(sym) || '';
+
     group.forEach(sell => {
+      const isNew = !symLastDate || sell.date > symLastDate;
+      if (isNew) newCount++; else ffCount++;
+
       let remain = sell.qty;
       let sellFeeLeft = round2_(sell.fee || R4_calcFee_(sell.amount));
       let sellTaxLeft = round2_(sell.tax || R4_calcTax_(sell.side, sell.amount));
       while (remain > 0) {
         while (q.length && q[0].remainQty <= 0) q.shift();
         if (!q.length) break;
-        const lot = q[0];
+        const lot  = q[0];
         const part = Math.min(remain, lot.remainQty);
-        const buyCost    = round2_(lot.buyPrice * part);
-        const buyFeePart = round2_(lot.buyFeePerShare * part);
-        const sellGross  = round2_(sell.price * part);
-        let sFee = round2_(sellFeeLeft * (part / sell.qty));
-        let sTax = round2_(sellTaxLeft * (part / sell.qty));
-        if (part === remain) { sFee = sellFeeLeft; sTax = sellTaxLeft; }
-        sellFeeLeft -= sFee; sellTaxLeft -= sTax;
-        const pnl  = round2_(sellGross - buyCost - buyFeePart - sFee - sTax);
-        const days = Math.max(1, daysBetween_R4_(lot.buyDate, sell.date));
-        // 計算持有期間股利：除息日在 [buyDate, sellDate] 之間的每股現金股利 × 本筆股數
-        let divInPeriod = 0;
-        (divMap.get(sym) || []).forEach(d => {
-          if (d.exDate >= lot.buyDate && d.exDate <= sell.date) divInPeriod += d.cash * part;
-        });
-        divInPeriod = round2_(divInPeriod);
-        const totalReturn    = round2_(pnl + divInPeriod);
-        const totalReturnPct = buyCost > 0 ? round2_((totalReturn / buyCost) * 100) : '';
-        rows.push([sym, lot.name || sell.name, lot.buyDate, part, lot.buyPrice, buyCost,
-                   sell.date, sell.price, sellGross, buyFeePart, sFee, sTax, pnl,
-                   divInPeriod, totalReturn, totalReturnPct, days, round2_(pnl / days)]);
+
+        if (isNew) {
+          const buyCost    = round2_(lot.buyPrice * part);
+          const buyFeePart = round2_(lot.buyFeePerShare * part);
+          const sellGross  = round2_(sell.price * part);
+          let sFee = round2_(sellFeeLeft * (part / sell.qty));
+          let sTax = round2_(sellTaxLeft * (part / sell.qty));
+          if (part === remain) { sFee = sellFeeLeft; sTax = sellTaxLeft; }
+          sellFeeLeft -= sFee; sellTaxLeft -= sTax;
+          const pnl  = round2_(sellGross - buyCost - buyFeePart - sFee - sTax);
+          const days = Math.max(1, daysBetween_R4_(lot.buyDate, sell.date));
+          // 計算持有期間股利：除息日在 [buyDate, sellDate] 之間的每股現金股利 × 本筆股數
+          let divInPeriod = 0;
+          (divMap.get(sym) || []).forEach(d => {
+            if (d.exDate >= lot.buyDate && d.exDate <= sell.date) divInPeriod += d.cash * part;
+          });
+          divInPeriod = round2_(divInPeriod);
+          const totalReturn    = round2_(pnl + divInPeriod);
+          const totalReturnPct = buyCost > 0 ? round2_((totalReturn / buyCost) * 100) : '';
+          rows.push([sym, lot.name || sell.name, lot.buyDate, part, lot.buyPrice, buyCost,
+                     sell.date, sell.price, sellGross, buyFeePart, sFee, sTax, pnl,
+                     divInPeriod, totalReturn, totalReturnPct, days, round2_(pnl / days)]);
+        }
+
         lot.remainQty -= part; remain -= part;
+      }
+      if (!isNew && q.length === 0 && remain > 0.001) {
+        Logger.log(`⚠ [Warning] 已實現損益快進：${sell.date} ${sym} 賣出 ${remain} 股時庫存不足（已忽略短缺部分）`);
       }
     });
   }
@@ -1621,7 +1618,7 @@ function rebuildRealizedPnL_FIFO() {
     out.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
     out.getRange(startRow, 16, rows.length, 1).setNumberFormat('0.0'); // 含息報酬率(%)
   }
-  Logger.log(`已實現損益：新增 ${rows.length} 筆（增量，前次最新賣出：${lastDate || '（首次完整）'}）`);
+  Logger.log(`已實現損益：新增 ${rows.length} 筆（增量，每股票各自游標；快進處理 ${ffCount} 筆舊賣出、新處理 ${newCount} 筆）`);
 }
 
 function buildBuyQueuesFromOpeningAndTrades_R4_(shOpen, shT) {
