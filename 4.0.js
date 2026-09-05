@@ -340,6 +340,7 @@ function rebuildRealizedPnL_FIFO_SAFE(){ return runWithAlert_(rebuildRealizedPnL
 function appendDCAFromHoldings_SAFE(){ return runWithAlert_(appendDCAFromHoldings, 'appendDCAFromHoldings'); }
 function runDividendsFullCycle_SAFE() { return runWithAlert_(runDividendsFullCycle_, 'runDividendsFullCycle'); }
 function rebuildDCADividends_SAFE() { return runWithAlert_(appendDCAFromHoldings, 'appendDCAFromHoldings'); }
+function auditInventoryGaps_SAFE(){ return runWithAlert_(auditInventoryGaps_, 'auditInventoryGaps'); }
 
 /* ===== 測試用 ===== */
 function testErrorAlert_SendSample() {
@@ -1623,6 +1624,75 @@ function rebuildRealizedPnL_FIFO() {
     out.getRange(startRow, 16, rows.length, 1).setNumberFormat('0.0'); // 含息報酬率(%)
   }
   Logger.log(`已實現損益：新增 ${rows.length} 筆（增量，每股票各自游標；快進處理 ${ffCount} 筆舊賣出、新處理 ${newCount} 筆）`);
+}
+
+/** ===== 診斷用：庫存缺口檢查 =====
+ * 依〈期初庫存〉起始股數 + 〈交易紀錄〉(排除當沖) 依時間順序模擬買賣，
+ * 找出「累計庫存第一次變成負數」的那一筆賣出——代表在這之前一定有買進
+ * (或期初持股) 沒有被記錄到，導致 FIFO 找不到對應批次可扣。
+ * 執行後在《庫存缺口檢查》分頁輸出：每檔股票第一次出現負庫存的日期、
+ * 歷史上最大的缺口股數（= 建議至少要補進〈期初庫存〉的股數），
+ * 以及依交易紀錄算到最後的目前庫存（可跟〈庫存紀錄〉現況互相對照）。
+ * 這是唯讀診斷，不會更動任何交易或庫存資料。
+ */
+function auditInventoryGaps_() {
+  const C = getCfg_();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const shT = ensureSheetWithHeader_(C.SHEET_TRADES, []);
+  const shOpen = ensureSheetWithHeader_(C.SHEET_OPENING, []);
+
+  const openingBySym = new Map();
+  readTableAsObjects_(shOpen).forEach(r => {
+    const sym = String(r['股票代碼'] || '').trim();
+    if (!sym) return;
+    const qty = Number(r['持有股數'] || 0);
+    openingBySym.set(sym, (openingBySym.get(sym) || 0) + qty);
+  });
+
+  const txAll = readTableAsObjects_(shT).map(r => ({
+    sym:  String(r['股票代碼'] || '').trim(),
+    name: String(r['股票名稱'] || '').trim(),
+    date: toYMDslash_(r['成交日期'] || ''),
+    time: normTime_(String(r['成交時間'] || '')),
+    side: String(r['成交類別'] || ''),
+    qty:  Number(r['股數'] || 0)
+  })).filter(x => x.sym && x.date && x.qty > 0 && !isDayLoopSide_(x.side));
+
+  txAll.sort((a, b) =>
+    a.sym.localeCompare(b.sym) || a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+
+  const bySym = new Map();
+  txAll.forEach(x => { if (!bySym.has(x.sym)) bySym.set(x.sym, []); bySym.get(x.sym).push(x); });
+
+  const report = [];
+  bySym.forEach((list, sym) => {
+    let bal = openingBySym.get(sym) || 0;
+    let minBal = bal, firstNegDate = '', firstNegQty = '', everNeg = false;
+    list.forEach(x => {
+      if (x.side.includes('買') || isStockBonusSide_(x.side)) {
+        bal += x.qty;
+      } else if (x.side.includes('賣')) {
+        bal -= x.qty;
+        if (bal < -0.001 && !everNeg) { everNeg = true; firstNegDate = x.date; firstNegQty = x.qty; }
+        if (bal < minBal) minBal = bal;
+      }
+    });
+    if (everNeg) {
+      report.push([sym, list[0].name, firstNegDate, firstNegQty, round2_(Math.abs(minBal)), round2_(bal)]);
+    }
+  });
+
+  const SHEET_NAME = '庫存缺口檢查';
+  let sh = ss.getSheetByName(SHEET_NAME);
+  if (sh) sh.clear(); else sh = ss.insertSheet(SHEET_NAME);
+  sh.appendRow(['股票代碼', '股票名稱', '第一次出現負庫存的賣出日期', '當筆賣出股數',
+                '建議至少補進期初庫存的股數', '依交易紀錄算到最後的目前庫存']);
+  sh.getRange(1, 1, 1, 6).setFontWeight('bold');
+  if (report.length) {
+    sh.getRange(2, 1, report.length, report[0].length).setValues(report);
+    sh.getRange(2, 1, report.length, 1).setNumberFormat('@');
+  }
+  Logger.log(`庫存缺口檢查：共 ${report.length} 檔股票在交易紀錄中出現過負庫存（可能漏記期初持股或配股），請看《${SHEET_NAME}》分頁。補期初庫存時，買進日期只要早於「第一次出現負庫存的賣出日期」即可。`);
 }
 
 function buildBuyQueuesFromOpeningAndTrades_R4_(shOpen, shT) {
