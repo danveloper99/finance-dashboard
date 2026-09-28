@@ -232,9 +232,29 @@
         <div class="summary-item"><div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;color:#bc6c25"><i class="ph ph-coins" style="font-size:15px;opacity:.7"></i><span style="font-size:12px;font-weight:700;opacity:.7">已實現獲利</span></div><div class="num-font font-bold" :class="dashboard.summary.realizedProfit>0?'val-pos':'val-neg'" style="font-size:clamp(20px,3.5vw,28px)">{{ fmtInt(dashboard.summary.realizedProfit) }}</div></div>
       </div>
       <div style="background:white;border-radius:1.5rem;padding:20px;border:1px solid rgba(0,0,0,.05);box-shadow:0 1px 4px rgba(0,0,0,.04)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:8px;color:#bc6c25"><i class="ph ph-chart-line-up" style="font-size:20px"></i><span class="font-bold" style="font-size:16px;opacity:.85">總報酬</span></div>
+          <button @click="dashChartFilterOpen=!dashChartFilterOpen"
+            :style="dashChartYearSet!==null?'background:#3a5a40;color:white;border-color:#3a5a40':''"
+            style="display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:9px;border:1.5px solid #dad7cd;font-size:11px;font-weight:700;cursor:pointer;background:white;color:#3a5a40;transition:all .15s;flex-shrink:0;white-space:nowrap">
+            <i class="ph ph-funnel" style="font-size:12px"></i>{{ dashRangeLabel }}
+          </button>
+        </div>
+        <div v-if="dashChartFilterOpen" style="margin-bottom:14px;padding:12px;background:#f7f9f4;border-radius:1rem;border:1px solid rgba(88,129,87,.12)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:12px;font-weight:700;color:#588157"><i class="ph ph-calendar" style="font-size:13px;margin-right:4px"></i>統計年度</span>
+            <button @click="dashChartYearSet=null" style="font-size:11px;font-weight:700;color:#3a5a40;background:#f0f4ee;border:1px solid #c5d9c5;border-radius:7px;padding:3px 10px;cursor:pointer">全部</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            <label v-for="y in dashAllChartYears" :key="y"
+              :style="dashYearActive(y)?'background:#3a5a40;color:white;border-color:#3a5a40':'background:white;color:#555;border-color:#dad7cd'"
+              style="display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border:1.5px solid;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;user-select:none;transition:all .15s"
+              @click="dashToggleYear(y)">{{ y }}</label>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:#aaa">「帳面未實現」是目前庫存的即時損益，不受年度篩選影響；已實現損益／股利只會加總勾選年度的部分。</div>
+        </div>
         <div class="total-return-wrap">
           <div style="flex-shrink:0">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;color:#bc6c25"><i class="ph ph-chart-line-up" style="font-size:20px"></i><span class="font-bold" style="font-size:16px;opacity:.85">總報酬</span></div>
             <div class="num-font font-bold" :class="computedTotalReturn>0?'val-pos':'val-neg'" style="font-size:clamp(28px,6vw,40px);line-height:1.1">{{ fmtInt(computedTotalReturn) }}</div>
             <p style="font-size:11px;color:#aaa;margin-top:6px" class="num-font">{{ computedTotalFormula }}</p>
           </div>
@@ -243,13 +263,20 @@
               <input type="checkbox" v-model="item.checked" class="hidden">
               <span :style="item.checked?'background:#3a5a40':'background:white;border:2px solid #c9c4b8'" style="width:18px;height:18px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s"><i v-if="item.checked" class="ph-bold ph-check" style="color:white;font-size:10px"></i></span>
               <span class="font-bold" style="font-size:13px;color:#344e41;flex:1">{{ item.label }}</span>
-              <span class="num-font font-bold" :class="item.value>0?'val-pos':'val-neg'" style="font-size:13px">{{ fmtInt(item.value) }}</span>
+              <span class="num-font font-bold" :class="trItemValue(item.key)>0?'val-pos':'val-neg'" style="font-size:13px">{{ fmtInt(trItemValue(item.key)) }}</span>
             </label>
           </div>
         </div>
       </div>
       <div style="background:white;border-radius:1.5rem;padding:16px;border:1px solid rgba(0,0,0,.05);box-shadow:0 1px 4px rgba(0,0,0,.04)">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;color:#3a5a40"><i class="ph ph-chart-bar" style="font-size:20px"></i><span class="font-bold section-title">歷年含息總報酬</span></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px">
+          <div style="display:flex;align-items:center;gap:8px;color:#3a5a40"><i class="ph ph-chart-bar" style="font-size:20px"></i><span class="font-bold section-title">歷年含息總報酬</span></div>
+          <button @click="dashChartFilterOpen=!dashChartFilterOpen"
+            :style="dashChartYearSet!==null?'background:#3a5a40;color:white;border-color:#3a5a40':''"
+            style="display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:9px;border:1.5px solid #dad7cd;font-size:11px;font-weight:700;cursor:pointer;background:white;color:#3a5a40;transition:all .15s;flex-shrink:0;white-space:nowrap">
+            <i class="ph ph-funnel" style="font-size:12px"></i>{{ dashRangeLabel }}
+          </button>
+        </div>
         <div class="chart-area"><canvas id="chartTotal"></canvas></div>
       </div>
     </div>
@@ -1102,16 +1129,40 @@ createApp({
     setTimeout(() => { const el = document.getElementById('loading-screen'); if (el) el.style.display = 'none'; }, 800);
 
     const totalReturnItems = ref([
-      { key:'realized',   label:'已實現損益', checked:true, value:0 },
-      { key:'dividend',   label:'歷年總股利', checked:true, value:0 },
-      { key:'unrealized', label:'帳面未實現', checked:true, value:0 },
+      { key:'realized',   label:'已實現損益', checked:true },
+      { key:'dividend',   label:'歷年總股利', checked:true },
+      { key:'unrealized', label:'帳面未實現', checked:true },
     ]);
-    watch(dashboard, d => {
-      totalReturnItems.value[0].value = d.summary.realizedProfit   || 0;
-      totalReturnItems.value[1].value = d.summary.totalDividend    || 0;
-      totalReturnItems.value[2].value = d.summary.unrealizedProfit || 0;
-    }, { deep: true });
-    const computedTotalReturn  = computed(() => totalReturnItems.value.filter(i=>i.checked).reduce((s,i)=>s+i.value,0));
+
+    // ── 儀表板「總報酬」＋「歷年含息總報酬」共用的年度篩選 ──
+    const dashChartFilterOpen = ref(false);
+    const dashChartYearSet    = ref(null); // null = 全部年度
+    const dashAllChartYears = computed(() => {
+      const c = dashboard.value && dashboard.value.charts; if (!c) return [];
+      const years = new Set([...Object.keys(c.pnlByYear||{}), ...Object.keys(c.divByYear||{}), ...Object.keys(c.totalByYear||{})]);
+      return [...years].sort().reverse();
+    });
+    const dashYearActive = y => dashChartYearSet.value===null || dashChartYearSet.value.has(y);
+    const dashToggleYear = y => {
+      const all = dashAllChartYears.value;
+      if (dashChartYearSet.value===null) { const s=new Set(all); s.delete(y); dashChartYearSet.value = s.size===all.length?null:s; }
+      else { const s=new Set(dashChartYearSet.value); s.has(y)?s.delete(y):s.add(y); dashChartYearSet.value = s.size===all.length?null:s; }
+    };
+    const dashRangeLabel = computed(() => {
+      if (dashChartYearSet.value===null) return '全部年度';
+      const s=[...dashChartYearSet.value].sort();
+      if (!s.length) return '未選年度';
+      return s.length<=3 ? s.join('、') : (s[0]+'～'+s[s.length-1]+`(${s.length})`);
+    });
+    // 依篩選年度加總已實現損益／股利；帳面未實現是目前庫存的即時損益，沒有「哪一年」的概念，永遠顯示目前值
+    const trItemValue = key => {
+      const c = dashboard.value && dashboard.value.charts;
+      if (key==='realized')   return c ? Object.entries(c.pnlByYear||{}).filter(([y])=>dashYearActive(y)).reduce((s,[,v])=>s+v,0) : 0;
+      if (key==='dividend')   return c ? Object.entries(c.divByYear||{}).filter(([y])=>dashYearActive(y)).reduce((s,[,v])=>s+v,0) : 0;
+      if (key==='unrealized') return (dashboard.value && dashboard.value.summary && dashboard.value.summary.unrealizedProfit) || 0;
+      return 0;
+    };
+    const computedTotalReturn  = computed(() => totalReturnItems.value.filter(i=>i.checked).reduce((s,i)=>s+trItemValue(i.key),0));
     const computedTotalFormula = computed(() => { const p=totalReturnItems.value.filter(i=>i.checked).map(i=>i.label); return p.length?'('+p.join(' + ')+')':'請勾選項目'; });
 
     const tabs = [
@@ -1665,25 +1716,35 @@ createApp({
 
     // ── Dashboard chart ──
     let chart3=null;
+    let lastDashChartData=null;
     const renderCharts = data => {
+      lastDashChartData = data;
       if(chart3)chart3.destroy();
       const ctx3=document.getElementById('chartTotal'); if(!ctx3) return;
       const isMob=window.innerWidth<640;
-      const sY=Object.keys(data.totalByYear||{}).sort();
+      const sY=Object.keys(data.totalByYear||{}).sort().filter(y=>dashYearActive(y));
+      const dTotal=sY.map(y=>data.totalByYear[y]);
+      const dDiv=sY.map(y=>(data.divByYear||{})[y]||0);
+      const dPnl=sY.map(y=>(data.pnlByYear||{})[y]||0);
+      // 給最高的長條／點多留一點頭部空間，避免數字被上方圖例或畫布邊緣擋到
+      const maxVal=Math.max(0,...dTotal,...dDiv,...dPnl);
+      const suggestedMax=maxVal>0?maxVal*1.18:undefined;
       chart3=new Chart(ctx3,{
         type:'bar',
         data:{labels:sY,datasets:[
-          {type:'bar',label:'含息總報酬',data:sY.map(y=>data.totalByYear[y]),backgroundColor:'#588157',borderRadius:6,barPercentage:.6,order:2,datalabels:{display:!isMob,anchor:'end',align:'end',color:'#3a5a40',font:{size:10,weight:'bold'},formatter:v=>v?new Intl.NumberFormat('en-US').format(Math.round(v)):''}},
-          {type:'line',label:'歷年股利',data:sY.map(y=>(data.divByYear||{})[y]||0),borderColor:'#dda15e',backgroundColor:'rgba(221,161,94,.12)',borderWidth:2.5,pointBackgroundColor:'#dda15e',pointRadius:isMob?3:4,tension:.4,fill:false,order:1,datalabels:{display:false}},
-          {type:'line',label:'已實現損益',data:sY.map(y=>(data.pnlByYear||{})[y]||0),borderColor:'#bc6c25',backgroundColor:'rgba(188,108,37,.08)',borderWidth:2.5,pointBackgroundColor:'#bc6c25',pointRadius:isMob?3:4,tension:.4,fill:false,order:0,datalabels:{display:false}},
+          {type:'bar',label:'含息總報酬',data:dTotal,backgroundColor:'#588157',borderRadius:6,barPercentage:.6,order:2,datalabels:{display:!isMob,anchor:'end',align:'end',color:'#3a5a40',font:{size:10,weight:'bold'},formatter:v=>v?new Intl.NumberFormat('en-US').format(Math.round(v)):''}},
+          {type:'line',label:'歷年股利',data:dDiv,borderColor:'#dda15e',backgroundColor:'rgba(221,161,94,.12)',borderWidth:2.5,pointBackgroundColor:'#dda15e',pointRadius:isMob?3:4,tension:.4,fill:false,order:1,datalabels:{display:false}},
+          {type:'line',label:'已實現損益',data:dPnl,borderColor:'#bc6c25',backgroundColor:'rgba(188,108,37,.08)',borderWidth:2.5,pointBackgroundColor:'#bc6c25',pointRadius:isMob?3:4,tension:.4,fill:false,order:0,datalabels:{display:false}},
         ]},
         options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-          plugins:{datalabels:{},legend:{display:true,position:'top',align:'end',labels:{usePointStyle:true,pointStyle:'circle',boxWidth:8,padding:12,color:'#588157',font:{size:11,weight:'bold'}}},tooltip:{callbacks:{label:c=>(c.dataset.label?c.dataset.label+': ':'')+fmtInt(c.parsed.y)}}},
-          scales:{y:{beginAtZero:true,grid:{color:'#f0f0f0'},ticks:{callback:v=>v===0?'0':(v/1000).toFixed(0)+'K',font:{size:11}},afterFit:a=>a.width=58},x:{grid:{display:false},ticks:{font:{size:11}}}}
+          layout:{padding:{top:20}},
+          plugins:{datalabels:{},legend:{display:true,position:'bottom',align:'center',labels:{usePointStyle:true,pointStyle:'circle',boxWidth:8,padding:12,color:'#588157',font:{size:11,weight:'bold'}}},tooltip:{callbacks:{label:c=>(c.dataset.label?c.dataset.label+': ':'')+fmtInt(c.parsed.y)}}},
+          scales:{y:{beginAtZero:true,suggestedMax,grid:{color:'#f0f0f0'},ticks:{callback:v=>v===0?'0':(v/1000).toFixed(0)+'K',font:{size:11}},afterFit:a=>a.width=58},x:{grid:{display:false},ticks:{font:{size:11}}}}
         },
         plugins:[ChartDataLabels],
       });
     };
+    Vue.watch(dashChartYearSet, () => { if (lastDashChartData) renderCharts(lastDashChartData); });
 
     // ══ 資產追蹤 ══════════════════════════════════════════════
     // ★ 新增 cathay_us_stock（美股，USD）
@@ -2285,6 +2346,7 @@ createApp({
       fmtInt,fmtDec,fmtCell,exportCSV,
       saveSettings,functionRunning,functionMsg,functionError,runFunction,
       totalReturnItems,computedTotalReturn,computedTotalFormula,
+      dashChartFilterOpen,dashChartYearSet,dashAllChartYears,dashYearActive,dashToggleYear,dashRangeLabel,trItemValue,
       analysisHistory,analysisLoading,analysisRunning,analysisMsg,analysisError,
       GeminiKeyStatus,GeminiKeyInput,expandedIdx,analysisResult,userNotes,includeDividend,
       analysisDimensions,uploadedImages,addImages,removeImage,
