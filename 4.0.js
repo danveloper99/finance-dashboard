@@ -195,6 +195,22 @@ function removeAllSuggestedTriggers_SAFE() {
   Logger.log('🧹 已移除建議排程。');
 }
 
+/**
+ * [診斷用] 列出目前這個 GAS 專案的所有觸發器（時間排程＋其他），寫進 Logger。
+ * Apps Script 每個帳號、每個專案通常有「觸發器總數上限 20 個」的限制，超過就會在新增時報
+ * 「This script has too many triggers」。跑這支可以看到目前有哪些、共幾個，方便判斷要刪哪些
+ * （例如同一支函式因為多次手動設定而重複掛了好幾個排程）。看完想清掉重複的，可以先執行
+ * removeAllSuggestedTriggers_SAFE()（只會刪本專案自己建立的那幾支已知排程，不會動到你在
+ * Triggers 頁面手動加的其他觸發器），再重新執行 setupAllSuggestedTriggers_SAFE() 乾淨重建。
+ */
+function listAllTriggers_() {
+  const triggers = ScriptApp.getProjectTriggers();
+  Logger.log(`目前共有 ${triggers.length} 個觸發器（帳號上限通常是 20 個）：`);
+  triggers.forEach((t, i) => {
+    Logger.log(`${i + 1}. 函式：${t.getHandlerFunction()}　類型：${t.getEventType()}　來源：${t.getTriggerSource()}`);
+  });
+}
+
 /** 只新增「每日股票代碼補值＋修復」排程，不動到其他既有排程（避免重跑整批 setupAllSuggestedTriggers_SAFE 造成其他排程被重建） */
 function addDailyMaintenanceTrigger_SAFE() {
   const already = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'dailyDataMaintenance_SAFE');
