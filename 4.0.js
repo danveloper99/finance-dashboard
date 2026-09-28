@@ -219,6 +219,16 @@ function addDailyMaintenanceTrigger_SAFE() {
  * @param {boolean} numericCodeOnly 是否只採信「代碼欄為純數字」的資料列（用於較不可靠的來源，如待確認交易）
  * @param {boolean} overwrite 是否覆蓋 map 裡已存在的同名項目（權威來源如《股票代碼對照表》設 true）
  */
+/**
+ * 判斷一個字串是不是「長得像合法股票代碼」：4~6 位數字，後面可以再接 1 個英文字母
+ * （例如主動式 ETF 的股份類別代碼 00981A、00982A）。純數字代碼（2330、00878）也符合。
+ * 注意：不能只用 isNaN(Number(c)) 判斷「是不是代碼」——00981A 這種帶字母後綴的代碼
+ * Number() 轉換一定是 NaN，會被誤判成「不是代碼、是名稱」，之前就是這樣被其他地方誤刪過字母。
+ */
+function isValidStockCode_(s) {
+  return /^\d{4,6}[A-Z]?$/i.test(String(s || '').trim());
+}
+
 function learnSymNameFromSheet_(ss, sheetName, map, numericCodeOnly, overwrite) {
   if (!sheetName) return;
   const s = ss.getSheetByName(sheetName);
@@ -228,7 +238,7 @@ function learnSymNameFromSheet_(ss, sheetName, map, numericCodeOnly, overwrite) 
     const c = String(r['股票代碼'] || '').trim();
     const n = String(r['股票名稱'] || '').trim().replace(/\s+/g, '');
     if (!c || !n) return;
-    if (numericCodeOnly && isNaN(Number(c))) return;
+    if (numericCodeOnly && !isValidStockCode_(c)) return;
     if (overwrite || !map.has(n)) map.set(n, c);
   });
 }
@@ -642,13 +652,17 @@ function ingestFromGmail_Plaintext() {
   const normSymForDedup_ = (s) => {
     const t = String(s||'').trim();
     if (!t || !isNaN(Number(t))) return t;
+    // ★ 已經是合法代碼形狀（含 00981A 這種主動式 ETF 字母後綴）就直接照原樣回傳，
+    //   不要再往下跑「從名稱擷取數字」的邏輯，否則 00981A 會被誤判成「名稱」，
+    //   截斷成 00981（字母被吃掉）
+    if (isValidStockCode_(t)) return t;
     // 完全比對
     if (nameToCodeMap.has(t)) return nameToCodeMap.get(t);
     // 去掉尾端 * 等特殊字元後再比對（如「國巨*」→「國巨」）
     const stripped = t.replace(/[*＊·•！]+$/, '').trim();
     if (stripped && stripped !== t && nameToCodeMap.has(stripped)) return nameToCodeMap.get(stripped);
-    // 開頭是 4~6 位數字就提取為代碼（如「2327國巨*」→「2327」）
-    const numPrefix = t.match(/^(\d{4,6})/);
+    // 開頭是 4~6 位數字（後面可能還接 1 個字母）就提取為代碼（如「2327國巨*」→「2327」）
+    const numPrefix = t.match(/^(\d{4,6}[A-Z]?)/i);
     if (numPrefix) return numPrefix[1];
     return t;
   };
@@ -708,7 +722,7 @@ function ingestFromGmail_Plaintext() {
   parsed.forEach(r => {
     const c = String(r[2]||'').trim();
     const n = String(r[3]||'').trim().replace(/\s+/g,'');
-    if (c && n && !isNaN(Number(c)) && !nameToCodeMap.has(n)) nameToCodeMap.set(n, c);
+    if (c && n && isValidStockCode_(c) && !nameToCodeMap.has(n)) nameToCodeMap.set(n, c);
   });
 
   // 2. 再處理 PDF 附件
@@ -729,19 +743,24 @@ function ingestFromGmail_Plaintext() {
             const keptRows = [];
             rows.forEach(r => {
               let sym = String(r[2]||'').trim();
-              // 嘗試 nameToCodeMap 對應（如 DCA_i_NAME 設定）
-              if (isNaN(Number(sym)) && nameToCodeMap.has(sym)) {
-                sym = nameToCodeMap.get(sym); r[2] = sym;
-              }
-              // 從基金名稱提取 4~6 位數字代碼（如「國泰永續高股息00919」→「00919」）
-              if (isNaN(Number(sym))) {
-                const codeMatch = sym.match(/(\d{4,6})/);
-                if (codeMatch) { sym = codeMatch[1]; r[2] = sym; }
-              }
-              // 若 sym 仍為非數字且與 r[3] 相同（PDF 只有商品名稱欄），清空 r[2]
-              // 讓名稱只顯示在「股票名稱」欄，避免代碼欄重複顯示同一文字
-              if (isNaN(Number(sym)) && sym === String(r[3]||'').trim().replace(/\s+/g,'')) {
-                r[2] = '';
+              // ★ 已經是合法代碼形狀（含 00981A 這種字母後綴）就直接跳過下面的名稱解析，
+              //   避免字母被「從名稱提取數字」的邏輯誤刪
+              if (!isValidStockCode_(sym)) {
+                // 嘗試 nameToCodeMap 對應（如 DCA_i_NAME 設定）
+                if (isNaN(Number(sym)) && nameToCodeMap.has(sym)) {
+                  sym = nameToCodeMap.get(sym); r[2] = sym;
+                }
+                // 從基金名稱提取 4~6 位數字代碼，後面可能還接 1 個字母
+                // （如「國泰永續高股息00919」→「00919」）
+                if (isNaN(Number(sym))) {
+                  const codeMatch = sym.match(/(\d{4,6}[A-Z]?)/i);
+                  if (codeMatch) { sym = codeMatch[1]; r[2] = sym; }
+                }
+                // 若 sym 仍為非數字且與 r[3] 相同（PDF 只有商品名稱欄），清空 r[2]
+                // 讓名稱只顯示在「股票名稱」欄，避免代碼欄重複顯示同一文字
+                if (isNaN(Number(sym)) && !isValidStockCode_(sym) && sym === String(r[3]||'').trim().replace(/\s+/g,'')) {
+                  r[2] = '';
+                }
               }
               // 按委託單號去重
               const ord = normOrderNo_(r[8]);
@@ -2336,6 +2355,56 @@ function fixStockCodes_Global() {
 }
 
 /**
+ * [手動修復用] 把所有相關分頁裡，股票代碼欄「完全等於 oldCode」的值，一次性改成 newCode。
+ * 用在少數已經發生過的既有代碼寫錯資料需要一次性修正時（例如 00981A 曾被舊版 Gmail 解析
+ * 邏輯誤判成「名稱」、截斷成 00981，字母 A 不見了）。修復範圍跟 fixStockCodes_Global 一樣，
+ * 外加《股票代碼對照表》。之後同一支股票就不會再錯了（root cause 已在解析邏輯修好），
+ * 這支只是拿來清掉「修好之前」已經寫進表格裡的舊錯誤資料。
+ */
+function fixSpecificCode_ONCE(oldCode, newCode) {
+  if (!oldCode || !newCode) { Logger.log('請提供 oldCode 與 newCode'); return; }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const targets = [
+    { name: '交易紀錄', col: 3 },
+    { name: '待確認交易', col: 3 },
+    { name: '庫存紀錄', col: 1 },
+    { name: '期初庫存', col: 1 },
+    { name: '股利狀況', col: 1 },
+    { name: '已實現損益', col: 1 },
+    { name: '定期定額', col: 2 },
+    { name: '股票代碼對照表', col: 1 },
+  ];
+  let totalFixed = 0;
+  targets.forEach(t => {
+    const sh = ss.getSheetByName(t.name);
+    if (!sh || sh.getLastRow() < 2) return;
+    const lastRow = sh.getLastRow();
+    const range = sh.getRange(2, t.col, lastRow - 1, 1);
+    const values = range.getValues();
+    let changed = false;
+    const newValues = values.map(r => {
+      const val = String(r[0]).trim();
+      if (val === oldCode) { changed = true; totalFixed++; return [newCode]; }
+      return [val];
+    });
+    if (changed) {
+      range.setNumberFormat('@');
+      range.setValues(newValues);
+      Logger.log(`✅ 已在 [${t.name}] 把「${oldCode}」修正為「${newCode}」`);
+    }
+  });
+  const msg = totalFixed > 0
+    ? `🎉 完成！共修正 ${totalFixed} 筆「${oldCode}」→「${newCode}」。`
+    : `👍 沒有找到需要修正的「${oldCode}」。`;
+  Logger.log(msg);
+  try { SpreadsheetApp.getUi().alert(msg); } catch (e) { /* 無 UI 環境，略過彈窗 */ }
+  return totalFixed;
+}
+// 專門修這次回報的案例：00981（被截斷，缺字母 A）→ 00981A。
+// 在 GAS 編輯器的函式下拉選單選這支直接執行即可，不用自己輸入參數。
+function fixSpecificCode_00981A_ONCE() { return fixSpecificCode_ONCE('00981', '00981A'); }
+
+/**
  * 確保《股票代碼對照表》存在。這張表是「我實際會買賣的股票」清單，只放代碼＋名稱兩欄，
  * 用途有三個：
  *   1. 給交易紀錄／待確認交易的「股票代碼」欄掛下拉選單驗證（見 setupStockCodeValidation_ONCE）
@@ -2366,7 +2435,7 @@ function ensureStockCodeRefSheet_() {
     readSheetAsObjects_(s).forEach(r => {
       const c = String(r['股票代碼'] || '').trim();
       const n = String(r['股票名稱'] || '').trim().replace(/\s+/g, '');
-      if (c && n && !isNaN(Number(c)) && !map.has(c)) map.set(c, n);
+      if (c && n && isValidStockCode_(c) && !map.has(c)) map.set(c, n);
     });
   };
   const C = getCfg_();
@@ -2467,7 +2536,7 @@ function learnNewCodesIntoRefSheet_() {
     readSheetAsObjects_(s).forEach(r => {
       const c = String(r['股票代碼'] || '').trim();
       const n = String(r['股票名稱'] || '').trim().replace(/\s+/g, '');
-      if (!c || !n || isNaN(Number(c))) return; // 只採信代碼為純數字、名稱不為空的乾淨資料
+      if (!c || !n || !isValidStockCode_(c)) return; // 只採信代碼形狀合法、名稱不為空的乾淨資料
       if (!known.has(c) && !newMap.has(c)) newMap.set(c, n);
     });
   };
