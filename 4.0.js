@@ -2336,14 +2336,15 @@ function fixStockCodes_Global() {
 }
 
 /**
- * 確保《股票代碼對照表》存在。這張表是使用者自己維護的「我實際會買賣的股票」清單，
- * 只放代碼＋名稱兩欄，用途有三個：
+ * 確保《股票代碼對照表》存在。這張表是「我實際會買賣的股票」清單，只放代碼＋名稱兩欄，
+ * 用途有三個：
  *   1. 給交易紀錄／待確認交易的「股票代碼」欄掛下拉選單驗證（見 setupStockCodeValidation_ONCE）
  *   2. 給 Gmail 解析（ingestFromGmail_*）當作最優先、最權威的名稱→代碼對照來源
  *   3. 給 fillMissingStockCodes_ 用來把缺代碼的列，依「股票名稱」補回代碼
  * 第一次建立時，會自動從既有的交易紀錄／期初庫存／庫存紀錄掃出目前已經在用的代碼＋名稱，
- * 當作起始內容；之後買進新股票，只要自己來這張表加一行「代碼、名稱」即可，
- * 下拉選單跟自動補值都會立刻認得這個新代碼，不需要再改任何程式。
+ * 當作起始內容。之後買進新股票，不需要自己手動來加這張表——每天的 dailyDataMaintenance_
+ * 會透過 learnNewCodesIntoRefSheet_ 自動把交易紀錄裡出現的新代碼學進來；你也可以隨時自己
+ * 手動加一行，兩者不衝突（自動學習只會新增、不會蓋掉你手動加/改過的列）。
  */
 function ensureStockCodeRefSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -2438,16 +2439,66 @@ function fillMissingStockCodes_() {
 }
 
 /**
- * 每日資料維護：先補缺代碼（依名稱），再修格式錯的代碼（如 50→0050）。
+ * 讓《股票代碼對照表》自己學會新股票，不用每次都手動去那張表加一行。
+ * 掃描 交易紀錄／期初庫存／庫存紀錄裡「代碼是純數字、名稱不為空」的乾淨資料列，
+ * 把對照表裡還沒有的代碼＋名稱補進去（append，不覆蓋既有列——你在對照表手動改過的
+ * 名稱不會被蓋掉，只會新增全新的代碼）。
+ * 注意：這解決的是「同一支股票之後不用再手動登記」，不是「憑空生出從沒出現過的代碼」——
+ * 一支全新股票第一次從 Gmail 解析進來、又剛好回報信只有名稱沒有代碼時，你還是得在
+ * 待確認交易／交易紀錄裡手動補一次正確代碼（本來確認交易時就會做的事），之後這支就會
+ * 被這裡自動學進對照表，不用再手動維護第二次。
+ */
+function learnNewCodesIntoRefSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const shRef = ensureStockCodeRefSheet_();
+
+  const known = new Set();
+  if (shRef.getLastRow() > 1) {
+    shRef.getRange(2, 1, shRef.getLastRow() - 1, 1).getValues().forEach(r => {
+      const c = String(r[0] || '').trim();
+      if (c) known.add(c);
+    });
+  }
+
+  const newMap = new Map(); // code -> name，這次新發現、對照表裡還沒有的
+  const learnFrom = (sheetName) => {
+    const s = ss.getSheetByName(sheetName);
+    if (!s || s.getLastRow() < 2) return;
+    readSheetAsObjects_(s).forEach(r => {
+      const c = String(r['股票代碼'] || '').trim();
+      const n = String(r['股票名稱'] || '').trim().replace(/\s+/g, '');
+      if (!c || !n || isNaN(Number(c))) return; // 只採信代碼為純數字、名稱不為空的乾淨資料
+      if (!known.has(c) && !newMap.has(c)) newMap.set(c, n);
+    });
+  };
+  const C = getCfg_();
+  learnFrom(C.SHEET_TRADES);
+  learnFrom(C.SHEET_OPENING);
+  learnFrom(C.SHEET_HOLD);
+
+  if (!newMap.size) return 0;
+
+  const rows = Array.from(newMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  const startRow = shRef.getLastRow() + 1;
+  shRef.getRange(startRow, 1, rows.length, 1).setNumberFormat('@');
+  shRef.getRange(startRow, 1, rows.length, 2).setValues(rows);
+  Logger.log(`✅ 《股票代碼對照表》自動學到 ${rows.length} 筆新股票代碼：${rows.map(r => r[0] + ' ' + r[1]).join('、')}`);
+  return rows.length;
+}
+
+/**
+ * 每日資料維護：先讓對照表自己學新代碼，再依對照表補缺代碼（依名稱），
+ * 最後修格式錯的代碼（如 50→0050）。
  * 排程順序：ingestFromGmail_Plaintext(18:00) → rebuildAll_B(18:30) →
  *           dailyDataMaintenance(18:45，這裡) → rebuildRealizedPnL_FIFO(19:00)
  * 這樣當天新解析／新確認的交易，代碼會在重算已實現損益之前就先清乾淨。
  */
 function dailyDataMaintenance_() {
   ensureStockCodeRefSheet_();
-  const filled = fillMissingStockCodes_();
-  const fixed  = fixStockCodes_Global();
-  Logger.log(`📋 每日資料維護完成：補上缺代碼 ${filled} 筆、修正代碼格式 ${fixed} 筆。`);
+  const learned = learnNewCodesIntoRefSheet_();
+  const filled  = fillMissingStockCodes_();
+  const fixed   = fixStockCodes_Global();
+  Logger.log(`📋 每日資料維護完成：對照表自動學到新代碼 ${learned} 筆、補上缺代碼 ${filled} 筆、修正代碼格式 ${fixed} 筆。`);
 }
 
 /**
@@ -2455,8 +2506,9 @@ function dailyDataMaintenance_() {
  * 股票代碼欄掛上下拉選單驗證，選項就是《股票代碼對照表》A欄目前的內容。
  * 用 setAllowInvalid(true)：手動打字打了清單以外的代碼，Sheets 只會顯示小紅色警告三角形提示，
  * 不會硬擋輸入（Gmail 解析／App 手動新增這些走程式寫入的路徑，本來就不受資料驗證影響）。
- * 之後如果買了新股票，只要來《股票代碼對照表》多加一行「代碼、名稱」，下拉選單會自動包含新選項，
- * 完全不需要重新執行這個函式或改任何驗證設定——只有在你想擴大驗證涵蓋的列數範圍時才需要重跑。
+ * 之後買了新股票，對照表會由每日排程（learnNewCodesIntoRefSheet_）自動長出新的一行，
+ * 下拉選單也會跟著自動包含新選項；完全不需要重新執行這個函式或改任何驗證設定——
+ * 只有在你想擴大驗證涵蓋的列數範圍時才需要重跑。
  */
 function setupStockCodeValidation_ONCE() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
