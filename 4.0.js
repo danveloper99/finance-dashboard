@@ -168,6 +168,9 @@ function setupAllSuggestedTriggers_SAFE() {
 
   ScriptApp.newTrigger('ingestFromGmail_Plaintext_SAFE').timeBased().everyDays(1).atHour(18).nearMinute(0).inTimezone(tz).create();
   ScriptApp.newTrigger('rebuildAll_B_SAFE').timeBased().everyDays(1).atHour(18).nearMinute(30).inTimezone(tz).create();
+  // 股票代碼補值＋修復：排在「交易紀錄→庫存紀錄」重建之後、已實現損益重算之前，
+  // 這樣當天新確認的交易在計算損益前，代碼就已經是乾淨的。
+  ScriptApp.newTrigger('dailyDataMaintenance_SAFE').timeBased().everyDays(1).atHour(18).nearMinute(45).inTimezone(tz).create();
   ScriptApp.newTrigger('rebuildRealizedPnL_FIFO_SAFE').timeBased().everyDays(1).atHour(19).nearMinute(0).inTimezone(tz).create();
   ScriptApp.newTrigger('appendDCAFromHoldings_SAFE').timeBased().everyDays(1).atHour(12).nearMinute(0).inTimezone(tz).create();
   ScriptApp.newTrigger('runDividendsFullCycle_SAFE').timeBased().everyDays(1).atHour(11).nearMinute(0).inTimezone(tz).create();
@@ -180,6 +183,7 @@ function removeAllSuggestedTriggers_SAFE() {
   const names = new Set([
     'ingestFromGmail_Plaintext_SAFE',
     'rebuildAll_B_SAFE',
+    'dailyDataMaintenance_SAFE',
     'rebuildRealizedPnL_FIFO_SAFE',
     'appendDCAFromHoldings_SAFE',
     'runDividendsFullCycle_SAFE',
@@ -191,7 +195,44 @@ function removeAllSuggestedTriggers_SAFE() {
   Logger.log('🧹 已移除建議排程。');
 }
 
+/** 只新增「每日股票代碼補值＋修復」排程，不動到其他既有排程（避免重跑整批 setupAllSuggestedTriggers_SAFE 造成其他排程被重建） */
+function addDailyMaintenanceTrigger_SAFE() {
+  const already = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'dailyDataMaintenance_SAFE');
+  if (already) {
+    Logger.log('ℹ️ 已經有 dailyDataMaintenance_SAFE 的排程了，不重複新增。');
+    return;
+  }
+  const C  = getCfg_();
+  const tz = C.TZ || 'Asia/Taipei';
+  ScriptApp.newTrigger('dailyDataMaintenance_SAFE').timeBased().everyDays(1).atHour(18).nearMinute(45).inTimezone(tz).create();
+  Logger.log('✅ 已新增「每日股票代碼補值＋修復」排程：每天 18:45（交易紀錄重建之後、已實現損益重算之前）。');
+}
+
 /* ===== 共用小工具 ===== */
+
+/**
+ * 依「欄位名稱」(而非欄位序號) 從某張表學習 股票代碼→股票名稱 對應，寫入 map。
+ * 用這個取代舊版寫死欄位序號的 learnFromSheet：期初庫存／庫存紀錄的「股票代碼」在第1欄，
+ * 交易紀錄／待確認交易的「股票代碼」卻在第3欄，寫死序號在不同表上會讀錯欄位（例如把
+ * 期初庫存的「買進日期」「買入價」誤當成代碼/名稱學進去），這裡一律用表頭名稱去對應，
+ * 不管欄位順序長怎樣都能正確讀到「股票代碼」「股票名稱」。
+ * @param {boolean} numericCodeOnly 是否只採信「代碼欄為純數字」的資料列（用於較不可靠的來源，如待確認交易）
+ * @param {boolean} overwrite 是否覆蓋 map 裡已存在的同名項目（權威來源如《股票代碼對照表》設 true）
+ */
+function learnSymNameFromSheet_(ss, sheetName, map, numericCodeOnly, overwrite) {
+  if (!sheetName) return;
+  const s = ss.getSheetByName(sheetName);
+  if (!s || s.getLastRow() < 2) return;
+  const rows = readSheetAsObjects_(s);
+  rows.forEach(r => {
+    const c = String(r['股票代碼'] || '').trim();
+    const n = String(r['股票名稱'] || '').trim().replace(/\s+/g, '');
+    if (!c || !n) return;
+    if (numericCodeOnly && isNaN(Number(c))) return;
+    if (overwrite || !map.has(n)) map.set(n, c);
+  });
+}
+
 function ensureSheetWithHeader_(name, header) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName(name) || ss.insertSheet(name);
@@ -345,6 +386,8 @@ function appendDCAFromHoldings_SAFE(){ return runWithAlert_(appendDCAFromHolding
 function runDividendsFullCycle_SAFE() { return runWithAlert_(runDividendsFullCycle_, 'runDividendsFullCycle'); }
 function rebuildDCADividends_SAFE() { return runWithAlert_(appendDCAFromHoldings, 'appendDCAFromHoldings'); }
 function auditInventoryGaps_SAFE(){ return runWithAlert_(auditInventoryGaps_, 'auditInventoryGaps'); }
+// 每日資料維護：先依《股票代碼對照表》補缺代碼，再修正代碼格式錯誤（如 50→0050）。
+function dailyDataMaintenance_SAFE(){ return runWithAlert_(dailyDataMaintenance_, 'dailyDataMaintenance'); }
 
 /* ===== 測試用 ===== */
 function testErrorAlert_SendSample() {
@@ -582,27 +625,15 @@ function ingestFromGmail_Plaintext() {
     }
   }
 
-  const learnFromSheet = (sheetName) => {
-    const s = ss.getSheetByName(sheetName);
-    if (!s || s.getLastRow() < 2) return;
-    const d = s.getRange(2, 1, s.getLastRow()-1, 4).getValues();
-    d.forEach(r => {
-      const c = String(r[2]||'').trim();
-      const n = String(r[3]||'').trim().replace(/\s+/g,'');
-      if (c && n && !nameToCodeMap.has(n)) nameToCodeMap.set(n, c);
-    });
-  };
-  learnFromSheet(C.SHEET_TRADES);
-  learnFromSheet(C.SHEET_OPENING);
-  learnFromSheet(C.SHEET_HOLD);
+  // ★ 改用「依欄位名稱」讀取，避免期初庫存／庫存紀錄（股票代碼在第1欄）跟交易紀錄
+  //    （股票代碼在第3欄）欄位序號不同、寫死序號讀錯欄位的問題
+  learnSymNameFromSheet_(ss, C.SHEET_TRADES, nameToCodeMap);
+  learnSymNameFromSheet_(ss, C.SHEET_OPENING, nameToCodeMap);
+  learnSymNameFromSheet_(ss, C.SHEET_HOLD, nameToCodeMap);
   // 從待確認交易補學：只採信代碼為數字的項目，避免名稱誤解析的髒資料污染 map
-  const stagingShTmp = ss.getSheetByName(C.SHEET_STAGING || '待確認交易');
-  if (stagingShTmp && stagingShTmp.getLastRow() > 1) {
-    stagingShTmp.getRange(2, 1, stagingShTmp.getLastRow()-1, 4).getValues().forEach(r => {
-      const c = String(r[2]||'').trim(), n = String(r[3]||'').trim().replace(/\s+/g,'');
-      if (c && n && !isNaN(Number(c)) && !nameToCodeMap.has(n)) nameToCodeMap.set(n, c);
-    });
-  }
+  learnSymNameFromSheet_(ss, C.SHEET_STAGING || '待確認交易', nameToCodeMap, true);
+  // 《股票代碼對照表》是使用者自己維護的權威清單，最後學、可覆蓋前面學到的結果
+  learnSymNameFromSheet_(ss, '股票代碼對照表', nameToCodeMap, true, true);
 
   const existedOrder = new Set();
   const existedNoOrd = new Set();
@@ -2223,13 +2254,16 @@ function cleanDuplicateDividends_Safe() {
 
 /**
  * [工具] 全域股票代碼修復 (修正版：區分 4碼 與 5碼 ETF)
- * 適用範圍：交易紀錄、庫存紀錄、期初庫存、股利狀況、已實現損益、定期定額
+ * 適用範圍：交易紀錄、待確認交易、庫存紀錄、期初庫存、股利狀況、已實現損益、定期定額
+ * 可安全從排程（無 UI 環境）呼叫：結尾的 getUi().alert 包了 try/catch，沒有 UI 時只會跳過彈窗，
+ * 不會讓整個排程失敗；訊息一律會寫進 Logger.log。
  */
 function fixStockCodes_Global() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  
+
   const targets = [
     { name: '交易紀錄', col: 3 },
+    { name: '待確認交易', col: 3 },
     { name: '庫存紀錄', col: 1 },
     { name: '期初庫存', col: 1 },
     { name: '股利狀況', col: 1 },
@@ -2290,12 +2324,165 @@ function fixStockCodes_Global() {
     }
   });
 
-  const msg = totalFixed > 0 
+  const msg = totalFixed > 0
     ? `🎉 修復完成！共修正了 ${totalFixed} 筆代碼 (含 00878 修正)。`
     : `👍 檢查完畢，代碼格式皆正確。`;
-    
+
   Logger.log(msg);
-  SpreadsheetApp.getUi().alert(msg);
+  // 從排程（時間觸發器）呼叫時沒有試算表 UI，getUi() 會直接拋錯，
+  // 用 try/catch 包起來：手動執行時仍會跳彈窗，排程執行時就靜默略過、只留 log。
+  try { SpreadsheetApp.getUi().alert(msg); } catch (e) { /* 無 UI 環境（排程），略過彈窗 */ }
+  return totalFixed;
+}
+
+/**
+ * 確保《股票代碼對照表》存在。這張表是使用者自己維護的「我實際會買賣的股票」清單，
+ * 只放代碼＋名稱兩欄，用途有三個：
+ *   1. 給交易紀錄／待確認交易的「股票代碼」欄掛下拉選單驗證（見 setupStockCodeValidation_ONCE）
+ *   2. 給 Gmail 解析（ingestFromGmail_*）當作最優先、最權威的名稱→代碼對照來源
+ *   3. 給 fillMissingStockCodes_ 用來把缺代碼的列，依「股票名稱」補回代碼
+ * 第一次建立時，會自動從既有的交易紀錄／期初庫存／庫存紀錄掃出目前已經在用的代碼＋名稱，
+ * 當作起始內容；之後買進新股票，只要自己來這張表加一行「代碼、名稱」即可，
+ * 下拉選單跟自動補值都會立刻認得這個新代碼，不需要再改任何程式。
+ */
+function ensureStockCodeRefSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName('股票代碼對照表');
+  if (sh) return sh;
+
+  sh = ss.insertSheet('股票代碼對照表');
+  sh.getRange(1, 1, 1, 2).setValues([['股票代碼', '股票名稱']])
+    .setFontWeight('bold').setBackground('#344e41').setFontColor('white');
+  sh.setFrozenRows(1);
+  sh.setColumnWidth(1, 100);
+  sh.setColumnWidth(2, 160);
+
+  // 首次建立時，從既有資料自動掃出目前有在用的代碼＋名稱，當作起始清單
+  const map = new Map(); // code -> name
+  const learn = (sheetName) => {
+    const s = ss.getSheetByName(sheetName);
+    if (!s || s.getLastRow() < 2) return;
+    readSheetAsObjects_(s).forEach(r => {
+      const c = String(r['股票代碼'] || '').trim();
+      const n = String(r['股票名稱'] || '').trim().replace(/\s+/g, '');
+      if (c && n && !isNaN(Number(c)) && !map.has(c)) map.set(c, n);
+    });
+  };
+  const C = getCfg_();
+  learn(C.SHEET_TRADES);
+  learn(C.SHEET_OPENING);
+  learn(C.SHEET_HOLD);
+
+  const rows = Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  if (rows.length) {
+    sh.getRange(2, 1, rows.length, 1).setNumberFormat('@');
+    sh.getRange(2, 1, rows.length, 2).setValues(rows);
+  }
+  Logger.log(`✅ 已建立《股票代碼對照表》，從既有資料帶入 ${rows.length} 筆起始資料。`);
+  return sh;
+}
+
+/**
+ * 依《股票代碼對照表》，把 交易紀錄／待確認交易 裡「股票代碼空白、但股票名稱對得到表裡」的列自動補上代碼。
+ * 這個解決的是跟 fixStockCodes_Global（修「格式錯」如 50→0050）不同的另一種問題：
+ * 代碼欄位「完全是空的」——通常發生在 Gmail 解析到一支從沒出現過的新股票時。
+ * 只要你在《股票代碼對照表》裡有登記這支股票的代碼＋名稱，這裡就會自動幫你補上去。
+ */
+function fillMissingStockCodes_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const shRef = ss.getSheetByName('股票代碼對照表');
+  if (!shRef || shRef.getLastRow() < 2) return 0;
+
+  const nameToCode = new Map();
+  shRef.getRange(2, 1, shRef.getLastRow() - 1, 2).getValues().forEach(r => {
+    const c = String(r[0] || '').trim();
+    const n = String(r[1] || '').trim().replace(/\s+/g, '');
+    if (c && n) nameToCode.set(n, c);
+  });
+  if (!nameToCode.size) return 0;
+
+  const targets = ['待確認交易', '交易紀錄'];
+  let filled = 0;
+
+  targets.forEach(sheetName => {
+    const sh = ss.getSheetByName(sheetName);
+    if (!sh || sh.getLastRow() < 2) return;
+
+    const lastRow  = sh.getLastRow();
+    const lastCol  = sh.getLastColumn();
+    const headers  = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h || '').trim());
+    const codeCol  = headers.indexOf('股票代碼');
+    const nameCol  = headers.indexOf('股票名稱');
+    if (codeCol < 0 || nameCol < 0) return;
+
+    const codeVals = sh.getRange(2, codeCol + 1, lastRow - 1, 1).getValues();
+    const nameVals = sh.getRange(2, nameCol + 1, lastRow - 1, 1).getValues();
+    let changed = false;
+
+    for (let i = 0; i < codeVals.length; i++) {
+      const code = String(codeVals[i][0] || '').trim();
+      const name = String(nameVals[i][0] || '').trim().replace(/\s+/g, '');
+      if (!code && name && nameToCode.has(name)) {
+        codeVals[i][0] = nameToCode.get(name);
+        changed = true;
+        filled++;
+      }
+    }
+    if (changed) {
+      sh.getRange(2, codeCol + 1, lastRow - 1, 1).setNumberFormat('@').setValues(codeVals);
+      Logger.log(`✅ 已在 [${sheetName}] 依名稱補上 ${filled} 筆缺漏的股票代碼`);
+    }
+  });
+
+  return filled;
+}
+
+/**
+ * 每日資料維護：先補缺代碼（依名稱），再修格式錯的代碼（如 50→0050）。
+ * 排程順序：ingestFromGmail_Plaintext(18:00) → rebuildAll_B(18:30) →
+ *           dailyDataMaintenance(18:45，這裡) → rebuildRealizedPnL_FIFO(19:00)
+ * 這樣當天新解析／新確認的交易，代碼會在重算已實現損益之前就先清乾淨。
+ */
+function dailyDataMaintenance_() {
+  ensureStockCodeRefSheet_();
+  const filled = fillMissingStockCodes_();
+  const fixed  = fixStockCodes_Global();
+  Logger.log(`📋 每日資料維護完成：補上缺代碼 ${filled} 筆、修正代碼格式 ${fixed} 筆。`);
+}
+
+/**
+ * [一次性設定] 在《股票代碼對照表》不存在時先建立它，然後把「交易紀錄」「待確認交易」的
+ * 股票代碼欄掛上下拉選單驗證，選項就是《股票代碼對照表》A欄目前的內容。
+ * 用 setAllowInvalid(true)：手動打字打了清單以外的代碼，Sheets 只會顯示小紅色警告三角形提示，
+ * 不會硬擋輸入（Gmail 解析／App 手動新增這些走程式寫入的路徑，本來就不受資料驗證影響）。
+ * 之後如果買了新股票，只要來《股票代碼對照表》多加一行「代碼、名稱」，下拉選單會自動包含新選項，
+ * 完全不需要重新執行這個函式或改任何驗證設定——只有在你想擴大驗證涵蓋的列數範圍時才需要重跑。
+ */
+function setupStockCodeValidation_ONCE() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const shRef = ensureStockCodeRefSheet_();
+
+  const REF_ROWS = 2000; // 對照表預留的列數空間，未來新增股票代碼都算在這個範圍內
+  const refRange = shRef.getRange(2, 1, REF_ROWS, 1); // 股票代碼對照表 A2:A2001
+
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInRange(refRange, true)
+    .setAllowInvalid(true)
+    .setHelpText('請從《股票代碼對照表》挑選股票代碼；買了新股票的話，先去那張表加一行代碼＋名稱')
+    .build();
+
+  const TARGET_ROWS = 3000; // 交易紀錄／待確認交易套用驗證的列數範圍
+  const targets = [
+    { name: '交易紀錄', col: 3 },
+    { name: '待確認交易', col: 3 },
+  ];
+  targets.forEach(t => {
+    const sh = ss.getSheetByName(t.name);
+    if (!sh) return;
+    sh.getRange(2, t.col, TARGET_ROWS, 1).setDataValidation(rule);
+  });
+
+  Logger.log('✅ 已在「交易紀錄」「待確認交易」的股票代碼欄掛上下拉選單（對照《股票代碼對照表》）。');
 }
 
 /* =========================================
@@ -2534,18 +2721,13 @@ function ingestFromGmail_ByDateRange() {
     const nm  = String(C[`DCA_${i}_NAME`]   || '').trim().replace(/\s+/g, '');
     if (sym) { dcaWhitelist.add(sym); if (nm) nameToCodeMap.set(nm, sym); }
   }
-  const learnFromSheet = (sheetName) => {
-    const s = ss.getSheetByName(sheetName);
-    if (!s || s.getLastRow() < 2) return;
-    s.getRange(2, 1, s.getLastRow() - 1, 4).getValues().forEach(r => {
-      const c = String(r[2] || '').trim();
-      const n = String(r[3] || '').trim().replace(/\s+/g, '');
-      if (c && n && !nameToCodeMap.has(n)) nameToCodeMap.set(n, c);
-    });
-  };
-  learnFromSheet(C.SHEET_TRADES);
-  learnFromSheet(C.SHEET_OPENING);
-  learnFromSheet(C.SHEET_HOLD);
+  // ★ 改用「依欄位名稱」讀取，避免期初庫存／庫存紀錄（股票代碼在第1欄）跟交易紀錄
+  //    （股票代碼在第3欄）欄位序號不同、寫死序號讀錯欄位的問題
+  learnSymNameFromSheet_(ss, C.SHEET_TRADES, nameToCodeMap);
+  learnSymNameFromSheet_(ss, C.SHEET_OPENING, nameToCodeMap);
+  learnSymNameFromSheet_(ss, C.SHEET_HOLD, nameToCodeMap);
+  learnSymNameFromSheet_(ss, C.SHEET_STAGING || '待確認交易', nameToCodeMap, true);
+  learnSymNameFromSheet_(ss, '股票代碼對照表', nameToCodeMap, true, true);
 
   let parsed = [];
 
