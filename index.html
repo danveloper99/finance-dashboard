@@ -295,7 +295,7 @@
       </div>
       <div class="table-wrap">
         <div v-if="listLoading" style="padding:48px;text-align:center;color:#588157"><i class="ph ph-spinner spin" style="font-size:28px;display:block;margin-bottom:8px"></i>讀取資料中...</div>
-        <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th v-for="h in realizedHeaders" :key="h" @click="sortBy(h)" class="table-th" :style="'cursor:pointer;'+realizedColAlign(h)">{{ h }}<span v-if="sortKey===h" style="margin-left:4px;color:#bc6c25"><i :class="sortOrder===1?'ph-bold ph-arrow-up':'ph-bold ph-arrow-down'"></i></span></th></tr></thead><tbody><tr v-for="(row,idx) in filteredRealizedList" :key="idx"><td v-for="h in realizedHeaders" :key="h" class="table-td" :style="realizedColAlign(h)" v-html="fmtCell(h,row[h])"></td></tr><tr v-if="!filteredRealizedList.length"><td :colspan="realizedHeaders.length" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合篩選條件的資料</td></tr></tbody></table></div>
+        <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th v-for="h in realizedHeaders" :key="h" @click="tblSortToggle('realized',h)" class="table-th" :style="'cursor:pointer;user-select:none;'+realizedColAlign(h)">{{ h }}<span v-if="tblSortIcon('realized',h)" style="margin-left:4px;color:#bc6c25"><i :class="tblSortIcon('realized',h)"></i></span></th></tr></thead><tbody><tr v-for="(row,idx) in filteredRealizedList" :key="idx"><td v-for="h in realizedHeaders" :key="h" class="table-td" :style="realizedColAlign(h)" v-html="fmtCell(h,row[h])"></td></tr><tr v-if="!filteredRealizedList.length"><td :colspan="realizedHeaders.length" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合篩選條件的資料</td></tr></tbody></table></div>
       </div>
 
       <!-- ── 月度損益圖表 ── -->
@@ -407,7 +407,7 @@
       </div>
       <div class="table-wrap">
         <div v-if="listLoading" style="padding:48px;text-align:center;color:#588157"><i class="ph ph-spinner spin" style="font-size:28px;display:block;margin-bottom:8px"></i>讀取中...</div>
-        <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th v-for="h in ['股票代碼','股票名稱','持有股數','買入均價','現價','獲利金額','獲利比例']" :key="h" @click="sortHoldingsBy(h)" class="table-th" style="cursor:pointer" :style="['持有股數','買入均價','現價','獲利金額','獲利比例'].includes(h)?'text-align:right':''">{{ h }}<span v-if="holdingsSortKey===h" style="margin-left:4px;color:#bc6c25"><i :class="holdingsSortOrder===1?'ph-bold ph-arrow-up':'ph-bold ph-arrow-down'"></i></span></th><th class="table-th" style="text-align:center">明細</th></tr></thead><tbody><tr v-for="(row,idx) in groupedHoldingsList" :key="idx"><td class="table-td font-medium">{{ row.symbol }}</td><td class="table-td font-medium">{{ row.name }}</td><td class="table-td num-font" style="text-align:right">{{ fmtInt(row.qty) }}</td><td class="table-td num-font" style="text-align:right">{{ row.avgPrice }}</td><td class="table-td num-font font-medium" :class="(row.currPrice-parseFloat(row.avgPrice))>0?'val-pos':'val-neg'" style="text-align:right">{{ row.currPrice }}</td><td class="table-td num-font font-bold" :class="row.profit>0?'val-pos':'val-neg'" style="text-align:right">{{ fmtInt(row.profit) }}</td><td class="table-td num-font font-bold" :class="parseFloat(row.profitPct)>0?'val-pos':'val-neg'" style="text-align:right">{{ row.profitPct }}%</td><td class="table-td" style="text-align:center"><button @click="openHoldingsModal(row)" style="color:#3a5a40;border:1px solid #dad7cd;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer"><i class="ph-bold ph-list-magnifying-glass"></i> 明細</button></td></tr><tr v-if="!groupedHoldingsList.length"><td colspan="8" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合的庫存資料</td></tr></tbody></table></div>
+        <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th v-for="h in ['股票代碼','股票名稱','持有股數','買入均價','現價','獲利金額','獲利比例']" :key="h" @click="tblSortToggle('holdings',h)" class="table-th" style="cursor:pointer;user-select:none" :style="['持有股數','買入均價','現價','獲利金額','獲利比例'].includes(h)?'text-align:right':''">{{ h }}<span v-if="tblSortIcon('holdings',h)" style="margin-left:4px;color:#bc6c25"><i :class="tblSortIcon('holdings',h)"></i></span></th><th class="table-th" style="text-align:center">明細</th></tr></thead><tbody><tr v-for="(row,idx) in groupedHoldingsList" :key="idx"><td class="table-td font-medium">{{ row.symbol }}</td><td class="table-td font-medium">{{ row.name }}</td><td class="table-td num-font" style="text-align:right">{{ fmtInt(row.qty) }}</td><td class="table-td num-font" style="text-align:right">{{ row.avgPrice }}</td><td class="table-td num-font font-medium" :class="(row.currPrice-parseFloat(row.avgPrice))>0?'val-pos':'val-neg'" style="text-align:right">{{ row.currPrice }}</td><td class="table-td num-font font-bold" :class="row.profit>0?'val-pos':'val-neg'" style="text-align:right">{{ fmtInt(row.profit) }}</td><td class="table-td num-font font-bold" :class="parseFloat(row.profitPct)>0?'val-pos':'val-neg'" style="text-align:right">{{ row.profitPct }}%</td><td class="table-td" style="text-align:center"><button @click="openHoldingsModal(row)" style="color:#3a5a40;border:1px solid #dad7cd;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer"><i class="ph-bold ph-list-magnifying-glass"></i> 明細</button></td></tr><tr v-if="!groupedHoldingsList.length"><td colspan="8" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合的庫存資料</td></tr></tbody></table></div>
       </div>
     </div>
 
@@ -424,7 +424,7 @@
       </div>
       <div class="table-wrap">
         <div v-if="listLoading" style="padding:48px;text-align:center;color:#588157">讀取中...</div>
-        <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th v-for="h in dividendHeaders" :key="h" class="table-th" :style="['現金股利 (元/股)','除息日持股數','實際領取金額','平均成交價','單次殖利率 (現金/買入價)'].includes(h)?'text-align:right':''">{{ h }}</th></tr></thead><tbody><tr v-for="(row,idx) in filteredDividendList" :key="idx"><td class="table-td">{{ row['股票代碼'] }}</td><td class="table-td">{{ row['股票名稱'] }}</td><td class="table-td">{{ row['股利年度'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['現金股利 (元/股)'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['除息日持股數'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['實際領取金額'] }}</td><td class="table-td">{{ row['除息日'] }}</td><td class="table-td">{{ row['發放日'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['平均成交價'] }}</td><td class="table-td num-font font-bold val-pos" style="text-align:right">{{ row['單次殖利率 (現金/買入價)'] }}</td></tr><tr v-if="!filteredDividendList.length"><td :colspan="dividendHeaders.length" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合篩選條件的資料</td></tr></tbody></table></div>
+        <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th v-for="h in dividendHeaders" :key="h" @click="tblSortToggle('dividends',h)" class="table-th" :style="'cursor:pointer;user-select:none;'+(['現金股利 (元/股)','除息日持股數','實際領取金額','平均成交價','單次殖利率 (現金/買入價)'].includes(h)?'text-align:right':'')">{{ h }}<span v-if="tblSortIcon('dividends',h)" style="margin-left:4px;color:#bc6c25"><i :class="tblSortIcon('dividends',h)"></i></span></th></tr></thead><tbody><tr v-for="(row,idx) in filteredDividendList" :key="idx"><td class="table-td">{{ row['股票代碼'] }}</td><td class="table-td">{{ row['股票名稱'] }}</td><td class="table-td">{{ row['股利年度'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['現金股利 (元/股)'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['除息日持股數'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['實際領取金額'] }}</td><td class="table-td">{{ row['除息日'] }}</td><td class="table-td">{{ row['發放日'] }}</td><td class="table-td num-font" style="text-align:right">{{ row['平均成交價'] }}</td><td class="table-td num-font font-bold val-pos" style="text-align:right">{{ row['單次殖利率 (現金/買入價)'] }}</td></tr><tr v-if="!filteredDividendList.length"><td :colspan="dividendHeaders.length" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合篩選條件的資料</td></tr></tbody></table></div>
       </div>
 
       <!-- ── 年度股利圖表 ── -->
@@ -484,7 +484,7 @@
       </div>
       <div class="table-wrap">
         <div v-if="listLoading" style="padding:48px;text-align:center;color:#588157">讀取中...</div>
-        <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th class="table-th">代碼</th><th class="table-th">名稱</th><th class="table-th">開始日期</th><th class="table-th" style="text-align:right">累計股數</th><th class="table-th" style="text-align:right">平均成本</th><th class="table-th" style="text-align:right">總投入</th><th class="table-th" style="text-align:right">累計股息</th><th class="table-th" style="text-align:right">殖利率</th><th class="table-th" style="text-align:center">明細</th></tr></thead><tbody><tr v-for="(row,idx) in groupedDcaList" :key="idx"><td class="table-td font-medium">{{ row.symbol }}</td><td class="table-td font-medium">{{ row.name }}</td><td class="table-td" style="color:#888">{{ row.firstDate }}</td><td class="table-td num-font font-bold" style="text-align:right">{{ fmtInt(row.totalQty) }}</td><td class="table-td num-font" style="text-align:right">{{ fmtDec(row.avgPrice) }}</td><td class="table-td num-font" style="text-align:right">{{ fmtInt(row.totalCost) }}</td><td class="table-td num-font val-pos" style="text-align:right">{{ fmtInt(row.totalDiv) }}</td><td class="table-td num-font font-bold" :class="row.yieldPct>0?'val-pos':'val-neg'" style="text-align:right">{{ fmtDec(row.yieldPct) }}%</td><td class="table-td" style="text-align:center"><button @click="openDcaDetailModal(row)" style="color:#3a5a40;border:1px solid #dad7cd;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer"><i class="ph-bold ph-list-magnifying-glass"></i> 明細</button></td></tr><tr v-if="!groupedDcaList.length"><td colspan="9" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合的 DCA 資料</td></tr></tbody></table></div>
+        <div v-else class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th v-for="c in dcaCols" :key="c.k" @click="tblSortToggle('dca',c.k)" class="table-th" :style="'cursor:pointer;user-select:none;'+(c.r?'text-align:right':'')">{{ c.l }}<span v-if="tblSortIcon('dca',c.k)" style="margin-left:4px;color:#bc6c25"><i :class="tblSortIcon('dca',c.k)"></i></span></th><th class="table-th" style="text-align:center">明細</th></tr></thead><tbody><tr v-for="(row,idx) in groupedDcaList" :key="idx"><td class="table-td font-medium">{{ row.symbol }}</td><td class="table-td font-medium">{{ row.name }}</td><td class="table-td" style="color:#888">{{ row.firstDate }}</td><td class="table-td num-font font-bold" style="text-align:right">{{ fmtInt(row.totalQty) }}</td><td class="table-td num-font" style="text-align:right">{{ fmtDec(row.avgPrice) }}</td><td class="table-td num-font" style="text-align:right">{{ fmtInt(row.totalCost) }}</td><td class="table-td num-font val-pos" style="text-align:right">{{ fmtInt(row.totalDiv) }}</td><td class="table-td num-font font-bold" :class="row.yieldPct>0?'val-pos':'val-neg'" style="text-align:right">{{ fmtDec(row.yieldPct) }}%</td><td class="table-td" style="text-align:center"><button @click="openDcaDetailModal(row)" style="color:#3a5a40;border:1px solid #dad7cd;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer"><i class="ph-bold ph-list-magnifying-glass"></i> 明細</button></td></tr><tr v-if="!groupedDcaList.length"><td colspan="9" style="padding:48px;text-align:center;color:#aaa;font-weight:700">沒有符合的 DCA 資料</td></tr></tbody></table></div>
       </div>
     </div>
 
@@ -536,11 +536,11 @@
           <h3 class="section-title" style="display:flex;align-items:center;gap:8px;margin:0"><i class="ph ph-list-checks" style="color:#588157"></i> 持股操作建議</h3>
           <label style="display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;cursor:pointer;font-size:13px;font-weight:700;border:1.5px solid;transition:all .2s" :style="includeDividend?'background:#f0f4ee;border-color:#3a5a40;color:#3a5a40':'background:white;border-color:#dad7cd;color:#888'"><input type="checkbox" v-model="includeDividend" class="hidden"><i :class="includeDividend?'ph-bold ph-check-square':'ph ph-square'" style="font-size:15px"></i> 含息報酬</label>
         </div>
-        <div class="table-wrap"><div class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th class="table-th">代碼</th><th class="table-th">名稱</th><th class="table-th" style="text-align:right">股數</th><th class="table-th" style="text-align:right">均買價</th><th class="table-th" style="text-align:right">現價</th><th class="table-th" style="text-align:right">帳面損益</th><th class="table-th" style="text-align:right">報酬%</th><th v-if="includeDividend" class="table-th" style="text-align:right">累積股息</th><th v-if="includeDividend" class="table-th" style="text-align:right">含息報酬</th><th v-if="includeDividend" class="table-th" style="text-align:right">含息%</th><th class="table-th" style="text-align:center">建議</th><th class="table-th" style="min-width:200px">原因</th></tr></thead><tbody><tr v-for="h in analysisResult.holdings" :key="h.code"><td class="table-td" style="font-family:monospace;font-weight:700;color:#3a5a40">{{ h.code }}</td><td class="table-td font-medium" style="white-space:nowrap">{{ h.name }}</td><td class="table-td num-font" style="text-align:right;color:#94a3b8">{{ h.qty.toLocaleString() }}</td><td class="table-td num-font" style="text-align:right;color:#94a3b8">{{ h.avgCost }}</td><td class="table-td num-font font-bold" style="text-align:right" :style="h.curPrice?(h.curPrice>h.avgCost?'color:#bc6c25':'color:#588157'):'color:#ccc'">{{ h.curPrice||'—' }}</td><td class="table-td num-font font-bold" style="text-align:right" :class="(h.capPnl||0)>=0?'val-pos':'val-neg'">{{ h.capPnl!=null?((h.capPnl>=0?'+':'')+h.capPnl.toLocaleString()):'—' }}</td><td class="table-td num-font font-bold" style="text-align:right" :class="(h.pct||0)>=0?'val-pos':'val-neg'">{{ h.pct!=null?((h.pct>=0?'+':'')+h.pct+'%'):'—' }}</td><td v-if="includeDividend" class="table-td num-font val-pos" style="text-align:right">{{ h.totalDiv>0?'+'+fmtInt(h.totalDiv):'—' }}</td><td v-if="includeDividend" class="table-td num-font font-bold" style="text-align:right" :class="(h.totalReturn||0)>=0?'val-pos':'val-neg'">{{ h.totalReturn!=null?((h.totalReturn>=0?'+':'')+h.totalReturn.toLocaleString()):'—' }}</td><td v-if="includeDividend" class="table-td num-font font-bold" style="text-align:right" :class="(h.totalReturnPct||0)>=0?'val-pos':'val-neg'">{{ h.totalReturnPct!=null?((h.totalReturnPct>=0?'+':'')+h.totalReturnPct+'%'):'—' }}</td><td class="table-td" style="text-align:center"><span :class="['action-tag',h.actionEn==='buy'?'action-buy':h.actionEn==='sell'?'action-sell':h.actionEn==='reduce'?'action-reduce':'action-hold']">{{ h.action||'—' }}</span></td><td class="table-td" style="font-size:12px;color:#666;line-height:1.6;white-space:normal;min-width:200px;max-width:340px">{{ h.reason }}</td></tr></tbody></table></div></div>
+        <div class="table-wrap"><div class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th v-for="c in analysisHCols" :key="c.k" @click="!c.ns&&tblSortToggle('analysisH',c.k)" class="table-th" :style="(c.ns?'':'cursor:pointer;user-select:none;')+(c.r?'text-align:right;':'')+(c.c?'text-align:center;':'')+(c.w||'')">{{ c.l }}<span v-if="tblSortIcon('analysisH',c.k)" style="margin-left:4px;color:#bc6c25"><i :class="tblSortIcon('analysisH',c.k)"></i></span></th></tr></thead><tbody><tr v-for="h in analysisHoldingsSorted" :key="h.code"><td class="table-td" style="font-family:monospace;font-weight:700;color:#3a5a40">{{ h.code }}</td><td class="table-td font-medium" style="white-space:nowrap">{{ h.name }}</td><td class="table-td num-font" style="text-align:right;color:#94a3b8">{{ h.qty.toLocaleString() }}</td><td class="table-td num-font" style="text-align:right;color:#94a3b8">{{ h.avgCost }}</td><td class="table-td num-font font-bold" style="text-align:right" :style="h.curPrice?(h.curPrice>h.avgCost?'color:#bc6c25':'color:#588157'):'color:#ccc'">{{ h.curPrice||'—' }}</td><td class="table-td num-font font-bold" style="text-align:right" :class="(h.capPnl||0)>=0?'val-pos':'val-neg'">{{ h.capPnl!=null?((h.capPnl>=0?'+':'')+h.capPnl.toLocaleString()):'—' }}</td><td class="table-td num-font font-bold" style="text-align:right" :class="(h.pct||0)>=0?'val-pos':'val-neg'">{{ h.pct!=null?((h.pct>=0?'+':'')+h.pct+'%'):'—' }}</td><td v-if="includeDividend" class="table-td num-font val-pos" style="text-align:right">{{ h.totalDiv>0?'+'+fmtInt(h.totalDiv):'—' }}</td><td v-if="includeDividend" class="table-td num-font font-bold" style="text-align:right" :class="(h.totalReturn||0)>=0?'val-pos':'val-neg'">{{ h.totalReturn!=null?((h.totalReturn>=0?'+':'')+h.totalReturn.toLocaleString()):'—' }}</td><td v-if="includeDividend" class="table-td num-font font-bold" style="text-align:right" :class="(h.totalReturnPct||0)>=0?'val-pos':'val-neg'">{{ h.totalReturnPct!=null?((h.totalReturnPct>=0?'+':'')+h.totalReturnPct+'%'):'—' }}</td><td class="table-td" style="text-align:center"><span :class="['action-tag',h.actionEn==='buy'?'action-buy':h.actionEn==='sell'?'action-sell':h.actionEn==='reduce'?'action-reduce':'action-hold']">{{ h.action||'—' }}</span></td><td class="table-td" style="font-size:12px;color:#666;line-height:1.6;white-space:normal;min-width:200px;max-width:340px">{{ h.reason }}</td></tr></tbody></table></div></div>
       </div>
       <div v-if="analysisResult && analysisResult.suggestions && analysisResult.suggestions.length">
         <h3 class="section-title" style="margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ph ph-star" style="color:#bc6c25"></i> AI 建議關注</h3>
-        <div class="table-wrap"><div class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th class="table-th">代碼</th><th class="table-th">名稱</th><th class="table-th" style="text-align:center">建議</th><th class="table-th" style="min-width:200px">原因</th></tr></thead><tbody><tr v-for="s in analysisResult.suggestions" :key="s.code"><td class="table-td" style="font-family:monospace;font-weight:700;color:#bc6c25">{{ s.code }}</td><td class="table-td font-medium">{{ s.name }}</td><td class="table-td" style="text-align:center"><span class="action-tag action-buy">{{ s.action||'考慮買入' }}</span></td><td class="table-td" style="font-size:13px;color:#555;line-height:1.6;white-space:normal;min-width:200px;max-width:400px">{{ s.reason }}</td></tr></tbody></table></div></div>
+        <div class="table-wrap"><div class="table-scroll"><table style="min-width:100%;border-collapse:collapse"><thead><tr><th v-for="c in analysisSCols" :key="c.k" @click="!c.ns&&tblSortToggle('analysisS',c.k)" class="table-th" :style="(c.ns?'':'cursor:pointer;user-select:none;')+(c.c?'text-align:center;':'')+(c.w||'')">{{ c.l }}<span v-if="tblSortIcon('analysisS',c.k)" style="margin-left:4px;color:#bc6c25"><i :class="tblSortIcon('analysisS',c.k)"></i></span></th></tr></thead><tbody><tr v-for="s in analysisSuggestionsSorted" :key="s.code"><td class="table-td" style="font-family:monospace;font-weight:700;color:#bc6c25">{{ s.code }}</td><td class="table-td font-medium">{{ s.name }}</td><td class="table-td" style="text-align:center"><span class="action-tag action-buy">{{ s.action||'考慮買入' }}</span></td><td class="table-td" style="font-size:13px;color:#555;line-height:1.6;white-space:normal;min-width:200px;max-width:400px">{{ s.reason }}</td></tr></tbody></table></div></div>
       </div>
       <div>
         <h3 class="section-title" style="margin-bottom:12px;display:flex;align-items:center;gap:8px"><i class="ph ph-clock-counter-clockwise" style="color:#588157"></i> 歷史分析紀錄 <span style="font-size:12px;font-weight:400;color:#aaa">（{{ analysisHistory.length }} 筆）</span></h3>
@@ -633,7 +633,7 @@
         <!-- 歷史表 -->
         <div v-if="wealthHistory.length" class="card" style="padding:0;overflow:hidden">
           <div style="padding:16px 20px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:8px;color:#3a5a40"><i class="ph ph-clock-counter-clockwise" style="font-size:18px"></i><span class="font-bold" style="font-size:15px">歷史快照</span></div>
-          <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:380px"><thead><tr><th class="table-th">日期</th><th class="table-th" style="text-align:right">總資產（台幣）</th><th class="table-th" style="text-align:right">環比增減</th></tr></thead><tbody><tr v-for="(row,idx) in [...wealthHistory].sort((a,b)=>String(b.date).localeCompare(String(a.date)))" :key="idx"><td class="table-td">{{ String(row.date||'').slice(0,10) }}</td><td class="table-td num-font font-bold" style="text-align:right">{{ fmtInt(row.totalTWD) }}</td><td class="table-td num-font font-bold" style="text-align:right"><template v-if="idx < wealthHistory.length-1"><span :class="(parseFloat(row.totalTWD)-parseFloat([...wealthHistory].sort((a,b)=>String(b.date).localeCompare(String(a.date)))[idx+1]?.totalTWD||row.totalTWD))>0?'val-pos':'val-neg'">{{ fmtInt(parseFloat(row.totalTWD)-parseFloat([...wealthHistory].sort((a,b)=>String(b.date).localeCompare(String(a.date)))[idx+1]?.totalTWD||row.totalTWD)) }}</span></template><span v-else style="color:#aaa">—</span></td></tr></tbody></table></div>
+          <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:380px"><thead><tr><th v-for="c in [{k:'dateStr',l:'日期'},{k:'total',l:'總資產（台幣）',r:1},{k:'diff',l:'環比增減',r:1}]" :key="c.k" @click="tblSortToggle('wealth',c.k)" class="table-th" :style="'cursor:pointer;user-select:none;'+(c.r?'text-align:right':'')">{{ c.l }}<span v-if="tblSortIcon('wealth',c.k)" style="margin-left:4px;color:#bc6c25"><i :class="tblSortIcon('wealth',c.k)"></i></span></th></tr></thead><tbody><tr v-for="(row,idx) in wealthHistoryRows" :key="row.date+'-'+idx"><td class="table-td">{{ row.dateStr }}</td><td class="table-td num-font font-bold" style="text-align:right">{{ fmtInt(row.totalTWD) }}</td><td class="table-td num-font font-bold" style="text-align:right"><span v-if="row.diff!==null" :class="row.diff>0?'val-pos':'val-neg'">{{ fmtInt(row.diff) }}</span><span v-else style="color:#aaa">—</span></td></tr></tbody></table></div>
         </div>
         <!-- Email 提醒 -->
         <div class="card">
@@ -1014,16 +1014,10 @@
           <div style="flex:1;overflow-y:auto;padding:16px 8px 20px">
             <table style="width:100%;border-collapse:collapse;font-size:13px">
               <thead style="background:#f5f7f5;position:sticky;top:0"><tr>
-                <th v-if="detailType==='holdings'" style="padding:10px 14px;text-align:left;font-weight:700;color:#588157">券商</th>
-                <th style="padding:10px 14px;text-align:left;font-weight:700;color:#588157">日期</th>
-                <th style="padding:10px 14px;text-align:right;font-weight:700;color:#588157">成交價</th>
-                <th style="padding:10px 14px;text-align:right;font-weight:700;color:#588157">股數</th>
-                <th style="padding:10px 14px;text-align:right;font-weight:700;color:#588157">手續費</th>
-                <th style="padding:10px 14px;text-align:right;font-weight:700;color:#588157">本金</th>
-                <th v-if="detailType==='dca'" style="padding:10px 14px;text-align:right;font-weight:700;color:#588157">累計股息</th>
+                <th v-for="c in detailCols" :key="c.k" @click="tblSortToggle('detail',c.k)" :style="'padding:10px 14px;font-weight:700;color:#588157;cursor:pointer;user-select:none;white-space:nowrap;text-align:'+(c.r?'right':'left')">{{ c.l }}<span v-if="tblSortIcon('detail',c.k)" style="margin-left:4px;color:#bc6c25"><i :class="tblSortIcon('detail',c.k)"></i></span></th>
               </tr></thead>
               <tbody>
-                <tr v-for="(item,i) in currentDetailList" :key="i" style="border-bottom:1px solid #f0f0f0">
+                <tr v-for="(item,i) in sortedDetailList" :key="i" style="border-bottom:1px solid #f0f0f0">
                   <td v-if="detailType==='holdings'" style="padding:10px 14px;font-weight:700;color:#344e41">{{ item.brokerName }}</td>
                   <td style="padding:10px 14px;color:#666">{{ item.date }}</td>
                   <td class="num-font" style="padding:10px 14px;text-align:right;font-weight:600;color:#3a5a40">{{ item.price }}</td>
@@ -1317,6 +1311,48 @@ createApp({
     // ── 資料表 ──
     const realizedFilter = ref({ year:'ALL', month:'ALL', name:'' });
     const sortKey = ref(''), sortOrder = ref(1);
+    // ── 通用表格表頭排序：點一下 = 降冪，再點 = 升冪；空值（空白/—）永遠排最後 ──
+    const tblSortState = ref({});
+    const tblSortToggle = (id,k) => { const st=tblSortState.value[id]; tblSortState.value={...tblSortState.value,[id]:(st&&st.key===k)?{key:k,order:-st.order}:{key:k,order:-1}}; };
+    const tblSortIcon = (id,k) => { const st=tblSortState.value[id]; return (st&&st.key===k)?(st.order===1?'ph-bold ph-arrow-up':'ph-bold ph-arrow-down'):''; };
+    const tblSortReset = id => { tblSortState.value={...tblSortState.value,[id]:null}; };
+    const tblSortRows = (id,rows,getter,textKeys) => {
+      const st=tblSortState.value[id]; if(!st||!st.key||!rows||!rows.length) return rows;
+      const g=getter||((r,k)=>r[k]);
+      const asText=(textKeys||[]).includes(st.key);
+      const isEmpty=v=>v==null||v===''||v==='—';
+      const toNum=v=>{ if(typeof v==='number') return v; const t=String(v).trim().replace(/[,%+]/g,''); return /^-?\d*\.?\d+$/.test(t)?parseFloat(t):NaN; };
+      return [...rows].sort((a,b)=>{
+        const va=g(a,st.key), vb=g(b,st.key);
+        const ea=isEmpty(va), eb=isEmpty(vb);
+        if(ea||eb) return (ea&&eb)?0:(ea?1:-1);
+        if(!asText){ const na=toNum(va), nb=toNum(vb); if(!isNaN(na)&&!isNaN(nb)) return (na-nb)*st.order; }
+        return String(va).localeCompare(String(vb),'zh-Hant')*st.order;
+      });
+    };
+    const dcaCols = [
+      {k:'symbol',l:'代碼'},{k:'name',l:'名稱'},{k:'firstDate',l:'開始日期'},
+      {k:'totalQty',l:'累計股數',r:1},{k:'avgPrice',l:'平均成本',r:1},{k:'totalCost',l:'總投入',r:1},{k:'totalDiv',l:'累計股息',r:1},{k:'yieldPct',l:'殖利率',r:1},
+    ];
+    const analysisHCols = computed(()=>[
+      {k:'code',l:'代碼'},{k:'name',l:'名稱'},{k:'qty',l:'股數',r:1},{k:'avgCost',l:'均買價',r:1},{k:'curPrice',l:'現價',r:1},{k:'capPnl',l:'帳面損益',r:1},{k:'pct',l:'報酬%',r:1},
+      ...(includeDividend.value?[{k:'totalDiv',l:'累積股息',r:1},{k:'totalReturn',l:'含息報酬',r:1},{k:'totalReturnPct',l:'含息%',r:1}]:[]),
+      {k:'action',l:'建議',c:1},{k:'reason',l:'原因',ns:1,w:'min-width:200px'},
+    ]);
+    const analysisSCols = [{k:'code',l:'代碼'},{k:'name',l:'名稱'},{k:'action',l:'建議',c:1},{k:'reason',l:'原因',ns:1,w:'min-width:200px'}];
+    const analysisHoldingsSorted = computed(()=>tblSortRows('analysisH',(analysisResult.value&&analysisResult.value.holdings)||[],null,['code','name','action']));
+    const analysisSuggestionsSorted = computed(()=>tblSortRows('analysisS',(analysisResult.value&&analysisResult.value.suggestions)||[],null,['code','name','action']));
+    const wealthHistoryRows = computed(()=>{
+      const base=[...wealthHistory.value].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+      const rows=base.map((r,i)=>{ const cur=parseFloat(r.totalTWD); const nxt=i<base.length-1?parseFloat(base[i+1].totalTWD):NaN; return {...r,dateStr:String(r.date||'').slice(0,10),total:cur,diff:(isNaN(cur)||isNaN(nxt))?null:cur-nxt}; });
+      return tblSortRows('wealth',rows);
+    });
+    const detailCols = computed(()=>[
+      ...(detailType.value==='holdings'?[{k:'brokerName',l:'券商'}]:[]),
+      {k:'date',l:'日期'},{k:'price',l:'成交價',r:1},{k:'qty',l:'股數',r:1},{k:'fee',l:'手續費',r:1},{k:'cost',l:'本金',r:1},
+      ...(detailType.value==='dca'?[{k:'div',l:'累計股息',r:1}]:[]),
+    ]);
+    const sortedDetailList = computed(()=>tblSortRows('detail',currentDetailList.value||[],null,['brokerName']));
     const holdingsSortKey = ref(''), holdingsSortOrder = ref(1);
     const dividendFilter = ref({ year:'ALL' });
 
@@ -1365,6 +1401,7 @@ createApp({
       });
       if (dividendFilter.value.year!=='ALL') d=d.filter(r=>String(r['股利年度'])===String(dividendFilter.value.year));
       if (searchText.value) d=d.filter(r=>multiSearch(r,searchText.value));
+      d=tblSortRows('dividends',d,null,['股票代碼','股票名稱']);
       return d;
     });
     const totalDividendAmount = computed(() => filteredDividendList.value.reduce((s,r)=>s+(parseFloat(String(r['實際領取金額']).replace(/,/g,''))||0),0));
@@ -1453,17 +1490,18 @@ createApp({
         item.totalQty+=qty; item.totalCost+=total; item.totalDiv+=div;
         item.details.push({date,price,qty,fee,cost:total,div});
       });
-      return Array.from(map.values()).map(item=>{
+      const dcaRows = Array.from(map.values()).map(item=>{
         const avgPrice=item.totalQty>0?item.totalCost/item.totalQty:0;
         const yieldPct=item.totalCost>0?(item.totalDiv/item.totalCost)*100:0;
         return {...item,avgPrice,yieldPct,details:item.details.sort((a,b)=>(a.date||'').localeCompare(b.date||''))};
       });
+      return tblSortRows('dca',dcaRows,null,['symbol','name']);
     });
     const dcaSummary = computed(() => {
       const list=groupedDcaList.value;
       return { totalCost:list.reduce((s,r)=>s+r.totalCost,0), count:list.length, avgYield:list.length?(list.reduce((s,r)=>s+r.yieldPct,0)/list.length).toFixed(2):0 };
     });
-    const openDcaDetailModal = row => { currentDetailStock.value={symbol:row.symbol,name:row.name}; currentDetailList.value=row.details; detailType.value='dca'; showDetailModal.value=true; };
+    const openDcaDetailModal = row => { currentDetailStock.value={symbol:row.symbol,name:row.name}; currentDetailList.value=row.details; detailType.value='dca'; tblSortReset('detail'); showDetailModal.value=true; };
 
     const groupedHoldingsList = computed(() => {
       if (currentTab.value!=='holdings') return [];
@@ -1509,10 +1547,8 @@ createApp({
         const profitPct=(fP+fF)>0&&item.curPrice>0?((profit/(fP+fF))*100).toFixed(2):'—';
         return{symbol:item.symbol,name:item.name,qty:Math.round(fQ),avgPrice:avgPrice.toFixed(2),currPrice:item.curPrice,profit,profitPct,details:item.details.sort((a,b)=>String(a.date).localeCompare(String(b.date)))};
       }).filter(x=>x!==null);
-      if(holdingsSortKey.value){
-        const km={'股票代碼':'symbol','股票名稱':'name','持有股數':'qty','買入均價':'avgPrice','現價':'currPrice','獲利金額':'profit','獲利比例':'profitPct'};
-        result.sort((a,b)=>{const va=a[km[holdingsSortKey.value]||holdingsSortKey.value],vb=b[km[holdingsSortKey.value]||holdingsSortKey.value];const na=parseFloat(String(va).replace(/,/g,'')),nb=parseFloat(String(vb).replace(/,/g,''));if(!isNaN(na)&&!isNaN(nb))return(na-nb)*holdingsSortOrder.value;return String(va).localeCompare(String(vb))*holdingsSortOrder.value;});
-      }
+      const km={'股票代碼':'symbol','股票名稱':'name','持有股數':'qty','買入均價':'avgPrice','現價':'currPrice','獲利金額':'profit','獲利比例':'profitPct'};
+      result=tblSortRows('holdings',result,(r,k)=>r[km[k]||k],['股票代碼','股票名稱']);
       if(holdingsFilterSelected.value!==null){
         result=result.filter(r=>holdingsFilterSelected.value.has(r.symbol));
       }
@@ -1520,7 +1556,7 @@ createApp({
     });
     const totalHoldingsProfit = computed(() => groupedHoldingsList.value.reduce((a,c)=>a+(c.profit||0),0));
     const sortHoldingsBy = k => { holdingsSortKey.value===k?holdingsSortOrder.value*=-1:(holdingsSortKey.value=k,holdingsSortOrder.value=-1); };
-    const openHoldingsModal = r => { currentDetailStock.value={symbol:r.symbol,name:r.name}; currentDetailList.value=r.details; detailType.value='holdings'; showDetailModal.value=true; };
+    const openHoldingsModal = r => { currentDetailStock.value={symbol:r.symbol,name:r.name}; currentDetailList.value=r.details; detailType.value='holdings'; tblSortReset('detail'); showDetailModal.value=true; };
 
     // ── 庫存篩選 ──────────────────────────────────────────────────
     const holdingsFilterOpen     = ref(false);
@@ -1669,7 +1705,7 @@ createApp({
       if(realizedFilter.value.year!=='ALL') d=d.filter(r=>{const k=Object.keys(r).find(x=>x.includes('賣出')&&(x.includes('日期')||x.includes('Date')));return k&&r[k]&&String(r[k]).startsWith(realizedFilter.value.year);});
       if(realizedFilter.value.month!=='ALL') d=d.filter(r=>{const k=Object.keys(r).find(x=>x.includes('賣出')&&(x.includes('日期')||x.includes('Date')));return k&&r[k]&&String(r[k]).length>=7&&String(r[k]).substring(5,7)===realizedFilter.value.month;});
       if(realizedFilter.value.name) d=d.filter(r=>multiSearch(r,realizedFilter.value.name));
-      if(sortKey.value){d=[...d].sort((a,b)=>{const va=a[sortKey.value],vb=b[sortKey.value];const na=parseFloat(String(va).replace(/,/g,'')),nb=parseFloat(String(vb).replace(/,/g,''));if(!isNaN(na)&&!isNaN(nb))return(na-nb)*sortOrder.value;return String(va).localeCompare(String(vb))*sortOrder.value;});}
+      d=tblSortRows('realized',d,null,['股票代碼','股票名稱']);
       return d;
     });
     const filteredRealizedTotal = computed(() => {
@@ -2346,6 +2382,7 @@ createApp({
       fmtInt,fmtDec,fmtCell,exportCSV,
       saveSettings,functionRunning,functionMsg,functionError,runFunction,
       totalReturnItems,computedTotalReturn,computedTotalFormula,
+      tblSortToggle,tblSortIcon,dcaCols,analysisHCols,analysisSCols,analysisHoldingsSorted,analysisSuggestionsSorted,wealthHistoryRows,detailCols,sortedDetailList,
       dashChartFilterOpen,dashChartYearSet,dashAllChartYears,dashYearActive,dashToggleYear,dashRangeLabel,trItemValue,
       analysisHistory,analysisLoading,analysisRunning,analysisMsg,analysisError,
       GeminiKeyStatus,GeminiKeyInput,expandedIdx,analysisResult,userNotes,includeDividend,
