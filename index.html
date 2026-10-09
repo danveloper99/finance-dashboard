@@ -666,14 +666,17 @@
           資產追蹤已改版，你的後端會在 1 天內自動更新。<br>也可以到「設定 → 自動更新」按「立即套用最新版」。
         </div>
         <template v-else>
-        <!-- 兩份紀錄切換 -->
-        <div style="display:flex;gap:6px;background:white;padding:5px;border-radius:14px;box-shadow:0 2px 10px rgba(58,90,64,.08)">
-          <button v-for="b in ['A','B']" :key="b" @click="wealthBook=b"
+        <!-- 資產紀錄切換（預設一份，用「新增紀錄」加） -->
+        <div class="no-scrollbar" style="display:flex;gap:6px;background:white;padding:5px;border-radius:14px;box-shadow:0 2px 10px rgba(58,90,64,.08);overflow-x:auto">
+          <button v-for="b in wealthOrder" :key="b" @click="wealthBook=b"
             :style="wealthBook===b?'background:#3a5a40;color:white':'background:transparent;color:#888'"
-            style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 10px;border-radius:10px;border:none;cursor:pointer;font-weight:700;font-size:14px;min-width:0;transition:all .15s">
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ wealthBooks[b].name }}</span>
+            style="flex:1 0 auto;min-width:110px;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 12px;border-radius:10px;border:none;cursor:pointer;font-weight:700;font-size:14px;transition:all .15s">
+            <span style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ wealthBooks[b] && wealthBooks[b].name }}</span>
             <i v-if="wealthBook===b" @click.stop="renameWealthBook(b)" class="ph ph-pencil-simple" title="改名" style="font-size:14px;opacity:.8;flex-shrink:0"></i>
           </button>
+          <button @click="addWealthBook" :disabled="wealthAddingBook" title="新增一份資產紀錄"
+            style="flex:0 0 auto;display:flex;align-items:center;gap:4px;padding:9px 12px;border-radius:10px;border:1.5px dashed #c9c4b8;background:transparent;color:#588157;cursor:pointer;font-weight:700;font-size:13px;white-space:nowrap">
+            <i :class="wealthAddingBook?'ph ph-spinner spin':'ph ph-plus'"></i> 新增紀錄</button>
         </div>
         <!-- 匯率 -->
         <div class="card">
@@ -715,6 +718,9 @@
             <button @click="wealthManageOpen=false" style="font-size:13px;color:#999;background:none;border:none;cursor:pointer">取消</button>
           </div>
           <p style="font-size:11px;color:#aaa;margin-top:10px;line-height:1.7">「存款／投資」決定在趨勢圖裡算在哪一塊（銀行預設存款、證券商預設投資）。<br>刪除不會影響過去的快照紀錄；沒填名稱的會被略過。</p>
+          <div v-if="wealthOrder.length>1" style="border-top:1px dashed #e0ddd8;margin-top:12px;padding-top:10px;text-align:right">
+            <button @click="deleteWealthBook" style="font-size:12px;color:#c0756a;background:none;border:none;cursor:pointer"><i class="ph ph-trash"></i> 刪除「{{ curWealthBook.name }}」這份紀錄</button>
+          </div>
         </div>
         <div v-if="!wealthManageOpen && !curWealthBook.institutions.length" class="card" style="text-align:center;padding:28px;color:#aaa;font-size:13px">還沒有任何銀行或證券商，點右上「管理」新增</div>
         <!-- 各機構輸入金額 -->
@@ -729,7 +735,7 @@
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
               <div v-for="a in inst.accounts" :key="a.id">
                 <div style="font-size:12px;font-weight:700;color:#588157;margin-bottom:5px">{{ a.name }}<span v-if="a.currency!=='TWD'||a.type!==(inst.kind==='broker'?'invest':'bank')" style="color:#aaa;font-weight:400">（{{ [a.currency!=='TWD'?a.currency:'', a.type!==(inst.kind==='broker'?'invest':'bank')?(a.type==='invest'?'投資':'存款'):''].filter(Boolean).join('・') }}）</span></div>
-                <input v-model="wealthForms[wealthBook][a.id]" type="number" step="1" class="input-custom" :placeholder="a.currency==='TWD'?'輸入金額':'原幣金額'">
+                <input v-if="wealthForms[wealthBook]" v-model="wealthForms[wealthBook][a.id]" type="number" step="1" class="input-custom" :placeholder="a.currency==='TWD'?'輸入金額':'原幣金額'">
               </div>
             </div>
           </div>
@@ -764,7 +770,7 @@
             </div>
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
-            <button v-for="c in wealthChips" :key="c.key" @click="toggleWealthFilter(c.key)" :style="wealthFilters[wealthBook].includes(c.key)?'background:'+c.color+';color:white;border-color:'+c.color:'background:white;color:#bbb;border-color:#e0ddd8'" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;border:1.5px solid;cursor:pointer;transition:all .15s"><i :class="['ph-bold',WEALTH_KIND_[c.kind].icon]" style="font-size:12px"></i>{{ c.name }}<span v-if="c.deleted" style="opacity:.7">（已刪除）</span></button>
+            <button v-for="c in wealthChips" :key="c.key" @click="toggleWealthFilter(c.key)" :style="(wealthFilters[wealthBook]||[]).includes(c.key)?'background:'+c.color+';color:white;border-color:'+c.color:'background:white;color:#bbb;border-color:#e0ddd8'" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;border:1.5px solid;cursor:pointer;transition:all .15s"><i :class="['ph-bold',WEALTH_KIND_[c.kind].icon]" style="font-size:12px"></i>{{ c.name }}<span v-if="c.deleted" style="opacity:.7">（已刪除）</span></button>
           </div>
           <div v-if="!filteredWealthHistory.length" style="text-align:center;padding:32px;color:#aaa;font-size:13px">此範圍無紀錄</div>
           <!-- ★ 手機版可橫向捲動：長條數多時每筆維持最小寬度，避免擠成一團 -->
@@ -1223,7 +1229,7 @@ const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
 // ── fetch 包裝：呼叫 GAS doPost ──────────────────────────────
 const AUTH_TOKEN_KEY = 'auth_token';
 // 最新後端（程式庫）版本：要和 WebAPI.js 的 APP_VERSION 一起改
-const LATEST_BACKEND_VERSION = 9;
+const LATEST_BACKEND_VERSION = 10;
 let onAuthExpired_ = null; // Vue 掛載後設定：Token 失效時切回登入畫面
 async function callGAS(action, args = []) {
   const url = getGasUrl();
@@ -2072,12 +2078,14 @@ createApp({
     const wealthChartInst   = ref(null);
     const wealthTimeRange   = ref('all');
     const wealthPointLimit  = ref('all'); // '6' | '12' | '20' | 'all' — 手機上減少長條數量用
-    const wealthBook        = ref((()=>{ try { return localStorage.getItem('wealth_book')==='B'?'B':'A'; } catch(e) { return 'A'; } })());
+    const wealthBook        = ref((()=>{ try { return localStorage.getItem('wealth_book') || 'A'; } catch(e) { return 'A'; } })());
     const wealthSupported   = ref(true);  // 舊版後端沒有 api_getWealth
-    const wealthBooks       = ref({ A:{ name:'我的資產', institutions:[] }, B:{ name:'第二份紀錄', institutions:[] } });
-    const wealthHist        = ref({ A:[], B:[] });
-    const wealthForms       = ref({ A:{}, B:{} });
-    const wealthFilters     = ref({ A:[], B:[] }); // 圖表要顯示的機構 ID
+    const wealthOrder       = ref(['A']);                                   // 資產紀錄的順序（ID）
+    const wealthBooks       = ref({ A:{ name:'我的資產', institutions:[] } });  // ID → { name, institutions }
+    const wealthHist        = ref({ A:[] });
+    const wealthForms       = ref({ A:{} });
+    const wealthFilters     = ref({ A:[] }); // 圖表要顯示的機構 ID
+    const wealthAddingBook  = ref(false);
     const wealthManageOpen  = ref(false);
     const wealthEdit        = ref([]);             // 管理中的機構清單（複本，按儲存才寫回）
     const wealthSavingCfg   = ref(false);
@@ -2085,6 +2093,12 @@ createApp({
 
     const curWealthBook       = computed(() => wealthBooks.value[wealthBook.value] || { name:'', institutions:[] });
     const activeWealthHistory = computed(() => wealthHist.value[wealthBook.value] || []);
+    // 確保每份紀錄都有表單／篩選的容器（新增紀錄、切換時用）
+    const ensureWealthSlots_ = () => wealthOrder.value.forEach(b => {
+      if (!wealthHist.value[b]) wealthHist.value[b] = [];
+      if (!wealthForms.value[b]) wealthForms.value[b] = {};
+      if (!wealthFilters.value[b]) wealthFilters.value[b] = [];
+    });
 
     const toTWD_ = (val, currency) => {
       const v = parseFloat(val)||0;
@@ -2094,12 +2108,12 @@ createApp({
       if (currency==='CNY') return v*(parseFloat(r.rate_cny)||4.4);
       return v;
     };
-    const wealthInstTotal = inst => (inst.accounts||[]).reduce((s, a) => s + toTWD_(wealthForms.value[wealthBook.value][a.id], a.currency), 0);
+    const wealthInstTotal = inst => (inst.accounts||[]).reduce((s, a) => s + toTWD_((wealthForms.value[wealthBook.value]||{})[a.id], a.currency), 0);
     const wealthCurTotal  = computed(() => curWealthBook.value.institutions.reduce((s, it) => s + wealthInstTotal(it), 0));
 
     // 圖表篩選鈕：目前的機構 + 歷史快照裡出現過、但已刪除的機構
     const wealthChipsFor_ = b => {
-      const chips = (wealthBooks.value[b].institutions||[]).map(it => ({ key:it.id, name:it.name, color:it.color, kind:it.kind, deleted:false }));
+      const chips = ((wealthBooks.value[b]||{}).institutions||[]).map(it => ({ key:it.id, name:it.name, color:it.color, kind:it.kind, deleted:false }));
       const known = new Set(chips.map(c => c.key));
       (wealthHist.value[b]||[]).forEach(snap => Object.values(snap.accounts||{}).forEach(a => {
         if (a.instId && !known.has(a.instId)) { known.add(a.instId); chips.push({ key:a.instId, name:a.instName||a.instId, color:'#b0aca2', kind:a.kind==='broker'?'broker':'bank', deleted:true }); }
@@ -2107,12 +2121,12 @@ createApp({
       return chips;
     };
     const wealthChips       = computed(() => wealthChipsFor_(wealthBook.value));
-    const wealthFilterAllOn = computed(() => wealthChips.value.every(c => wealthFilters.value[wealthBook.value].includes(c.key)));
+    const wealthFilterAllOn = computed(() => wealthChips.value.every(c => (wealthFilters.value[wealthBook.value]||[]).includes(c.key)));
 
     const wealthFormFromLast_ = b => {
       const hist = wealthHist.value[b] || [], last = hist[hist.length-1];
       const prev = wealthForms.value[b] || {}, f = {};
-      (wealthBooks.value[b].institutions||[]).forEach(it => it.accounts.forEach(a => {
+      ((wealthBooks.value[b]||{}).institutions||[]).forEach(it => it.accounts.forEach(a => {
         f[a.id] = prev[a.id] !== undefined ? prev[a.id] : (last && last.values && last.values[a.id] !== undefined ? last.values[a.id] : 0);
       }));
       return f;
@@ -2120,14 +2134,19 @@ createApp({
     const applyWealth_ = res => {
       wealthSupported.value = !!(res && res.ok && res.books);
       if (!wealthSupported.value) return;
-      const blank = b => ({ name: b==='A' ? '我的資產' : '第二份紀錄', institutions: [] });
-      wealthBooks.value = { A: res.books.A || blank('A'), B: res.books.B || blank('B') };
-      wealthHist.value  = { A: (res.history && res.history.A) || [], B: (res.history && res.history.B) || [] };
-      wealthForms.value = { A:{}, B:{} };
-      wealthForms.value = { A: wealthFormFromLast_('A'), B: wealthFormFromLast_('B') };
-      wealthFilters.value = { A: wealthChipsFor_('A').map(c => c.key), B: wealthChipsFor_('B').map(c => c.key) };
-      // 匯率：用兩份紀錄中最新一筆快照的匯率
-      const lasts = ['A','B'].map(b => wealthHist.value[b][wealthHist.value[b].length-1]).filter(Boolean).sort((x, y) => x.date.localeCompare(y.date));
+      const order = (Array.isArray(res.order) && res.order.length ? res.order : Object.keys(res.books)).filter(b => res.books[b]);
+      wealthOrder.value = order.length ? order : ['A'];
+      wealthBooks.value = order.length ? res.books : { A:{ name:'我的資產', institutions:[] } };
+      const h = {}; wealthOrder.value.forEach(b => { h[b] = (res.history && res.history[b]) || []; });
+      wealthHist.value = h;
+      const blankForms = {}; wealthOrder.value.forEach(b => { blankForms[b] = {}; });
+      wealthForms.value = blankForms;
+      const f = {}, fl = {};
+      wealthOrder.value.forEach(b => { f[b] = wealthFormFromLast_(b); fl[b] = wealthChipsFor_(b).map(c => c.key); });
+      wealthForms.value = f; wealthFilters.value = fl;
+      if (!wealthOrder.value.includes(wealthBook.value)) wealthBook.value = wealthOrder.value[0];
+      // 匯率：用所有紀錄中最新一筆快照的匯率
+      const lasts = wealthOrder.value.map(b => wealthHist.value[b][wealthHist.value[b].length-1]).filter(Boolean).sort((x, y) => x.date.localeCompare(y.date));
       const lr = lasts.length ? (lasts[lasts.length-1].rates || {}) : {};
       if (lr.USD) wealthRates.value.rate_usd = lr.USD;
       if (lr.JPY) wealthRates.value.rate_jpy = lr.JPY;
@@ -2148,7 +2167,9 @@ createApp({
     const saveWealthConfig_ = async (b, book) => {
       const res = await callGAS('api_saveWealthConfig', [b, JSON.parse(JSON.stringify(book))]);
       if (!res.ok) { alert('❌ ' + (res.msg || '儲存失敗')); return false; }
-      wealthBooks.value = { A: res.books.A, B: res.books.B };
+      wealthBooks.value = res.books;
+      if (Array.isArray(res.order)) wealthOrder.value = res.order;
+      ensureWealthSlots_();
       return true;
     };
     const saveWealthManage = async () => {
@@ -2167,12 +2188,36 @@ createApp({
         scheduleRender_();
       } finally { wealthSavingCfg.value = false; }
     };
+    const addWealthBook = async () => {
+      const v = prompt('新的資產紀錄名稱（最多 30 字），例如：家人、公司帳戶', `第${wealthOrder.value.length + 1}份紀錄`);
+      if (v === null || !v.trim()) return;
+      const id = wealthNewId_('k');
+      wealthAddingBook.value = true;
+      try {
+        if (!(await saveWealthConfig_(id, { name: v.trim(), institutions: [] }))) return;
+        wealthBook.value = id;
+        await nextTick();
+        openWealthManage(); // 新紀錄直接進入「管理」新增銀行／證券商
+      } finally { wealthAddingBook.value = false; }
+    };
+    const deleteWealthBook = async () => {
+      const b = wealthBook.value, name = curWealthBook.value.name;
+      if (!confirm(`確定要刪除「${name}」這份紀錄？\n（過去的快照仍保留在試算表《資產快照明細》，只是不再顯示）`)) return;
+      const res = await callGAS('api_deleteWealthBook', [b]);
+      if (!res.ok) { alert('❌ ' + (res.msg || '刪除失敗')); return; }
+      wealthManageOpen.value = false;
+      wealthBooks.value = res.books;
+      wealthOrder.value = res.order;
+      wealthBook.value = res.order[0];
+      scheduleRender_();
+    };
     const renameWealthBook = async b => {
       const v = prompt('輸入這份紀錄的名稱（最多 30 字）', wealthBooks.value[b].name);
       if (v === null || !v.trim()) return;
       await saveWealthConfig_(b, { ...wealthBooks.value[b], name: v.trim() });
     };
     watch(wealthBook, v => {
+      ensureWealthSlots_();
       try { localStorage.setItem('wealth_book', v); } catch(e) {}
       wealthMsg.value = ''; wealthManageOpen.value = false;
       scheduleRender_();
@@ -2206,7 +2251,7 @@ createApp({
         if (res.ok) {
           wealthMsg.value='✅ 快照已儲存！台幣總資產：'+fmtInt(res.total||0)+' 元'; wealthError.value=false;
           const r2 = await callGAS('api_getWealth');
-          if (r2.ok) { wealthHist.value = { A: r2.history.A||[], B: r2.history.B||[] }; scheduleRender_(); }
+          if (r2.ok) { const h = {}; wealthOrder.value.forEach(x => { h[x] = (r2.history && r2.history[x]) || []; }); wealthHist.value = h; scheduleRender_(); }
         } else { wealthMsg.value='❌ '+(res.msg||'儲存失敗'); wealthError.value=true; }
       } catch(e) { wealthMsg.value='❌ '+e.message; wealthError.value=true; }
       finally { wealthSaving.value=false; }
@@ -2221,7 +2266,7 @@ createApp({
     const scheduleRender_ = () => { clearTimeout(_wealthRenderTimer); _wealthRenderTimer = setTimeout(renderWealthChart, 80); };
 
     const toggleWealthFilter = key => {
-      const b = wealthBook.value, arr = wealthFilters.value[b];
+      const b = wealthBook.value, arr = wealthFilters.value[b] || [];
       wealthFilters.value[b] = arr.includes(key) ? arr.filter(k => k !== key) : [...arr, key];
       scheduleRender_();
     };
@@ -2253,7 +2298,7 @@ createApp({
         const hist = filteredWealthHistory.value;
         if (!hist.length) return;
 
-        const selected = new Set(wealthFilters.value[wealthBook.value]);
+        const selected = new Set(wealthFilters.value[wealthBook.value] || []);
         const sorted = [...hist].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
         const labels  = sorted.map(d=>String(d.date||'').slice(0,10));
 
@@ -2701,6 +2746,7 @@ createApp({
       wealthBook,wealthSupported,wealthBooks,wealthForms,wealthFilters,wealthChips,wealthManageOpen,wealthEdit,wealthSavingCfg,
       curWealthBook,activeWealthHistory,wealthFilterAllOn,wealthCurTotal,wealthInstTotal,
       renameWealthBook,openWealthManage,addWealthInst,addWealthAcc,saveWealthManage,
+      wealthOrder,wealthAddingBook,addWealthBook,deleteWealthBook,
       gasUrlInput,currentGasUrl,updateGasUrl,
       pendingList,pendingSelected,pendingLoading,pendingConfirming,pendingMsg,pendingError,pendingDeleting,
       pendingGrouped,loadPending,toggleSelectAll,togglePendingRow,recalcTax,confirmSelected,deletePendingRow,

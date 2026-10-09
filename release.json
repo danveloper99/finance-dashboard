@@ -1,8 +1,8 @@
 {
   "current": {
-    "version": 9,
-    "releasedAt": "2026-10-09T23:31:39+08:00",
-    "notes": "資產追蹤改版：銀行／證券商與細項全部自訂；月報定期定額精簡",
+    "version": 10,
+    "releasedAt": "2026-10-09T23:38:53+08:00",
+    "notes": "資產紀錄改為預設一份，可新增／刪除多份",
     "immediate": true
   },
   "previous": null,

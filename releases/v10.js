@@ -1,0 +1,5019 @@
+// @@FIN_BUNDLE v10
+// 你不理財，才不理你 — 程式包 v10（由 tools/build-release.js 產生，請勿手動修改）
+// ===== 4.0.js =====
+/***** ===========================================
+ * (1) Gmail 擷取 → 交易紀錄（中文表頭 + 費/稅/淨額）
+ * (2) 庫存紀錄（B 模式一鍵：內嵌 先沖期初賣單 → 再重建）
+ * (3) 股利狀況（FinMind TaiwanStockDividendResult；APPEND ONLY）
+ * SAFE：所有可排程入口皆提供 *_SAFE() 包裝
+ * 修訂重點（2025-12-30）：
+ * - 庫存 FIFO 邏輯升級：支援「同股票、不同券商」獨立計算成本
+ * - 庫存表新增「證券商」欄位
+ * - 設定頁新增券商參數
+ * - 補回所有遺失的 SAFE 函式與工具
+ * ============================================ */
+
+/***** =======================
+ * Part 1/4
+ * 安裝精靈 + 共用工具 + SAFE 包裝
+ * ======================== */
+
+/** 產生〈設定〉分頁（保留使用者自訂說明 + 新增 DCA 中文名稱欄位） */
+function installWizard_Init() {
+  const ss = getSS_();
+  const sh = ss.getSheetByName('設定') || ss.insertSheet('設定');
+  sh.clear();
+
+  // 表頭：鍵 / 值 / 說明
+  sh.getRange(1,1,1,3).setValues([[ '鍵', '值', '說明' ]]).setFontWeight('bold');
+
+  // === 1. 基礎設定 (完全保留您的說明文字) ===
+  const rows = [
+    ['TZ', 'Asia/Taipei', '時區（IANA 格式），例：Asia/Taipei、America/Los_Angeles。影響日期格式與排程時區。'],
+    ['GMAIL_LABEL_HTML', '', '【HTML信件】單純內文解析的標籤名稱（無加密PDF）。'],
+    ['GMAIL_LABEL_PDF',  '',  '【PDF信件】含有加密 PDF 附件的標籤名稱（需 Cloud Run 解鎖）。'],
+    ['GMAIL_QUERY_DAYS', '7', '往回撈幾天的郵件。整數，例：7。'],
+    
+    // --- 🆕 券商設定 ---
+    ['BROKER_DEFAULT_NAME', '國泰證券', '【券商】預設券商名稱（無特定關鍵字時使用）。'],
+    ['FEE_DISCOUNT', '0.28', '手續費折數（0~1 之間的小數）。手續費 = ROUNDDOWN(成交金額 × 1.425‰ × 折數)，最低 1 元。例：0.28 = 2.8 折。'],
+    ['BROKER_2_KEYWORD', '統一', '【券商】第二券商判定關鍵字（如：統一）。若無可留空。'],
+    ['BROKER_2_NAME', '統一證券', '【券商】第二券商顯示名稱。'],
+    ['BROKER_2_DISCOUNT', '0.6', '【券商】第二券商手續費折數 (0~1)。'],
+    // ------------------
+
+    ['ID_NUMBER', '', '【必要】身分證字號（用於 PDF 解鎖密碼）。'],
+    ['CLOUD_RUN_URL', '', '【必要】Google Cloud Run 服務網址（https://...）。'],
+    ['SHEET_TRADES', '交易紀錄', '交易紀錄分頁名稱（可自訂，但需與其它設定一致）。'],
+    ['SHEET_HOLD', '庫存紀錄', '庫存紀錄分頁名稱。'],
+    ['SHEET_OPENING', '期初庫存', '期初庫存分頁名稱（表頭與庫存相同）。'],
+    ['SHEET_DIV', '股利狀況', '股利狀況分頁名稱（FinMind 追加資料的輸出表）。'],
+    ['SHEET_REALIZED', '已實現損益', '已實現損益（FIFO）輸出分頁名稱。'],
+    ['SHEET_DCA', '定期定額', '定期定額分頁名稱（自庫存複製 DCA 匯總）。'],
+    ['SHEET_GUIDE', '安裝指引', '安裝指引分頁名稱（說明與檢查清單）。'],
+    ['ALERT_ENABLED', 'TRUE', '是否啟用錯誤即時通知（TRUE/FALSE）。FALSE 仍會寫入錯誤紀錄分頁。'],
+    ['ALERT_TO', '', '錯誤通知收件人 Email。建議填你自己的信箱。多位可用逗號分隔。'],
+    ['ALERT_SUBJECT_PREFIX', '【自動化錯誤】', '錯誤通知主旨前綴。'],
+    ['ALERT_LOG_SHEET', '錯誤通知紀錄', '錯誤紀錄分頁名稱。'],
+
+    ['HOLDINGS_START_DATE', '', '庫存計算起算日（YYYY/MM/DD）。留空＝不限制。只納入此日（含）之後的交易。'],
+    ['DIV_START_DATE', '', '股利計算起算日（YYYY/MM/DD）。留空＝不限制。僅計算此日（含）之後除權息。'],
+    ['DIV_YEAR_FROM', String(new Date().getFullYear() - 8), '股利抓取的起始年度（含），通常抓近 8 年即可。'],
+    ['DIV_STOCK_BONUS_TO_TRADES', 'TRUE', '是否把「股票股利入帳」寫回〈交易紀錄〉（TRUE/FALSE）。'],
+    ['DIV_STOCK_BONUS_ROUNDING', 'FLOOR', '配股取整規則：FLOOR(無條件捨去) / ROUND(四捨五入) / CEIL(無條件進位)。'],
+    ['DIV_CASH_FEE_PER_PAYOUT', '10', '每筆現金股利入帳之固定手續費（元）。無手續費請填 0。'],
+    ['DIV_THROTTLE_MS', '1000', '抓取 FinMind 每檔之間的延遲（毫秒）。太小可能被限流。'],
+    ['FINMIND_TOKEN', '', 'FinMind API Token。無 Token 可能遇到配額限制或 401。請至 FinMind 取得並貼上。'],
+    ['DIV_SYMBOLS_PER_RUN', '10', '股利分批每輪處理檔數（建議 8~12）'],
+    ['DIV_CURSOR_RESET_IF_STALE_DAYS', '3', '距上次執行超過 N 天即重置游標（建議 3）'],
+  ];
+
+  // === 2. 定期定額設定 (使用迴圈生成，確保文字與您的一致，並插入新欄位) ===
+  for (let i = 1; i <= 10; i++) {
+    const symbolDesc = (i === 1) ? `定期定額#${i} 股票代碼（例：00878）` : `定期定額#${i} 股票代碼`;
+    rows.push([`DCA_${i}_NAME`,   '', `定期定額#${i} PDF中文名稱 (如: 國泰永續高股息)`]);
+    rows.push([`DCA_${i}_SYMBOL`, '', symbolDesc]);
+    rows.push([`DCA_${i}_START`,  '', `定期定額#${i} 開始日期（YYYY/MM/DD）`]);
+    rows.push([`DCA_${i}_END`,    '', `定期定額#${i} 結束日期（留空＝至今）`]);
+  }
+
+  sh.getRange(2,1,rows.length,3).setValues(rows);
+
+  // 驗證
+  const boolRule = SpreadsheetApp.newDataValidation().requireValueInList(['TRUE','FALSE'], true).build();
+  const roundingRule = SpreadsheetApp.newDataValidation().requireValueInList(['FLOOR','ROUND','CEIL'], true).build();
+  const numberRule01 = SpreadsheetApp.newDataValidation().requireNumberBetween(0, 1).build();
+
+  const rowIndexByKey = Object.fromEntries(rows.map((r,i)=>[r[0], i+2]));
+  ['ALERT_ENABLED','DIV_STOCK_BONUS_TO_TRADES'].forEach(k=>{
+    if (rowIndexByKey[k]) sh.getRange(rowIndexByKey[k], 2).setDataValidation(boolRule);
+  });
+  if (rowIndexByKey['DIV_STOCK_BONUS_ROUNDING']) sh.getRange(rowIndexByKey['DIV_STOCK_BONUS_ROUNDING'], 2).setDataValidation(roundingRule);
+  if (rowIndexByKey['FEE_DISCOUNT']) sh.getRange(rowIndexByKey['FEE_DISCOUNT'], 2).setDataValidation(numberRule01);
+
+  // 版面
+  sh.setFrozenRows(1);
+  sh.setColumnWidths(1,1,160); 
+  sh.setColumnWidths(2,1,240); 
+  sh.setColumnWidths(3,1,560); 
+  const lastRow = 1 + rows.length;
+  try {
+    sh.getRange(2,2,lastRow-1,1).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW).setWrap(false);
+  } catch (e) {
+    sh.getRange(2,2,lastRow-1,1).setWrap(false);
+  }
+  sh.getRange(2,3,lastRow-1,1).setWrap(true).setVerticalAlignment('top');
+
+  SpreadsheetApp.flush();
+  Logger.log('✅ 已重建〈設定〉分頁。');
+}
+
+/**
+ * 多租戶路由：本次執行要操作的試算表
+ * doPost 驗證 Token 後若是租戶，會把 CURRENT_SS_ 設成租戶自己的試算表；
+ * 擁有者與排程觸發器則維持 null → 使用綁定的主控試算表。
+ * GAS 每次執行都是獨立環境，全域變數不會跨請求殘留。
+ */
+var CURRENT_SS_ = null;
+function getSS_() {
+  return CURRENT_SS_ || SpreadsheetApp.getActiveSpreadsheet();
+}
+
+/**
+ * 程式庫模式：朋友試算表裡的「殼程式」會先呼叫
+ *   FinLib.bindEnv({ scriptApp: ScriptApp, props: getProps_(), lockService: LockService })
+ * 原因：
+ * - 在程式庫裡建立的觸發器不會生效 → 觸發器要用殼程式自己的 ScriptApp
+ * - 程式庫的 Script Properties / Lock 是「程式庫自己一份、所有使用者共用」→ 密碼、Gemini Key
+ *   一定要存在殼程式自己的 Properties，否則所有人會共用同一組帳號
+ * 直接部署（你自己的專案）時不會呼叫 bindEnv，就用本專案自己的服務。
+ */
+var SCRIPT_APP_ = null;
+var PROPS_ = null;
+var LOCK_SVC_ = null;
+var SHELL_VERSION_ = 0; // 殼程式版本：2 起有 monthlyReport_SAFE、3 起有 autoUpdate_SAFE
+function bindEnv(env) {
+  env = env || {};
+  if (!env.props) throw new Error('殼程式版本過舊（未傳入 props），請依說明更新試算表裡的 Apps Script 殼程式');
+  SCRIPT_APP_   = env.scriptApp || null;
+  PROPS_        = env.props;
+  LOCK_SVC_     = env.lockService || null;
+  SHELL_VERSION_ = Number(env.shellVersion) || 1;
+}
+function getScriptApp_() {
+  return SCRIPT_APP_ || ScriptApp;
+}
+/** 一律用這個取代 getProps_() */
+function getProps_() {
+  return PROPS_ || PropertiesService.getScriptProperties();
+}
+/** 一律用這個取代 getScriptLock_() */
+function getScriptLock_() {
+  return (LOCK_SVC_ || LockService).getScriptLock();
+}
+
+/** 讀取〈設定〉分頁為物件 */
+function getCfg_() {
+  const ss = getSS_();
+  const sh = ss.getSheetByName('設定');
+  if (!sh) throw new Error('找不到〈設定〉，請先執行 installWizard_Init()');
+
+  const lastRow = sh.getLastRow();
+  const raw = (lastRow>1) ? sh.getRange(2,1,lastRow-1,2).getValues() : [];
+  const cfg = {};
+  raw.forEach(([k,v]) => {
+    if (k) cfg[String(k).trim()] = (v==null ? '' : String(v).trim());
+  });
+  return cfg;
+}
+
+/** 安裝精靈：依〈設定〉建立必要分頁 */
+function installWizard_Apply() {
+  const C = getCfg_();
+  const ss = getSS_();
+
+  ensureSheetWithHeader_(C.SHEET_TRADES, [
+    '成交日期','成交時間','股票代碼','股票名稱','成交類別',
+    '股數','成交價','成交金額','委託單號','手續費','交易稅','淨收付金額','證券商','備註'
+  ]);
+  ensureSheetWithHeader_(C.SHEET_OPENING, [
+    '股票代碼','股票名稱','買進日期','買入價','持有股數',
+    '買入成本 (單純買入價*股數)','手續費','證券商'
+  ]);
+  ensureSheetWithHeader_(C.SHEET_HOLD, [
+    '股票代碼','股票名稱','買進日期','買入價','持有股數',
+    '買入成本 (單純買入價*股數)','手續費','證券商','現價','即時市值'
+  ]);
+  ensureSheetWithHeader_(C.SHEET_DIV, [
+    '股票代碼','股票名稱','股利所屬年度','除息日','現金股利發放日',
+    '現金股利 (元/股)','除息日持股數',
+    '現金總股息','實際領取金額 (扣除每筆手續費10元)',
+    '平均成交價','個人殖利率 (現金/買入價)','備註'
+  ]);
+  ensureSheetWithHeader_(C.SHEET_REALIZED, [
+    '股票代碼','股票名稱',
+    '買進日期','股數','買進單價','買進成本',
+    '賣出日期','賣出單價','賣出總金額',
+    '買進手續費','賣出手續費','交易稅','淨獲利','股利','含息報酬','含息報酬率(%)','持有天數','每天獲利金額'
+  ]);
+  ensureSheetWithHeader_(C.SHEET_DCA || '定期定額', [
+    '買入日期','股票代碼','股票名稱','成交價','股數',
+    '買入成本 (=成交價*股數)','手續費','總成本 (=買入成本+手續費)'
+  ]);
+  ensureSheetWithHeader_(C.ALERT_LOG_SHEET || '錯誤通知紀錄', [
+    '時間','入口函式','錯誤訊息','堆疊','附加資訊','試算表名稱','URL'
+  ]);
+
+  Logger.log('✅ 基礎表格已建立；填好〈設定〉即可開始使用 SAFE 入口或建立排程。');
+}
+
+/** 建議排程（可選） */
+function setupAllSuggestedTriggers_SAFE() {
+  const C = getCfg_();
+  removeAllSuggestedTriggers_SAFE();
+  const tz = C.TZ || 'Asia/Taipei';
+
+  getScriptApp_().newTrigger('ingestFromGmail_Plaintext_SAFE').timeBased().everyDays(1).atHour(18).nearMinute(0).inTimezone(tz).create();
+  getScriptApp_().newTrigger('rebuildAll_B_SAFE').timeBased().everyDays(1).atHour(18).nearMinute(30).inTimezone(tz).create();
+  // 股票代碼補值＋修復：排在「交易紀錄→庫存紀錄」重建之後、已實現損益重算之前，
+  // 這樣當天新確認的交易在計算損益前，代碼就已經是乾淨的。
+  getScriptApp_().newTrigger('dailyDataMaintenance_SAFE').timeBased().everyDays(1).atHour(18).nearMinute(45).inTimezone(tz).create();
+  getScriptApp_().newTrigger('rebuildRealizedPnL_FIFO_SAFE').timeBased().everyDays(1).atHour(19).nearMinute(0).inTimezone(tz).create();
+  getScriptApp_().newTrigger('appendDCAFromHoldings_SAFE').timeBased().everyDays(1).atHour(12).nearMinute(0).inTimezone(tz).create();
+  getScriptApp_().newTrigger('runDividendsFullCycle_SAFE').timeBased().everyDays(1).atHour(11).nearMinute(0).inTimezone(tz).create();
+  ensureMonthlyReportTrigger_(); // 每月 1 號 8 點寄月報（依《設定》MONTHLY_REPORT_ENABLED）
+
+  Logger.log('✅ 已建立新排程。');
+}
+
+/** 解除建議排程 */
+function removeAllSuggestedTriggers_SAFE() {
+  const names = new Set([
+    'ingestFromGmail_Plaintext_SAFE',
+    'rebuildAll_B_SAFE',
+    'dailyDataMaintenance_SAFE',
+    'rebuildRealizedPnL_FIFO_SAFE',
+    'appendDCAFromHoldings_SAFE',
+    'runDividendsFullCycle_SAFE',
+    'updateDividendsFromFinMind_SAFE',
+    'monthlyReport_SAFE',
+    'autoUpdate_SAFE', // 舊版（Apps Script API）自動更新，已停用；保留名稱以便清掉
+    'finTrigger'
+  ]);
+  getScriptApp_().getProjectTriggers().forEach(t => {
+    if (names.has(t.getHandlerFunction())) getScriptApp_().deleteTrigger(t);
+  });
+  Logger.log('🧹 已移除建議排程。');
+}
+
+/**
+ * [診斷用] 列出目前這個 GAS 專案的所有觸發器（時間排程＋其他），寫進 Logger。
+ * Apps Script 每個帳號、每個專案通常有「觸發器總數上限 20 個」的限制，超過就會在新增時報
+ * 「This script has too many triggers」。跑這支可以看到目前有哪些、共幾個，方便判斷要刪哪些
+ * （例如同一支函式因為多次手動設定而重複掛了好幾個排程）。看完想清掉重複的，可以先執行
+ * removeAllSuggestedTriggers_SAFE()（只會刪本專案自己建立的那幾支已知排程，不會動到你在
+ * Triggers 頁面手動加的其他觸發器），再重新執行 setupAllSuggestedTriggers_SAFE() 乾淨重建。
+ */
+function listAllTriggers_() {
+  const triggers = getScriptApp_().getProjectTriggers();
+  Logger.log(`目前共有 ${triggers.length} 個觸發器（帳號上限通常是 20 個）：`);
+  triggers.forEach((t, i) => {
+    Logger.log(`${i + 1}. 函式：${t.getHandlerFunction()}　類型：${t.getEventType()}　來源：${t.getTriggerSource()}`);
+  });
+}
+
+/** 只新增「每日股票代碼補值＋修復」排程，不動到其他既有排程（避免重跑整批 setupAllSuggestedTriggers_SAFE 造成其他排程被重建） */
+function addDailyMaintenanceTrigger_SAFE() {
+  const already = getScriptApp_().getProjectTriggers().some(t => t.getHandlerFunction() === 'dailyDataMaintenance_SAFE');
+  if (already) {
+    Logger.log('ℹ️ 已經有 dailyDataMaintenance_SAFE 的排程了，不重複新增。');
+    return;
+  }
+  const C  = getCfg_();
+  const tz = C.TZ || 'Asia/Taipei';
+  getScriptApp_().newTrigger('dailyDataMaintenance_SAFE').timeBased().everyDays(1).atHour(18).nearMinute(45).inTimezone(tz).create();
+  Logger.log('✅ 已新增「每日股票代碼補值＋修復」排程：每天 18:45（交易紀錄重建之後、已實現損益重算之前）。');
+}
+
+/* ===== 共用小工具 ===== */
+
+/**
+ * 依「欄位名稱」(而非欄位序號) 從某張表學習 股票代碼→股票名稱 對應，寫入 map。
+ * 用這個取代舊版寫死欄位序號的 learnFromSheet：期初庫存／庫存紀錄的「股票代碼」在第1欄，
+ * 交易紀錄／待確認交易的「股票代碼」卻在第3欄，寫死序號在不同表上會讀錯欄位（例如把
+ * 期初庫存的「買進日期」「買入價」誤當成代碼/名稱學進去），這裡一律用表頭名稱去對應，
+ * 不管欄位順序長怎樣都能正確讀到「股票代碼」「股票名稱」。
+ * @param {boolean} numericCodeOnly 是否只採信「代碼欄為純數字」的資料列（用於較不可靠的來源，如待確認交易）
+ * @param {boolean} overwrite 是否覆蓋 map 裡已存在的同名項目（權威來源如《股票代碼對照表》設 true）
+ */
+/**
+ * 判斷一個字串是不是「長得像合法股票代碼」：4~6 位數字，後面可以再接 1 個英文字母
+ * （例如主動式 ETF 的股份類別代碼 00981A、00982A）。純數字代碼（2330、00878）也符合。
+ * 注意：不能只用 isNaN(Number(c)) 判斷「是不是代碼」——00981A 這種帶字母後綴的代碼
+ * Number() 轉換一定是 NaN，會被誤判成「不是代碼、是名稱」，之前就是這樣被其他地方誤刪過字母。
+ */
+function isValidStockCode_(s) {
+  return /^\d{4,6}[A-Z]?$/i.test(String(s || '').trim());
+}
+
+function learnSymNameFromSheet_(ss, sheetName, map, numericCodeOnly, overwrite) {
+  if (!sheetName) return;
+  const s = ss.getSheetByName(sheetName);
+  if (!s || s.getLastRow() < 2) return;
+  const rows = readSheetAsObjects_(s);
+  rows.forEach(r => {
+    const c = String(r['股票代碼'] || '').trim();
+    const n = String(r['股票名稱'] || '').trim().replace(/\s+/g, '');
+    if (!c || !n) return;
+    if (numericCodeOnly && !isValidStockCode_(c)) return;
+    if (overwrite || !map.has(n)) map.set(n, c);
+  });
+}
+
+function ensureSheetWithHeader_(name, header) {
+  const ss = getSS_();
+  const sh = ss.getSheetByName(name) || ss.insertSheet(name);
+  if (sh.getLastRow() === 0) sh.appendRow(header);
+  return sh;
+}
+function toYMDslash_(s) {
+  if (!s) return '';
+  s = String(s).trim();
+  let m = s.match(/(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
+  if (m) return `${m[1]}/${('0'+m[2]).slice(-2)}/${('0'+m[3]).slice(-2)}`;
+  m = s.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (m) return `${m[1]}/${('0'+m[2]).slice(-2)}/${('0'+m[3]).slice(-2)}`;
+  m = s.match(/(\d{2,3})[\/年](\d{1,2})[\/月](\d{1,2})/); // 民國年
+  if (m && Number(m[1])<200) return `${Number(m[1])+1911}/${('0'+m[2]).slice(-2)}/${('0'+m[3]).slice(-2)}`;
+  try {
+    const d = new Date(s);
+    if (!isNaN(d)) {
+      const yyyy=d.getFullYear(), mm=('0'+(d.getMonth()+1)).slice(-2), dd=('0'+d.getDate()).slice(-2);
+      return `${yyyy}/${mm}/${dd}`;
+    }
+  } catch(e){}
+  return s;
+}
+function normTime_(t){
+  const s = String(t||'').trim();
+  const m = s.match(/^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$/);
+  if (!m) return s || '00:00:00';
+  const HH = ('0'+m[1]).slice(-2);
+  const MM = ('0'+m[2]).slice(-2);
+  const SS = ('0'+(m[3]||'00')).slice(-2);
+  return `${HH}:${MM}:${SS}`;
+}
+function round2_(x){ return Math.round((x + Number.EPSILON) * 100) / 100; }
+function round4_(x){ return Math.round((x + Number.EPSILON) * 10000) / 10000; }
+function num_(s){ return Number(String(s).replace(/,/g,'')); }
+function escapeHtml_(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function getFeeDiscount_() {
+  try {
+    const C = getCfg_ ? getCfg_() : {};
+    let d = Number((C && C.FEE_DISCOUNT) != null ? C.FEE_DISCOUNT : 0.28);
+    if (!isFinite(d)) d = 0.28;
+    return Math.max(0, Math.min(1, d));
+  } catch (e) {
+    return 0.28;
+  }
+}
+
+function calcFee_(amount) {
+  if (!amount || amount <= 0) return 0;
+  const discount = (typeof getFeeDiscount_ === 'function') ? getFeeDiscount_() : 0.28;
+  const raw = amount * 1.425 / 1000 * discount;
+  return Math.max(1, Math.floor(raw));
+}
+
+function calcTax_(sideText, amount){
+  const s = String(sideText || '').trim();
+  if (!amount || amount <= 0) return 0;
+  if (s === '現賣') return Math.round(amount * 0.003);
+  if (s === '沖賣') return Math.round(amount * 0.0015);
+  return 0;
+}
+
+function calcNet_(sideText, amount, fee, tax){
+  const s = String(sideText || '');
+  if (s.includes('買')) return -Number(amount||0) - Number(fee||0) - Number(tax||0);
+  if (s.includes('賣')) return  Number(amount||0) - Number(fee||0) - Number(tax||0);
+  return - Number(fee||0) - Number(tax||0);
+}
+
+function normDate_(d){ return toYMDslash_(String(d||'').trim()); }
+function normOrderNo_(s) {
+  return String(s || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+}
+
+function isStockBonusSide_(sideText) {
+  if (!sideText) return false;
+  const s = String(sideText).replace(/\s+/g, '').replace(/[()（）\[\]【】]/g,'');
+  return (
+    s.includes('股票股利') ||
+    s.includes('配股入帳') ||
+    (s.includes('股票股利') && s.includes('入帳')) ||
+    s === '配股' || s === '股票股利'
+  );
+}
+function isDayLoopSide_(sideText){
+  const s = String(sideText||'').trim();
+  return (s.includes('沖買') || s.includes('沖賣'));
+}
+
+/* ===== 錯誤通知 ===== */
+function getAlertCfg_() {
+  const C = getCfg_();
+  return {
+    ENABLED: (String(C.ALERT_ENABLED||'TRUE').toUpperCase()==='TRUE'),
+    TO: C.ALERT_TO || '',
+    CC: '',
+    SUBJECT_PREFIX: C.ALERT_SUBJECT_PREFIX || '【自動化錯誤】',
+    TZ: C.TZ || 'Asia/Taipei',
+    LOG_SHEET: C.ALERT_LOG_SHEET || '錯誤通知紀錄'
+  };
+}
+function onError_(entryName, err, extra) {
+  try {
+    const A = getAlertCfg_();
+    const now = Utilities.formatDate(new Date(), A.TZ, 'yyyy/MM/dd HH:mm:ss');
+    const ss = getSS_();
+    const sh = ss.getSheetByName(A.LOG_SHEET) || ss.insertSheet(A.LOG_SHEET);
+    if (sh.getLastRow() === 0) {
+      sh.appendRow(['時間','入口函式','錯誤訊息','堆疊','附加資訊','試算表名稱','URL']);
+    }
+    sh.appendRow([
+      now, entryName, String(err && err.message || err),
+      String(err && err.stack || ''), extra ? JSON.stringify(extra) : '',
+      ss.getName(), ss.getUrl()
+    ]);
+
+    if (A.ENABLED && A.TO) {
+      const html = [
+        `<p>Hi，系統偵測到錯誤：</p>`,
+        `<ul><li><b>時間：</b>${now}</li>`,
+        `<li><b>入口函式：</b>${escapeHtml_(entryName)}</li>`,
+        `<li><b>試算表：</b>${escapeHtml_(ss.getName())}</li>`,
+        `<li><b>連結：</b><a href="${ss.getUrl()}" target="_blank">${ss.getUrl()}</a></li></ul>`,
+        `<p><b>錯誤訊息：</b></p><pre>${escapeHtml_(String(err && err.message || err))}</pre>`,
+        `<p><b>堆疊：</b></p><pre>${escapeHtml_(String(err && err.stack || ''))}</pre>`,
+        extra ? `<p><b>附加資訊：</b></p><pre>${escapeHtml_(JSON.stringify(extra,null,2))}</pre>` : ''
+      ].join('\n');
+      MailApp.sendEmail({ to: A.TO, subject: A.SUBJECT_PREFIX + entryName + ' 錯誤', htmlBody: html });
+    }
+  } catch(e2){ Logger.log('onError_ failed: %s', e2); }
+}
+function runWithAlert_(fn, entryName, extra) {
+  try { return fn(); } catch (err) { onError_(entryName, err, extra); throw err; }
+}
+
+/* ===== SAFE 入口 ===== */
+function ingestFromGmail_Plaintext_SAFE(){ return runWithAlert_(ingestFromGmail_Plaintext,'ingestFromGmail_Plaintext'); }
+function rebuildAll_B_SAFE(){ return runWithAlert_(rebuildAll_B,'rebuildAll_B'); }
+function updateDividendsFromFinMind_SAFE(){ return runWithAlert_(updateDividendsFromFinMind,'updateDividendsFromFinMind'); }
+function rebuildRealizedPnL_FIFO_SAFE(){ return runWithAlert_(rebuildRealizedPnL_FIFO,'rebuildRealizedPnL_FIFO'); }
+// ★ 完整重建版：清空《已實現損益》既有資料，用目前的交易紀錄/期初庫存/股利狀況從頭整批重算。
+//   跟上面那個「只算上次處理時間點之後」的增量版是分開的兩個入口，平常自動排程請維持用增量版，
+//   這個只在你改過期初庫存、修正過交易紀錄分類、或想整批重算時手動執行。
+function rebuildRealizedPnL_FIFO_FullRebuild_SAFE(){ return runWithAlert_(()=>rebuildRealizedPnL_FIFO(true), 'rebuildRealizedPnL_FIFO_FullRebuild'); }
+function appendDCAFromHoldings_SAFE(){ return runWithAlert_(appendDCAFromHoldings, 'appendDCAFromHoldings'); }
+function runDividendsFullCycle_SAFE() { return runWithAlert_(runDividendsFullCycle_, 'runDividendsFullCycle'); }
+function rebuildDCADividends_SAFE() { return runWithAlert_(appendDCAFromHoldings, 'appendDCAFromHoldings'); }
+function auditInventoryGaps_SAFE(){ return runWithAlert_(auditInventoryGaps_, 'auditInventoryGaps'); }
+// 每日資料維護：先依《股票代碼對照表》補缺代碼，再修正代碼格式錯誤（如 50→0050）。
+function dailyDataMaintenance_SAFE(){ return runWithAlert_(dailyDataMaintenance_, 'dailyDataMaintenance'); }
+
+/* ===== 測試用 ===== */
+function testErrorAlert_SendSample() {
+  onError_('testErrorAlert_SendSample', new Error('這是一封測試錯誤通知'), { hint: '僅測試郵件與紀錄' });
+}
+
+/***** =======================
+ * Part 2/4
+ * Gmail 擷取
+ * ======================== */
+
+function makeKey_NoOrder_(r) {
+  return [r[0], normTime_(r[1]||''), r[2], String(r[4]||'').trim(), r[5], r[6]].join('|');
+}
+function makeKey_Order_(dateStr, orderNo, symbol) {
+  return [String(dateStr||'').trim(), normOrderNo_(orderNo), String(symbol||'').trim()].join('|');
+}
+
+function consolidateByOrderNo_(rows) {
+  const map = new Map();
+  const noOrderList = [];
+
+  for (const r of rows) {
+    const [date, time, code, name, type, qty, price, amt, orderNo, fee, tax, net] = r;
+    const normalizedOrderNo = normOrderNo_(orderNo);
+
+    if (normalizedOrderNo === '') {
+      noOrderList.push(r);
+      continue;
+    }
+
+    const key = makeKey_Order_(date, orderNo, code);
+    const timeN = normTime_(time || '');
+
+    if (!map.has(key)) {
+      map.set(key, {
+        date: date,
+        timeMax: timeN || '',
+        sym: String(code || '').trim(),
+        name: name || '',
+        side: String(type || '').trim(),
+        qtySum: Number(qty || 0),
+        amtSum: Number(amt || 0),
+        feeSum: Number(fee || 0), 
+        taxSum: Number(tax || 0),
+        orderNo: orderNo
+      });
+    } else {
+      const o = map.get(key);
+      if (timeN > (o.timeMax || '')) o.timeMax = timeN;
+      o.qtySum += Number(qty || 0);
+      o.amtSum += Number(amt || 0);
+      o.feeSum += Number(fee || 0);
+      o.taxSum += Number(tax || 0);
+    }
+  }
+
+  const merged = [];
+  for (const o of map.values()) {
+    const px = o.qtySum !== 0 ? round2_(o.amtSum / o.qtySum) : 0;
+    const finalFee = o.feeSum;
+    const finalTax = o.taxSum;
+    const finalNet = calcNet_(o.side, o.amtSum, finalFee, finalTax);
+
+    merged.push([
+      o.date, o.timeMax, o.sym, o.name, o.side,
+      o.qtySum, px, o.amtSum, o.orderNo, finalFee, finalTax, finalNet, '合併訂單'
+    ]);
+  }
+  return merged.concat(noOrderList);
+}
+
+function callCloudRunToUnlock_(blob, password) {
+  const C = getCfg_();
+  const apiUrl = C.CLOUD_RUN_URL;
+  if (!apiUrl) throw new Error("未設定 CLOUD_RUN_URL");
+
+  const payload = { file_content: Utilities.base64Encode(blob.getBytes()), password: password };
+  const options = {
+    method: 'post', contentType: 'application/json',
+    payload: JSON.stringify(payload), muteHttpExceptions: true
+  };
+
+  // 冷啟動重試：最多 3 次，每次間隔 15 秒
+  const MAX_RETRY = 3;
+  const RETRY_WAIT_MS = 15000;
+
+  for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+    const response = UrlFetchApp.fetch(apiUrl, options);
+    const code = response.getResponseCode();
+    const text = response.getContentText();
+
+    if (code === 200) {
+      const json = JSON.parse(text);
+      if (json.status !== 'success') throw new Error(`PDF 解鎖失敗: ${json.message}`);
+      return json.data;
+    }
+
+    if (code === 503) {
+      Logger.log(`⏳ Cloud Run 冷啟動中，第 ${attempt}/${MAX_RETRY} 次，等待 ${RETRY_WAIT_MS/1000} 秒後重試...`);
+      if (attempt < MAX_RETRY) Utilities.sleep(RETRY_WAIT_MS);
+      continue;
+    }
+
+    // 其他錯誤直接拋出，不重試
+    throw new Error(`Cloud Run Error (${code}): ${text}`);
+  }
+
+  throw new Error(`Cloud Run 服務無法連線，已重試 ${MAX_RETRY} 次，請確認服務是否正常運作。`);
+}
+
+function parseCloudRunData_(rawData, tz) {
+  if (!rawData || !rawData.length) return [];
+  
+  let defaultDate = '';
+  const dateRegex = /(\d{3,4})[\/年](\d{1,2})[\/月](\d{1,2})/;
+  
+  for (let i = 0; i < Math.min(rawData.length, 20); i++) {
+    const rowStr = rawData[i].join('');
+    const m = rowStr.match(dateRegex);
+    if (m) {
+      let y = parseInt(m[1]);
+      if (y < 1911) y += 1911; 
+      defaultDate = `${y}/${('0'+m[2]).slice(-2)}/${('0'+m[3]).slice(-2)}`;
+      break;
+    }
+  }
+
+  const colMap = {
+    date: ['成交日期', '交易日期'], time: ['成交時間', '時間'],
+    sym:  ['股票代碼', '股票代號', '股號', '商品代碼', '商品名稱'],
+    name: ['股票名稱', '商品名稱', '名稱'], side: ['類別', '交易別', '買賣別', '種類'],
+    qty:  ['成交股數', '股數', '數量'], price:['單價', '成交單價', '成交價'],
+    amt:  ['成交金額', '價金', '金額'], ord:  ['委託書號', '委託單號', '書號']
+  };
+
+  const stopKeywords = [
+    '庫存明細', '集保明細', '當日收盤價', '集保股數', '集保市值', '理財資訊', '個股分析', '我要下單'
+  ];
+
+  const out = [];
+  let headerIdx = -1;
+  let headers = [];
+
+  for (let i = 0; i < rawData.length; i++) {
+    const rowStr = rawData[i].join('').replace(/\s/g, '');
+    const hasSym  = colMap.sym.some(k => rowStr.includes(k));
+    const hasSide = colMap.side.some(k => rowStr.includes(k));
+    const hasPrc  = colMap.price.some(k => rowStr.includes(k));
+
+    if (hasSym && hasSide && hasPrc) {
+      headerIdx = i;
+      headers = rawData[i].map(s => String(s).trim());
+      break;
+    }
+  }
+
+  if (headerIdx === -1) return [];
+
+  const idx = {};
+  for (const [key, keywords] of Object.entries(colMap)) {
+    idx[key] = headers.findIndex(h => keywords.some(k => h.includes(k)));
+  }
+
+  for (let i = headerIdx + 1; i < rawData.length; i++) {
+    const row = rawData[i];
+    const rowStrSimple = row.join('').replace(/\s/g, '');
+
+    if (stopKeywords.some(kw => rowStrSimple.includes(kw))) break;
+    if (row.length < headers.length - 3) continue;
+    if (rowStrSimple.includes('合計') || rowStrSimple.includes('總計')) continue;
+
+    const sideRaw = (idx.side >= 0) ? String(row[idx.side]).trim() : '';
+    if (!sideRaw.includes('買') && !sideRaw.includes('賣') && !sideRaw.includes('沖')) continue;
+
+    let dateStr = defaultDate; 
+    if (idx.date >= 0 && row[idx.date]) {
+        const d = toYMDslash_(row[idx.date]);
+        if (d.length >= 5) dateStr = d;
+    }
+    if (!dateStr) continue;
+
+    const timeStr = (idx.time >= 0 && row[idx.time]) ? normTime_(row[idx.time]) : '00:00:00';
+    let symRaw = (idx.sym >= 0) ? String(row[idx.sym]).trim() : '';
+    let nameRaw = (idx.name >= 0) ? String(row[idx.name]).trim() : '';
+    if (!symRaw && nameRaw) symRaw = nameRaw; 
+    if (!nameRaw && symRaw) nameRaw = symRaw; 
+    const sym = symRaw.replace(/\s+/g, ''); 
+    const name = nameRaw.replace(/\s+/g, '');
+
+    const qty     = (idx.qty >= 0) ? num_(row[idx.qty]) : 0;
+    const price   = (idx.price >= 0) ? num_(row[idx.price]) : 0;
+    const amount  = (idx.amt >= 0) ? num_(row[idx.amt]) : Math.round(qty * price);
+    const ord     = (idx.ord >= 0) ? String(row[idx.ord]).trim() : '';
+
+    if (!qty && !amount) continue; 
+
+    const feeCol = headers.findIndex(h => h.includes('手續費'));
+    const taxCol = headers.findIndex(h => h.includes('交易稅'));
+    const fee = (feeCol >= 0) ? num_(row[feeCol]) : calcFee_(amount);
+    const tax = (taxCol >= 0) ? num_(row[taxCol]) : calcTax_(sideRaw, amount);
+    const net = calcNet_(sideRaw, amount, fee, tax);
+
+    out.push([dateStr, timeStr, sym, name, sideRaw, qty, price, amount, ord, fee, tax, net, 'CloudRun']);
+  }
+  return out;
+}
+
+function ingestFromGmail_Plaintext() {
+  const lock = getScriptLock_();
+  if (!lock.tryLock(10000))
+    throw new Error('ingestFromGmail_Plaintext: 另一個執行緒正在執行，請稍後再試');
+  try {
+  const C = getCfg_();
+  const ss = getSS_();
+
+  // 寫入目標：待確認交易（staging）
+  const shStaging = ensureStagingSheet_();
+
+  // 去重來源：同時檢查「交易紀錄」+ 「待確認交易」，避免重複送進 staging
+  const shTrades = ensureSheetWithHeader_(C.SHEET_TRADES, [
+    '成交日期','成交時間','股票代碼','股票名稱','成交類別',
+    '股數','成交價','成交金額','委託單號','手續費','交易稅','淨收付金額','証券商','備註'
+  ]);
+
+  const nameToCodeMap = new Map();
+  const dcaWhitelist = new Set();
+
+  for (let i=1; i<=10; i++) {
+    const sym = String(C[`DCA_${i}_SYMBOL`]||'').trim();
+    const nm  = String(C[`DCA_${i}_NAME`]||'').trim().replace(/\s+/g,'');
+    if (sym) {
+      dcaWhitelist.add(sym);
+      if (nm) nameToCodeMap.set(nm, sym);
+    }
+  }
+
+  // ★ 改用「依欄位名稱」讀取，避免期初庫存／庫存紀錄（股票代碼在第1欄）跟交易紀錄
+  //    （股票代碼在第3欄）欄位序號不同、寫死序號讀錯欄位的問題
+  learnSymNameFromSheet_(ss, C.SHEET_TRADES, nameToCodeMap);
+  learnSymNameFromSheet_(ss, C.SHEET_OPENING, nameToCodeMap);
+  learnSymNameFromSheet_(ss, C.SHEET_HOLD, nameToCodeMap);
+  // 從待確認交易補學：只採信代碼為數字的項目，避免名稱誤解析的髒資料污染 map
+  learnSymNameFromSheet_(ss, C.SHEET_STAGING || '待確認交易', nameToCodeMap, true);
+  // 《股票代碼對照表》是使用者自己維護的權威清單，最後學、可覆蓋前面學到的結果
+  learnSymNameFromSheet_(ss, '股票代碼對照表', nameToCodeMap, true, true);
+
+  const existedOrder = new Set();
+  const existedNoOrd = new Set();
+
+  // 去重用的代碼正規化
+  const normSymForDedup_ = (s) => {
+    const t = String(s||'').trim();
+    if (!t || !isNaN(Number(t))) return t;
+    // ★ 已經是合法代碼形狀（含 00981A 這種主動式 ETF 字母後綴）就直接照原樣回傳，
+    //   不要再往下跑「從名稱擷取數字」的邏輯，否則 00981A 會被誤判成「名稱」，
+    //   截斷成 00981（字母被吃掉）
+    if (isValidStockCode_(t)) return t;
+    // 完全比對
+    if (nameToCodeMap.has(t)) return nameToCodeMap.get(t);
+    // 去掉尾端 * 等特殊字元後再比對（如「國巨*」→「國巨」）
+    const stripped = t.replace(/[*＊·•！]+$/, '').trim();
+    if (stripped && stripped !== t && nameToCodeMap.has(stripped)) return nameToCodeMap.get(stripped);
+    // 開頭是 4~6 位數字（後面可能還接 1 個字母）就提取為代碼（如「2327國巨*」→「2327」）
+    const numPrefix = t.match(/^(\d{4,6}[A-Z]?)/i);
+    if (numPrefix) return numPrefix[1];
+    return t;
+  };
+  // 去重用的類別正規化：現買/沖買/集買 → 買；現賣/沖賣 → 賣
+  // 避免同一筆交易因不同信件的類別標記不同（如「現買」vs「沖買」）而被當成兩筆
+  const normTypeForDedup_ = (type) => String(type||'').includes('賣') ? '賣' : '買';
+
+  const loadDedup_ = (sh) => {
+    if (!sh || sh.getLastRow() < 2) return;
+    const data = sh.getRange(2, 1, sh.getLastRow()-1, sh.getLastColumn()).getValues();
+    for (const r of data) {
+      const sym  = normSymForDedup_(r[2]);
+      const ord  = normOrderNo_(r[8]);
+      const date = String(r[0]||'').trim();
+      if (ord) existedOrder.add(makeKey_Order_(date, ord, sym));
+      else {
+        const typeNorm = normTypeForDedup_(r[4]);
+        existedNoOrd.add([date, normTime_(r[1]||''), sym, typeNorm, r[5], r[6]].join('|'));
+      }
+    }
+  };
+  loadDedup_(shTrades);
+  loadDedup_(shStaging);
+
+  const since = new Date();
+  since.setDate(since.getDate() - Number(C.GMAIL_QUERY_DAYS || 7));
+  const tz = C.TZ || 'Asia/Taipei';
+  const after = Utilities.formatDate(since, tz, 'yyyy/MM/dd');
+
+  let parsed = [];
+  const logMsg = [];
+  // HTML 信件中出現過的委託單號
+  const htmlOrderSet = new Set();
+  // HTML 信件中出現過的交易內容 key（date|normSym|qty|price），用於內容比對去重
+  const htmlContentSet = new Set();
+
+  // 1. 先處理 HTML 信件，建立去重集合
+  const labelHtml = (C.GMAIL_LABEL_HTML || '').trim();
+  if (labelHtml) {
+    const qHtml = `label:${labelHtml} after:${after}`;
+    const threadsHtml = GmailApp.search(qHtml, 0, 30);
+    threadsHtml.forEach(t => t.getMessages().forEach(m => {
+      const html = m.getBody();
+      const body = m.getPlainBody();
+      let rows = parseBrokerMailHTMLTable_CN_(html, m, tz);
+      if (!rows.length) rows = parseBrokerMailPlainTable_CN_(body, m, tz);
+      rows.forEach(r => {
+        const ord = normOrderNo_(r[8]);
+        if (ord) htmlOrderSet.add(ord);
+        const ns = normSymForDedup_(String(r[2]||'').trim());
+        htmlContentSet.add([String(r[0]||'').trim(), ns, r[5], r[6]].join('|'));
+      });
+      if (rows.length > 0) parsed = parsed.concat(rows);
+    }));
+  }
+  // HTML 行的名稱→代碼學入 nameToCodeMap，讓 PDF 解析時能將「國巨*」對應到「2327」
+  parsed.forEach(r => {
+    const c = String(r[2]||'').trim();
+    const n = String(r[3]||'').trim().replace(/\s+/g,'');
+    if (c && n && isValidStockCode_(c) && !nameToCodeMap.has(n)) nameToCodeMap.set(n, c);
+  });
+
+  // 2. 再處理 PDF 附件
+  //    - 按委託單號去重：PDF 單號已在 HTML → 跳過
+  //    - 按內容去重：同日期＋代碼＋股數＋價格 → 跳過（處理 HTML「現買」= PDF「集買」的重複）
+  //    - 上述都沒中 → 定期定額或 PDF 獨有交易 → 保留
+  const labelPdf = (C.GMAIL_LABEL_PDF || '').trim();
+  if (labelPdf) {
+    const qPdf = `label:${labelPdf} after:${after} has:attachment`;
+    const threadsPdf = GmailApp.search(qPdf, 0, 30);
+    threadsPdf.forEach(t => t.getMessages().forEach(m => {
+      const atts = m.getAttachments();
+      atts.forEach(att => {
+        if (att.getContentType() === "application/pdf" || att.getName().toLowerCase().endsWith(".pdf")) {
+          try {
+            const rawTable = callCloudRunToUnlock_(att, C.ID_NUMBER);
+            const rows = parseCloudRunData_(rawTable, tz);
+            const keptRows = [];
+            rows.forEach(r => {
+              let sym = String(r[2]||'').trim();
+              // ★ 已經是合法代碼形狀（含 00981A 這種字母後綴）就直接跳過下面的名稱解析，
+              //   避免字母被「從名稱提取數字」的邏輯誤刪
+              if (!isValidStockCode_(sym)) {
+                // 嘗試 nameToCodeMap 對應（如 DCA_i_NAME 設定）
+                if (isNaN(Number(sym)) && nameToCodeMap.has(sym)) {
+                  sym = nameToCodeMap.get(sym); r[2] = sym;
+                }
+                // 從基金名稱提取 4~6 位數字代碼，後面可能還接 1 個字母
+                // （如「國泰永續高股息00919」→「00919」）
+                if (isNaN(Number(sym))) {
+                  const codeMatch = sym.match(/(\d{4,6}[A-Z]?)/i);
+                  if (codeMatch) { sym = codeMatch[1]; r[2] = sym; }
+                }
+                // 若 sym 仍為非數字且與 r[3] 相同（PDF 只有商品名稱欄），清空 r[2]
+                // 讓名稱只顯示在「股票名稱」欄，避免代碼欄重複顯示同一文字
+                if (isNaN(Number(sym)) && !isValidStockCode_(sym) && sym === String(r[3]||'').trim().replace(/\s+/g,'')) {
+                  r[2] = '';
+                }
+              }
+              // 按委託單號去重
+              const ord = normOrderNo_(r[8]);
+              if (ord && htmlOrderSet.has(ord)) {
+                Logger.log(`[PDF skip] 委託單號="${ord}" 已在 HTML，跳過`);
+                return;
+              }
+              // 按內容去重（日期＋代碼＋股數＋價格）
+              const ns = normSymForDedup_(sym || String(r[3]||'').trim());
+              const ck = [String(r[0]||'').trim(), ns, r[5], r[6]].join('|');
+              if (htmlContentSet.has(ck)) {
+                Logger.log(`[PDF skip] 內容重複 ${ck}，已在 HTML，跳過`);
+                return;
+              }
+              r[12] = 'CloudRun_SIP';
+              keptRows.push(r);
+            });
+            if (keptRows.length > 0) {
+              parsed = parsed.concat(keptRows);
+              logMsg.push(`[PDF] ${m.getSubject()} (${keptRows.length}筆)`);
+            }
+          } catch (e) {
+            Logger.log(`PDF失敗: ${e.message}`);
+          }
+        }
+      });
+    }));
+  }
+
+  // 合併前先正規化代碼，確保同委託單號的「國巨*」與「2327」能在 consolidate 時被合併
+  parsed.forEach(r => {
+    const sym = normSymForDedup_(String(r[2]||'').trim());
+    if (sym !== String(r[2]||'').trim()) r[2] = sym;
+  });
+
+  const consolidated = consolidateByOrderNo_(parsed);
+  const toWrite = [];
+
+  for (const r of consolidated) {
+    // 正規化代碼：若為非數字名稱且有對應，直接修正 r[2]，讓 staging 也拿到正確代碼
+    const rawSym = String(r[2]||'').trim();
+    if (rawSym && isNaN(Number(rawSym)) && nameToCodeMap.has(rawSym)) {
+      r[2] = nameToCodeMap.get(rawSym);
+    }
+    const sym = String(r[2]||'').trim();
+    const ord = normOrderNo_(r[8]);
+    if (ord) {
+      const k = makeKey_Order_(r[0], ord, sym);
+      if (existedOrder.has(k)) continue;
+      existedOrder.add(k);
+      toWrite.push(r);
+    } else {
+      const typeNorm = normTypeForDedup_(r[4]);
+      const k = [String(r[0]||'').trim(), normTime_(r[1]||''), sym, typeNorm, r[5], r[6]].join('|');
+      if (existedNoOrd.has(k)) continue;
+      existedNoOrd.add(k);
+      toWrite.push(r);
+    }
+  }
+
+  if (toWrite.length) {
+    // 轉換為 staging 格式（15 欄）：前 12 欄不變，插入空的証券商，保留備註，加確認狀態
+    const stagingRows = toWrite.map(r => [
+      ...r.slice(0, 12),  // 成交日期..淨收付金額
+      '',                  // 証券商（email 無法得知）
+      r[12] || '',         // 備註（CloudRun 等標記）
+      '待確認',            // 確認狀態
+    ]);
+    const startRow = shStaging.getLastRow() + 1;
+    const numRows  = stagingRows.length;
+    shStaging.getRange(startRow, 3, numRows, 1).setNumberFormat('@'); // 股票代碼
+    shStaging.getRange(startRow, 9, numRows, 1).setNumberFormat('@'); // 委託單號
+    shStaging.getRange(startRow, 1, numRows, stagingRows[0].length).setValues(stagingRows);
+  }
+  Logger.log(`總計新增：${toWrite.length} 筆交易至待確認`);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function parseBrokerMailHTMLTable_CN_(html, msg, tz) {
+  if (!html) return [];
+  const out = [];
+  const rawDate = (() => {
+    const m = html.match(/(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
+    if (!m) return '';
+    return `${m[1]}-${('0'+m[2]).slice(-2)}-${('0'+m[3]).slice(-2)}`;
+  })() || Utilities.formatDate(msg.getDate(), tz, 'yyyy-MM-dd');
+  const dateStr = toYMDslash_(rawDate);
+
+  const tables = html.match(/<table[\s\S]*?<\/table>/gi) || [];
+  const wantHeaders = ['成交時間','委託單號','股號','股票代號','股票名稱','類別','買賣別','股數','單價','成交價','價金','成交金額'];
+
+  for (const tbl of tables) {
+    const trs = tbl.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+    if (!trs.length) continue;
+    const headerCells = extractCellsText_(trs[0]);
+    if (!headerCells.length) continue;
+    const hits = wantHeaders.filter(h => headerCells.join('|').indexOf(h) >= 0).length;
+    if (hits < 6) continue;
+
+    const idx = {
+      time:   indexOfLike_(headerCells, ['成交時間','時間']),
+      orderNo:indexOfLike_(headerCells, ['委託單號','委託書號','委託單號碼']),
+      symbol: indexOfLike_(headerCells, ['股號','股票代號','商品代碼']),
+      name:   indexOfLike_(headerCells, ['股票名稱','商品名稱','名稱']),
+      side:   indexOfLike_(headerCells, ['成交類別','類別','買賣別','方向']),
+      qty:    indexOfLike_(headerCells, ['股數','數量','成交股數']),
+      price:  indexOfLike_(headerCells, ['成交價','單價']),
+      amount: indexOfLike_(headerCells, ['成交金額','價金'])
+    };
+
+    for (let i=1;i<trs.length;i++){
+      const cells = extractCellsText_(trs[i]).map(s => s.replace(/&nbsp;/g,'').trim());
+      if (!cells.length) continue;
+      const time    = normTime_(safePick_(cells, idx.time));
+      const orderNo = safePick_(cells, idx.orderNo);
+      const symbol  = safePick_(cells, idx.symbol);
+      const name    = safePick_(cells, idx.name);
+      const sideRaw = keepSide_(safePick_(cells, idx.side));
+      const qty     = num_(safePick_(cells, idx.qty));
+      const price   = num_(safePick_(cells, idx.price));
+      const amount  = num_(safePick_(cells, idx.amount));
+
+      if (!symbol || !time || !sideRaw || !qty || !price) continue;
+      const fee = calcFee_(amount);
+      const tax = calcTax_(sideRaw, amount);
+      const net = calcNet_(sideRaw, amount, fee, tax);
+      out.push([ dateStr, time, symbol, name, sideRaw, qty, price, amount, orderNo, fee, tax, net, '' ]);
+    }
+    if (out.length) break;
+  }
+  return out;
+}
+
+function parseBrokerMailPlainTable_CN_(text, msg, tz) {
+  if (!text) return [];
+  const out = [];
+  const rawDate = (() => {
+    const m = text.match(/(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
+    if (!m) return '';
+    return `${m[1]}-${('0'+m[2]).slice(-2)}-${('0'+m[3]).slice(-2)}`;
+  })() || Utilities.formatDate(msg.getDate(), tz, 'yyyy-MM-dd');
+  const dateStr = toYMDslash_(rawDate);
+
+  const headerRe = /成交時間\s+委託單號\s+(?:股號|股票代號)\s+股票名稱\s+(?:成交類別|類別|買賣別)\s+股數\s+(?:成交價|單價)\s+(?:成交金額|價金)(?:\s+\S+)?/;
+  const idx = text.search(headerRe);
+  if (idx < 0) return out;
+
+  const tail = text.slice(idx).split(/\r?\n/).slice(1);
+  const lineRe = /^\s*([0-9:]{5,8})\s+(\S+)\s+(\d{3,6})\s+(\S+)\s+(\S+)\s+([\d,]+)\s+([\d,\.]+)\s+([\d,\.]+)(?:\s+\S+)?/;
+
+  for (const line of tail) {
+    const m = line.match(lineRe);
+    if (!m) { if (/^\s*$/.test(line)) break; continue; }
+    const time    = normTime_(m[1]);
+    const orderNo = m[2];
+    const symbol  = m[3];
+    const name    = m[4];
+    const sideRaw = keepSide_(m[5]);
+    const qty     = num_(m[6]);
+    const price   = num_(m[7]);
+    const amount  = num_(m[8]);
+    const fee = calcFee_(amount);
+    const tax = calcTax_(sideRaw, amount);
+    const net = calcNet_(sideRaw, amount, fee, tax);
+    out.push([ dateStr, time, symbol, name, sideRaw, qty, price, amount, orderNo, fee, tax, net, '' ]);
+  }
+  return out;
+}
+
+function extractCellsText_(trHtml) {
+  const reg = /<(?:td|th)[^>]*>([\s\S]*?)<\/(?:td|th)>/gi;
+  const cells = []; let m;
+  while ((m = reg.exec(trHtml)) !== null) cells.push(cleanHtmlText_(m[1]));
+  return cells;
+}
+function cleanHtmlText_(s) {
+  return String(s||'').replace(/<br\s*\/?>/gi,' ').replace(/<[^>]*>/g,'').replace(/&nbsp;/g,' ').trim();
+}
+function indexOfLike_(arr, keys){ for (const k of keys){ const i=arr.findIndex(x=>x.indexOf(k)>=0); if (i>=0) return i; } return -1; }
+function safePick_(arr,i){ return (i>=0 && i<arr.length)?arr[i]:''; }
+function keepSide_(s){ return (s==null)?'':String(s).trim(); }
+
+/***** =======================
+ * Part 3/4
+ * 庫存紀錄
+ * ======================== */
+
+function rebuildAll_B() {
+  const C = getCfg_();
+  const ss = getSS_();
+  
+  const headersOpen = ['股票代碼','股票名稱','買進日期','買入價','持有股數','買入成本 (單純買入價*股數)','手續費','證券商'];
+  const headersHold = ['股票代碼','股票名稱','買進日期','買入價','持有股數','買入成本 (單純買入價*股數)','手續費','證券商','現價','即時市值'];
+  
+  const shOpen = ensureSheetWithHeader_(C.SHEET_OPENING, headersOpen);
+  const shH     = ensureSheetWithHeader_(C.SHEET_HOLD, headersHold);
+  const shT     = ensureSheetWithHeader_(C.SHEET_TRADES, [
+    '成交日期','成交時間','股票代碼','股票名稱','成交類別',
+    '股數','成交價','成交金額','委託單號','手續費','交易稅','淨收付金額','證券商','備註'
+  ]);
+
+  // === 輔助函式：標準化時間戳記 (確保排序絕對正確) ===
+  const getTs_ = (d, t) => {
+    // 處理日期
+    let dateStr = "";
+    if (d instanceof Date) {
+      dateStr = Utilities.formatDate(d, 'GMT+8', 'yyyy/MM/dd');
+    } else {
+      dateStr = String(d).replace(/\-/g, '/').trim();
+    }
+    // 處理時間
+    let timeStr = "00:00:00";
+    if (t instanceof Date) {
+      timeStr = Utilities.formatDate(t, 'GMT+8', 'HH:mm:ss');
+    } else if (t && String(t).trim()) {
+      timeStr = String(t).trim();
+    }
+    return new Date(`${dateStr} ${timeStr}`).getTime();
+  };
+  // ===============================================
+
+  // 1. 優先處理：用賣單沖銷期初庫存 (針對持有中但尚未在此系統記錄買入的)
+  (function applySalesToOpening_inline() {
+    const openRows = readTableAsObjects_(shOpen);
+    const openMap = new Map();
+    openRows.forEach(o=>{
+      const sym = String(o['股票代碼']).trim(); if (!sym) return;
+      // Key 加上券商，確保分券商沖銷
+      const key = sym + '|' + String(o['證券商']||'').trim();
+      openMap.set(key, {
+        name: String(o['股票名稱']||'').trim(),
+        buyDate: toYMDslash_(o['買進日期']||''),
+        buyPrice: Number(o['買入價']||0),
+        qty: Number(o['持有股數']||0),
+        fee: Number(o['手續費']||0),
+        broker: String(o['證券商']||'')
+      });
+    });
+    
+    if (openMap.size > 0) {
+        const start = (C.HOLDINGS_START_DATE||'').trim();
+        const sales = readTableAsObjects_(shT)
+          .filter(r => String(r['成交類別']||'').includes('賣'))
+          .filter(r => !start || String(r['成交日期']||'') >= start)
+          .map(r => {
+             // 這裡也要加上 timestamp 方便排序
+             r._ts = getTs_(r['成交日期'], r['成交時間']);
+             return r;
+          })
+          .sort((a,b)=> a._ts - b._ts); // 絕對時間排序
+
+        sales.forEach(r=>{
+          const sym = String(r['股票代碼']||'').trim();
+          const broker = String(r['證券商']||'').trim();
+          const sellQty = Number(r['股數']||0);
+          
+          if (!sym || sellQty<=0) return;
+          
+          // 嘗試找對應券商的期初庫存
+          const key = sym + '|' + broker;
+          const o = openMap.get(key);
+          
+          if (!o || o.qty<=0) return;
+          
+          const use = Math.min(o.qty, sellQty);
+          const prop = (o.qty>0) ? (use/o.qty) : 0;
+          o.qty -= use;
+          o.fee = Math.round(o.fee * (1 - prop));
+        });
+
+        shOpen.clear(); shOpen.appendRow(headersOpen);
+        const out=[];
+        openMap.forEach((v,k)=>{
+          // 只有當數量 > 0 才寫回，否則代表已完全沖銷
+          if(Math.round(v.qty) > 0) {
+            const buyCost = v.buyPrice * v.qty;
+            out.push([k.split('|')[0], v.name, toYMDslash_(v.buyDate)||'', round2_(v.buyPrice), Math.round(v.qty), round2_(buyCost), Math.round(v.fee), v.broker]);
+          }
+        });
+        // 確保格式正確
+        if (out.length) {
+            shOpen.getRange(2,1,out.length,out[0].length).setValues(out);
+            shOpen.getRange(2,1,out.length,1).setNumberFormat('@'); // 代碼設為文字
+        }
+    }
+  })();
+
+  // 2. 重建目前庫存 (FIFO)
+  const start = (C.HOLDINGS_START_DATE||'').trim();
+  
+  // 讀取所有交易並加上 Timestamp
+  const txAll = readTableAsObjects_(shT)
+    .filter(r => !start || String(r['成交日期']||'') >= start)
+    .map(r => ({
+      sym:   String(r['股票代碼']||'').trim(),
+      name:  String(r['股票名稱']||'').trim(),
+      date:  toYMDslash_(r['成交日期']||''),
+      time:  normTime_(String(r['成交時間']||'')),
+      ts:    getTs_(r['成交日期'], r['成交時間']), // 加入 Timestamp
+      side:  String(r['成交類別']||''),
+      qty:   Number(r['股數']||0),
+      price: Number(r['成交價']||0),
+      amt:   Number(r['成交金額']||0),
+      fee:   Number(r['手續費']||0) || R4_calcFee_(Number(r['成交金額']||0)),
+      tax:   Number(r['交易稅']||0)  || R4_calcTax_(String(r['成交類別']||''), Number(r['成交金額']||0)),
+      broker: String(r['證券商']||'')
+    }))
+    .filter(x => x.sym && x.date && x.qty>0);
+
+  // === 關鍵修正：依照 Timestamp 排序，保證先買後賣 ===
+  txAll.sort((a,b)=> {
+    if (a.sym !== b.sym) return a.sym.localeCompare(b.sym);
+    return a.ts - b.ts;
+  });
+
+  const lotsByKey = new Map();
+
+  // 載入期初庫存 (已扣除完畢的剩餘量)
+  readTableAsObjects_(ensureSheetWithHeader_(C.SHEET_OPENING, [])).forEach(r=>{
+    const sym = String(r['股票代碼']||'').trim(); if (!sym) return;
+    const qty = Math.round(Number(r['持有股數']||0)); if (qty<=0) return;
+    const name = String(r['股票名稱']||'').trim();
+    const buyDate = toYMDslash_(r['買進日期']||'') || '1900/01/01';
+    const buyPrice = Number(r['買入價']||0);
+    const buyFeePerShare = (qty>0) ? (Number(r['手續費']||0)/qty) : 0;
+    const broker = String(r['證券商']||'').trim(); 
+    
+    const key = `${sym}|${broker}`;
+    if (!lotsByKey.has(key)) lotsByKey.set(key, []);
+    lotsByKey.get(key).push({ sym, name, buyDate, buyPrice, buyFeePerShare, remainQty: qty, broker });
+  });
+
+  // 處理交易紀錄
+  txAll.forEach(x=>{
+    const key = `${x.sym}|${x.broker}`;
+    
+    // 忽略當沖
+    if (isDayLoopSide_(x.side)) return;
+
+    if (isStockBonusSide_(x.side)) {
+      // 股票股利 (忽略成本)
+      if (!lotsByKey.has(key)) lotsByKey.set(key, []);
+      lotsByKey.get(key).push({ sym: x.sym, name:x.name, buyDate:x.date, buyPrice:0, buyFeePerShare:0, remainQty: Math.floor(x.qty), broker: x.broker });
+      return;
+    }
+    
+    if (x.side.includes('買') && x.price>=0) { // 允許 0 元買入 (手動補配股)
+      if (!lotsByKey.has(key)) lotsByKey.set(key, []);
+      const perShareFee = (x.qty>0) ? (x.fee / x.qty) : 0;
+      lotsByKey.get(key).push({ sym: x.sym, name:x.name, buyDate:x.date, buyPrice:x.price, buyFeePerShare: perShareFee, remainQty: Math.round(x.qty), broker: x.broker });
+    }
+    else if (x.side.includes('賣')) {
+      // 賣出扣抵 (FIFO)
+      let remain = Math.round(x.qty);
+      const q = lotsByKey.get(key) || [];
+      
+      // 清除已耗盡的批次
+      while (q.length && q[0].remainQty <= 0.001) q.shift();
+
+      if (q.length === 0) {
+        // 這裡就是報錯的地方，但因為我們已經修正了排序，理論上不會再發生
+        Logger.log(`⚠ [Warning] ${x.date} ${x.sym} (${x.broker}) 賣出 ${remain} 股時庫存不足 (已忽略短缺部分)`);
+      } else {
+        while (remain > 0 && q.length > 0) {
+           const lot = q[0];
+           const part = Math.min(remain, lot.remainQty);
+           lot.remainQty -= part;
+           remain -= part;
+           if (lot.remainQty <= 0.001) q.shift();
+        }
+      }
+    }
+  });
+
+  // 3. 匯總結果
+  const grouped = new Map(); 
+  for (const [key, lots] of lotsByKey.entries()) {
+    lots.filter(l => l.remainQty > 0.1).forEach(l => {
+      const outKey = `${l.sym}|${l.buyDate}|${l.broker}`;
+      if (!grouped.has(outKey)) grouped.set(outKey, {
+        sym: l.sym || key.split('|')[0], name: l.name || '', buyDate: l.buyDate,
+        sumQty: 0, sumPxQty: 0, sumFee: 0, broker: l.broker || ''
+      });
+      const g = grouped.get(outKey);
+      g.sumQty += Math.round(l.remainQty);
+      g.sumPxQty += (l.buyPrice || 0) * Math.round(l.remainQty);
+      g.sumFee += (l.buyFeePerShare || 0) * Math.round(l.remainQty);
+      if (!g.name && l.name) g.name = l.name;
+    });
+  }
+
+  const out = Array.from(grouped.values())
+    .sort((a,b) => (String(a.sym||'').localeCompare(String(b.sym||'')) || String(a.buyDate||'').localeCompare(String(b.buyDate||''))))
+    .map(g => {
+      const avgBuy = g.sumQty > 0 ? round2_(g.sumPxQty / g.sumQty) : 0;
+      return [g.sym, g.name, g.buyDate || '', avgBuy, Math.round(g.sumQty), round2_(avgBuy * Math.round(g.sumQty)), Math.round(g.sumFee), g.broker || '', '', ''];
+    });
+
+  // 4. 寫入庫存紀錄
+  shH.clear(); shH.appendRow(headersHold);
+  if (out.length) {
+      shH.getRange(2, 1, out.length, out[0].length).setValues(out);
+      shH.getRange(2, 1, out.length, 1).setNumberFormat('@'); // 代碼補零保護
+      
+      const formulas = [];
+      for (let r = 2; r <= out.length + 1; r++) {
+         const f_price = `=IFERROR(GOOGLEFINANCE("TPE:" & A${r}), IFERROR(IMPORTXML("https://finance.yahoo.com/quote/" & A${r} & ".TWO", "//fin-streamer[@data-field='regularMarketPrice']"), 0))`;
+         const f_market = `=E${r} * I${r}`; 
+         formulas.push([f_price, f_market]);
+      }
+      shH.getRange(2, 9, formulas.length, 2).setFormulas(formulas);
+      shH.getRange(2, 4, out.length, 7).setNumberFormat("#,##0.00");
+    }
+    Logger.log(`Holdings updated: ${out.length} rows`);
+}
+function readTableAsObjects_(sh) {
+  const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
+  if (lastRow<2) return [];
+  const headers = sh.getRange(1,1,1,lastCol).getValues()[0].map(h=>String(h||'').trim());
+  const data = sh.getRange(2,1,lastRow-1,lastCol).getValues();
+  return data.map(row => {
+    const o={}; headers.forEach((h,i)=>o[h]=row[i]); return o;
+  });
+}
+
+/***** =======================
+ * Part 4/4 股利與其他
+ * ======================== */
+
+function fetchStockNameOnce_(sym, token) {
+  if (!sym) return '';
+  try {
+    const props = getProps_();
+    const KEY = 'NAME_CACHE__' + String(sym).trim();
+    const cached = props.getProperty(KEY);
+    if (cached) return cached;
+    const url = 'https://api.finmindtrade.com/api/v4/data';
+    const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+    const qs = 'dataset=TaiwanStockInfo&data_id=' + encodeURIComponent(sym);
+    const resp = UrlFetchApp.fetch(url + '?' + qs, { muteHttpExceptions: true, followRedirects: true, headers });
+    if (resp.getResponseCode() !== 200) return '';
+    const json = JSON.parse(resp.getContentText('utf-8'));
+    const rows = Array.isArray(json.data) ? json.data : [];
+    const hit = rows.find(x => x && (x.stock_name || x.company_name || x.name));
+    const nm = hit ? String(hit.stock_name || hit.company_name || hit.name || '').trim() : '';
+    if (nm) props.setProperty(KEY, nm);
+    return nm || '';
+  } catch (e) { return ''; }
+}
+
+function buildNameCache_(shHold, shOpen, shT) {
+  const cache = new Map();
+  const push = (sym, nm) => {
+    const s = String(sym || '').trim(); const n = String(nm || '').trim();
+    if (s && n && !cache.has(s)) cache.set(s, n);
+  };
+  readTableAsObjects_(shHold).forEach(r => push(r['股票代碼'], r['股票名稱']));
+  readTableAsObjects_(shOpen).forEach(r => push(r['股票代碼'], r['股票名稱']));
+  readTableAsObjects_(shT).forEach(r => push(r['股票代碼'], r['股票名稱']));
+  return cache;
+}
+
+function updateDividendsFromFinMind() {
+  const C = getCfg_();
+  const ss = getSS_();
+  const shHold = ensureSheetWithHeader_(C.SHEET_HOLD, []);
+  const shOpen = ensureSheetWithHeader_(C.SHEET_OPENING, []);
+  const shT     = ensureSheetWithHeader_(C.SHEET_TRADES, []);
+  
+  const headers = [
+    '股票代碼','股票名稱','股利所屬年度','除息日','現金股利發放日',
+    '現金股利 (元/股)','除息日持股數','現金總股息',
+    '實際領取金額 (扣除每筆手續費10元)','平均成交價','個人殖利率 (現金/買入價)','備註'
+  ];
+  const shOut = ensureSheetWithHeader_(C.SHEET_DIV, headers);
+
+  // 1. 建立現有資料快取 (防止重複) - 修正比對邏輯
+  const existingDivKeys = new Set();
+  const lastRowDiv = shOut.getLastRow();
+  if (lastRowDiv > 1) {
+    const divData = shOut.getRange(2, 1, lastRowDiv - 1, 4).getValues();
+    divData.forEach(r => {
+      let s = String(r[0]||'').trim();
+      // ★ 修正比對邏輯：3位數補成5碼，2位數補成4碼
+      if (/^\d{1,3}$/.test(s)) {
+         const n = Number(s);
+         s = (n < 100) ? ('0000' + n).slice(-4) : ('00000' + n).slice(-5);
+      }
+      const d = toYMDslash_(r[3]||'');
+      if (s && d) existingDivKeys.add(`${s}|${d}`);
+    });
+  }
+
+  const nameBySym = buildNameCache_(shHold, shOpen, shT);
+  const openingQty = new Map();
+  readTableAsObjects_(shOpen).forEach(o => {
+    const sym = String(o['股票代碼'] || '').trim(); if (sym) openingQty.set(sym, Number(o['持有股數'] || 0));
+  });
+
+  const start = (C.DIV_START_DATE || '').trim();
+  const tradeRows = readTableAsObjects_(shT);
+  const txBySym = new Map();
+  tradeRows.forEach(r => {
+    const sym = String(r['股票代碼'] || '').trim(); if (!sym) return;
+    const side= String(r['成交類別'] || '');
+    const date= toYMDslash_(String(r['成交日期'] || '').trim());
+    const qty = Number(r['股數'] || 0);
+    if (!date || !(qty > 0)) return;
+    if (start && date < start) return;
+    if (side.includes('沖買') || side.includes('沖賣')) return;
+    const delta = (isStockBonusSide_(side) || side.includes('買')) ? qty : (side.includes('賣') ? -qty : 0);
+    if (delta === 0) return;
+    if (!txBySym.has(sym)) txBySym.set(sym, []);
+    txBySym.get(sym).push({ date, deltaQty: delta });
+  });
+  for (const [sym, arr] of txBySym.entries()) arr.sort((a, b) => a.date.localeCompare(b.date));
+
+  const tradeSyms = Array.from(new Set(tradeRows.map(r => String(r['股票代碼'] || '').trim()).filter(Boolean)));
+  const allSymbols = Array.from(new Set([...Array.from(openingQty.keys()), ...Array.from(nameBySym.keys()), ...tradeSyms])).filter(Boolean);
+  const yearFrom = String(C.DIV_YEAR_FROM || (new Date().getFullYear() - 8));
+  const hadPosOrBuy = new Set();
+  tradeRows.forEach(r => {
+    const d = toYMDslash_(String(r['成交日期'] || '')); const y = d ? d.slice(0, 4) : '';
+    const sym = String(r['股票代碼'] || '').trim(); const side= String(r['成交類別'] || '');
+    if (!sym || !y || y < yearFrom) return;
+    if (side.includes('買') || isStockBonusSide_(side)) hadPosOrBuy.add(sym);
+  });
+  const filteredSymbols = allSymbols.filter(sym => {
+    const openQ = Number(openingQty.get(sym) || 0);
+    if (openQ > 0) return true;
+    return hadPosOrBuy.has(sym);
+  }).sort();
+
+  const perRun = Math.max(1, Number(C.DIV_SYMBOLS_PER_RUN || 10));
+  const props = getProps_();
+  const CUR_KEY = 'DIV_CURSOR'; const TS_KEY  = 'DIV_CURSOR_TS';
+  const staleDays = Math.max(1, Number(C.DIV_CURSOR_RESET_IF_STALE_DAYS || 3));
+  const lastTs = Number(props.getProperty(TS_KEY) || 0);
+  const inCycle = getProps_().getProperty('DIV_CYCLE_ACTIVE') === '1';
+  if (!inCycle && lastTs && (Date.now() - lastTs) > staleDays * 86400000) props.deleteProperty(CUR_KEY);
+
+  let cur = Number(props.getProperty(CUR_KEY) || 0);
+  if (cur >= filteredSymbols.length) cur = 0;
+  
+  if (props.getProperty(CUR_KEY) === null && shOut.getLastRow() === 0) {
+      shOut.appendRow(headers);
+  }
+
+  const slice = filteredSymbols.slice(cur, cur + perRun);
+  if (!slice.length) { Logger.log('DIV: 無可處理之代號'); return; }
+
+  const rowsToAppend = [];
+
+  for (const sym of slice) {
+    const list = fetchFinMind_Dividends_(sym, C.FINMIND_TOKEN, C.DIV_YEAR_FROM);
+    list.sort((a, b) => (a.exDate || '').localeCompare(b.exDate || ''));
+    
+    const openQ = openingQty.get(sym) || 0;
+    const txs   = txBySym.get(sym) || [];
+    
+    const qtyOnDateBase = (function (openQty, txs) {
+      const cache = new Map();
+      return function (dateStr) {
+        if (!dateStr) return Math.max(0, Math.round(openQty));
+        if (cache.has(dateStr)) return cache.get(dateStr);
+        let qty = openQty;
+        for (const t of (txs || [])) { if (t.date <= dateStr) qty += t.deltaQty; else break; }
+        qty = Math.max(0, Math.round(qty));
+        cache.set(dateStr, qty);
+        return qty;
+      };
+    })(openQ, txs);
+
+    let bonusCarry = 0; 
+
+    list.forEach(rec => {
+      const exDate = rec.exDate; if (!exDate) return;
+      
+      // ★★★ 修正點：比對前先標準化 CheckSym (2碼->4碼, 3碼->5碼) ★★★
+      let checkSym = sym;
+      if (/^\d{1,3}$/.test(checkSym)) {
+         const n = Number(checkSym);
+         checkSym = (n < 100) ? ('0000' + n).slice(-4) : ('00000' + n).slice(-5);
+      }
+      
+      if (existingDivKeys.has(`${checkSym}|${exDate}`)) return;
+
+      const cashPerShare = Number(rec.cashPerShare || 0);
+      const baseQty = qtyOnDateBase(exDate);
+      const qtyAtEx = Math.max(0, Math.round(baseQty)); 
+      if (qtyAtEx <= 0) return;
+
+      const cashTotal     = round2_(qtyAtEx * cashPerShare);
+      const feePerPayout = Number(C.DIV_CASH_FEE_PER_PAYOUT || 10);
+      const actualCash    = cashTotal > 0 ? Math.max(0, round2_(cashTotal - feePerPayout)) : 0;
+
+      let avgBuyAtEx = 0, myYield = '';
+      if (cashPerShare > 0) {
+        avgBuyAtEx = avgBuyOnDate_(sym, exDate, readTableAsObjects_(shOpen), tradeRows);
+        myYield    = (avgBuyAtEx > 0) ? round4_(cashPerShare / avgBuyAtEx) : '';
+      }
+
+      // ★★★ 修正點：寫入前標準化 FixedSym (2碼->4碼, 3碼->5碼) ★★★
+      let fixedSym = sym;
+      if (/^\d{1,3}$/.test(fixedSym)) {
+         const n = Number(fixedSym);
+         fixedSym = (n < 100) ? ('0000' + n).slice(-4) : ('00000' + n).slice(-5);
+      }
+
+      rowsToAppend.push([
+        fixedSym,  // 使用修正後的 5 碼代碼
+        nameBySym.get(sym) || rec.stockName || '', 
+        rec.year || '', 
+        exDate, 
+        rec.payDate || '',
+        cashPerShare,
+        qtyAtEx,      
+        cashTotal,    
+        actualCash,   
+        (avgBuyAtEx > 0 ? round2_(avgBuyAtEx) : ''), 
+        myYield,      
+        ''            
+      ]);
+    });
+    Utilities.sleep(Number(C.DIV_THROTTLE_MS || 1000));
+  }
+
+  if (rowsToAppend.length) {
+    const startRow = shOut.getLastRow() + 1;
+    // 1. 先設定「股票代碼」欄位為純文字
+    shOut.getRange(startRow, 1, rowsToAppend.length, 1).setNumberFormat('@');
+    
+    // 2. 寫入資料
+    shOut.getRange(startRow, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
+    
+    // 3. 設定其他數值格式
+    shOut.getRange(startRow, 6, rowsToAppend.length, 1).setNumberFormat('0.00'); // 現金股利
+    shOut.getRange(startRow, 8, rowsToAppend.length, 2).setNumberFormat('0.00'); // 總額/實領
+    shOut.getRange(startRow, 11, rowsToAppend.length, 1).setNumberFormat('0.00%'); // 殖利率
+  }
+  
+  let next = Number(props.getProperty(CUR_KEY) || 0) + slice.length;
+  props.setProperty(CUR_KEY, String(next >= filteredSymbols.length ? 0 : next));
+  props.setProperty(TS_KEY,  String(Date.now()));
+  Logger.log(`DIV batch done`);
+}
+
+function resetDividendBatchCursor() {
+  getProps_().deleteProperty('DIV_CURSOR');
+  Logger.log('已重置股利分批游標。');
+}
+
+function appendStockBonusToTrades_(rows, C) {
+  if (!rows || !rows.length) return;
+  const sh = ensureSheetWithHeader_(C.SHEET_TRADES || '交易紀錄', []);
+  const grouped = new Map(); 
+  rows.forEach(r => {
+    const key = [String(r.date).trim(), String(r.sym).trim()].join('|');
+    const cur = grouped.get(key) || { date:r.date, sym:r.sym, name:r.name||'', qty:0 };
+    cur.qty += Math.floor(Number(r.qty||0));
+    grouped.set(key, cur);
+  });
+  const toUpsert = Array.from(grouped.values()).filter(v => v.qty > 0).map(v => {
+      const ord = 'SB' + v.sym + v.date.replace(/\//g,''); 
+      return [v.date, '00:00:00', v.sym, v.name, '股票股利', Math.floor(v.qty), 0, 0, ord, 0, 0, 0, '', '由股利寫回'];
+  });
+  if (!toUpsert.length) return;
+  const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
+  const data = (lastRow > 1) ? sh.getRange(2,1,lastRow-1,lastCol).getValues() : [];
+  const existing = new Map(); 
+  for (let r=0; r<data.length; r++) {
+      if (String(data[r][4]) === '股票股利') existing.set(String(data[r][8]).trim(), r + 2);
+  }
+  const toAppend = [];
+  toUpsert.forEach(row => {
+    const hit = existing.get(row[8]);
+    if (hit) sh.getRange(hit, 1, 1, row.length).setValues([row]); 
+    else toAppend.push(row);
+  });
+  if (toAppend.length) sh.getRange(sh.getLastRow()+1, 1, toAppend.length, toAppend[0].length).setValues(toAppend);
+}
+
+function fetchFinMind_Dividends_(stockId, token, yearFromStr) {
+  const url = 'https://api.finmindtrade.com/api/v4/data';
+  const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+  const qs = ['dataset=TaiwanStockDividend','data_id='+stockId,'start_date='+(new Date().getFullYear()-12)+'-01-01'].join('&');
+  const resp = UrlFetchApp.fetch(url+'?'+qs, { muteHttpExceptions:true, headers });
+  if (resp.getResponseCode() !== 200) return [];
+  const json = JSON.parse(resp.getContentText('utf-8'));
+  const rows = Array.isArray(json.data) ? json.data : [];
+  const norm = rows.map(normalizeFinMindDividendRow_).filter(Boolean);
+  const byKey = new Map();
+
+  norm.forEach(r=>{
+    // 計算現金 (盈餘+公積)
+    const cash = r.cash_from_earnings + r.cash_from_statutory;
+    
+    // === 強制忽略股票股利 (設為 0) ===
+    const stockRaw = 0; 
+
+    // 若該次只有配股(無現金)且被我們歸零了，就直接略過不處理
+    // 除非有現金發放日(代表可能有現金)
+    const exDate = (cash>0 ? r.exDate_cash : '') || r.exDate_stock || '';
+    if (!exDate && cash<=0) return;
+
+    const key = [r.stockId, exDate].join('|');
+    
+    if (!byKey.has(key)) byKey.set(key, { 
+      stockId:r.stockId, 
+      stockName:r.stockName, 
+      exDate, 
+      payDate:r.payDate_cash, 
+      cashPerShare:0, 
+      stockPerShareRaw:0, // 這裡也強制 0
+      yearText:r.yearText 
+    });
+    
+    const cur = byKey.get(key);
+    cur.cashPerShare += cash; 
+    cur.stockPerShareRaw += 0; // 這裡也強制 +0
+  });
+
+  const yFrom = yearFromStr ? String(yearFromStr) : null;
+  
+  return Array.from(byKey.values()).map(v=>{
+    // 年份邏輯：優先用發放日，沒有才用除息日
+    let dateForYear = v.payDate || v.exDate;
+    let year = dateForYear ? dateForYear.slice(0,4) : (v.yearText ? String(v.yearText).match(/(\d{4})/)[1] : '');
+
+    return { 
+      stockId:v.stockId, 
+      stockName:v.stockName, 
+      year, 
+      exDate:v.exDate, 
+      payDate:v.payDate, 
+      cashPerShare:round2_(v.cashPerShare), 
+      stockPerShareRaw:0, // 強制回傳 0
+      stockPerShare:0     // 強制回傳 0
+    };
+  }).filter(v => !yFrom || v.year >= yFrom).sort((a,b)=> (a.exDate||'').localeCompare(b.exDate||''));
+}
+
+function normalizeFinMindDividendRow_(o) {
+  if (!o) return null;
+  const pickNum = (k) => { const n=Number(String(o[k]||'').replace(/[^\d.\-]/g,'')); return isFinite(n)?n:0; };
+  return {
+    stockId: o.stock_id, stockName: o.stock_name || o.company_name, yearText: o.year,
+    exDate_cash: toYMDslash_(o.CashExDividendTradingDate), exDate_stock: toYMDslash_(o.StockExDividendTradingDate),
+    payDate_cash: toYMDslash_(o.CashDividendPaymentDate),
+    cash_from_earnings: pickNum('CashEarningsDistribution'), cash_from_statutory: pickNum('CashStatutorySurplus'),
+    stock_from_earnings: pickNum('StockEarningsDistribution'), stock_from_statutory: pickNum('StockStatutorySurplus')
+  };
+}
+
+function avgBuyOnDate_(sym, cutoffDate, openRows, tradeRows) {
+  const lots = [];
+  openRows.forEach(r=>{
+    if (String(r['股票代碼']).trim()===sym) lots.push({ buyDate:toYMDslash_(r['買進日期'])||'1900/01/01', price:Number(r['買入價']), qty:Math.round(Number(r['持有股數'])) });
+  });
+  const tx = tradeRows.filter(r => String(r['股票代碼']).trim()===sym && toYMDslash_(r['成交日期'])<=cutoffDate)
+    .map(r => ({ date:toYMDslash_(r['成交日期']), side:String(r['成交類別']), qty:Math.round(Number(r['股數'])), px:Number(r['成交價']) }));
+  
+  for (const x of tx) {
+    if (x.side.includes('沖')) continue;
+    if (isStockBonusSide_(x.side)) lots.push({ buyDate:x.date, price:0, qty:x.qty });
+    else if (x.side.includes('買')) lots.push({ buyDate:x.date, price:x.px, qty:x.qty });
+    else if (x.side.includes('賣')) {
+      let remain = x.qty; lots.sort((a,b)=>a.buyDate.localeCompare(b.buyDate));
+      for (let i=0; i<lots.length && remain>0; i++){
+        const take = Math.min(lots[i].qty, remain);
+        lots[i].qty -= take; remain -= take;
+      }
+    }
+  }
+  const qtySum = lots.reduce((s,l)=>s+Math.max(0,l.qty),0);
+  return qtySum>0 ? round2_(lots.reduce((s,l)=>s+l.price*Math.max(0,l.qty),0)/qtySum) : 0;
+}
+
+/**
+ * 已實現損益（增量模式）
+ * - 若《已實現損益》已有資料，只計算最新賣出日之後的新賣單並追加
+ * - 若工作表為空，執行完整重建
+ * - 想強制完整重建：手動清空《已實現損益》工作表後再執行
+ */
+function rebuildRealizedPnL_FIFO(fullRebuild) {
+  const C = getCfg_();
+  const ss = getSS_();
+  const shOpen = ensureSheetWithHeader_(C.SHEET_OPENING, []);
+  const shT    = ensureSheetWithHeader_(C.SHEET_TRADES, []);
+  const HEADERS = ['股票代碼','股票名稱','買進日期','股數','買進單價','買進成本','賣出日期','賣出單價','賣出總金額','買進手續費','賣出手續費','交易稅','淨獲利','股利','含息報酬','含息報酬率(%)','持有天數','每天獲利金額'];
+  const out = ensureSheetWithHeader_(C.SHEET_REALIZED, HEADERS);
+  if (out.getLastRow() === 0) out.appendRow(HEADERS);
+
+  // 偵測舊格式（無「股利」欄），自動清空資料並更新表頭，強制完整重建
+  if (out.getLastRow() >= 1) {
+    const existingHdrs = out.getRange(1, 1, 1, out.getLastColumn()).getValues()[0].map(String);
+    if (!existingHdrs.includes('股利')) {
+      if (out.getLastRow() > 1) out.getRange(2, 1, out.getLastRow() - 1, out.getLastColumn()).clearContent();
+      out.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+      Logger.log('已實現損益：偵測到舊格式，已清空並更新表頭，執行完整重建');
+    }
+  }
+
+  // ★ 完整重建模式：先清空既有資料列（保留表頭），這樣下面「每股票各自最後
+  //   處理日期」會全部變成空白，等同於把所有股票的所有賣出都當成新的，
+  //   用目前的〈交易紀錄〉〈期初庫存〉〈股利狀況〉從頭整批重算一次。
+  if (fullRebuild && out.getLastRow() > 1) {
+    out.getRange(2, 1, out.getLastRow() - 1, out.getLastColumn()).clearContent();
+    Logger.log('已實現損益：完整重建模式，已清空既有資料，重新計算全部歷史');
+  }
+
+  // 載入股利資料：code -> [{exDate, cashPerShare}]
+  const divMap = new Map();
+  const shDiv = ss.getSheetByName(C.SHEET_DIV || '股利狀況');
+  if (shDiv && shDiv.getLastRow() > 1) {
+    readTableAsObjects_(shDiv).forEach(r => {
+      const sym    = String(r['股票代碼'] || '').trim();
+      const exDate = toYMDslash_(r['除息日'] || '');
+      const cash   = Number(r['現金股利 (元/股)'] || 0);
+      if (sym && exDate && cash > 0) {
+        if (!divMap.has(sym)) divMap.set(sym, []);
+        divMap.get(sym).push({ exDate, cash });
+      }
+    });
+  }
+
+  // 找出「每支股票各自」已處理的最新賣出日期
+  // ★ 修正：原本用整張表（所有股票混在一起）算出單一個 lastDate，
+  //   會導致某支股票只要比較晚才有賣出紀錄被寫入，其他股票只要賣出日期比它舊，
+  //   就會被「快進」邏輯永遠當成已處理過而跳過、永遠不會產生已實現損益列。
+  //   改成「每支股票代碼各自記錄自己的最後處理日期」，股票之間互不影響。
+  // ★ 當沖列的持有天數固定是 0（一般賣出最少 1 天），不列入一般賣出的游標，
+  //   改用「股票|日期」記錄哪些當沖已經寫過，避免重複寫入。
+  const lastDateBySym = new Map();
+  const doneDayTradeKeys = new Set();
+  if (out.getLastRow() > 1) {
+    const existingRows = out.getRange(2, 1, out.getLastRow() - 1, 17).getValues(); // 股票代碼(1) ~ 持有天數(17)
+    existingRows.forEach(r => {
+      const sym = String(r[0] || '').trim();
+      const d   = toYMDslash_(String(r[6] || ''));
+      if (!sym || !d) return;
+      if (r[16] === 0 || r[16] === '0') { doneDayTradeKeys.add(sym + '|' + d); return; }
+      const prev = lastDateBySym.get(sym);
+      if (!prev || d > prev) lastDateBySym.set(sym, d);
+    });
+  }
+
+  const allTx = readTableAsObjects_(shT).map(r => ({
+    sym: String(r['股票代碼']).trim(), name: String(r['股票名稱']).trim(),
+    date: toYMDslash_(r['成交日期']), time: normTime_(r['成交時間']),
+    price: Number(r['成交價']), qty: Number(r['股數']), amount: Number(r['成交金額']),
+    fee: Number(r['手續費']), tax: Number(r['交易稅']), side: String(r['成交類別'])
+  })).filter(x => x.sym && x.date && x.qty > 0);
+
+  // 從期初庫存 + 所有買進建立 queue
+  const buyQueues = buildBuyQueuesFromOpeningAndTrades_R4_(shOpen, shT);
+
+  const sells = allTx.filter(x => x.side.includes('賣') && !isDayLoopSide_(x.side))
+    .sort((a, b) => a.sym.localeCompare(b.sym) || a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+
+  // 依股票代碼分組，各自用「自己的」lastDate 判斷：
+  // 早於等於自己 lastDate 的賣出只用來墊 queue 狀態（快進，不產生新列）；
+  // 晚於自己 lastDate 的賣出才是「新賣出」，會產生已實現損益列。
+  const rows = [];
+  let newCount = 0, ffCount = 0;
+  let j = 0;
+  while (j < sells.length) {
+    const sym = sells[j].sym;
+    const group = [];
+    while (j < sells.length && sells[j].sym === sym) { group.push(sells[j]); j++; }
+    const q = buyQueues.get(sym) || [];
+    const symLastDate = lastDateBySym.get(sym) || '';
+
+    group.forEach(sell => {
+      const isNew = !symLastDate || sell.date > symLastDate;
+      if (isNew) newCount++; else ffCount++;
+
+      let remain = sell.qty;
+      let sellFeeLeft = round2_(sell.fee || R4_calcFee_(sell.amount));
+      let sellTaxLeft = round2_(sell.tax || R4_calcTax_(sell.side, sell.amount));
+      while (remain > 0) {
+        while (q.length && q[0].remainQty <= 0) q.shift();
+        if (!q.length) break;
+        const lot  = q[0];
+        const part = Math.min(remain, lot.remainQty);
+
+        if (isNew) {
+          const buyCost    = round2_(lot.buyPrice * part);
+          const buyFeePart = round2_(lot.buyFeePerShare * part);
+          const sellGross  = round2_(sell.price * part);
+          let sFee = round2_(sellFeeLeft * (part / sell.qty));
+          let sTax = round2_(sellTaxLeft * (part / sell.qty));
+          if (part === remain) { sFee = sellFeeLeft; sTax = sellTaxLeft; }
+          sellFeeLeft -= sFee; sellTaxLeft -= sTax;
+          const pnl  = round2_(sellGross - buyCost - buyFeePart - sFee - sTax);
+          const days = Math.max(1, daysBetween_R4_(lot.buyDate, sell.date));
+          // 計算持有期間股利：除息日在 [buyDate, sellDate] 之間的每股現金股利 × 本筆股數
+          let divInPeriod = 0;
+          (divMap.get(sym) || []).forEach(d => {
+            if (d.exDate >= lot.buyDate && d.exDate <= sell.date) divInPeriod += d.cash * part;
+          });
+          divInPeriod = round2_(divInPeriod);
+          const totalReturn    = round2_(pnl + divInPeriod);
+          const totalReturnPct = buyCost > 0 ? round2_((totalReturn / buyCost) * 100) : '';
+          rows.push([sym, lot.name || sell.name, lot.buyDate, part, lot.buyPrice, buyCost,
+                     sell.date, sell.price, sellGross, buyFeePart, sFee, sTax, pnl,
+                     divInPeriod, totalReturn, totalReturnPct, days, round2_(pnl / days)]);
+        }
+
+        lot.remainQty -= part; remain -= part;
+      }
+      if (q.length === 0 && remain > 0.001) {
+        if (isNew) {
+          Logger.log(`⚠ [Warning] 已實現損益：${sell.date} ${sym} 賣出 ${remain} 股時庫存不足，這筆（或其中一部分）不會產生已實現損益列，請檢查〈期初庫存〉或〈交易紀錄〉是否漏記買進`);
+        } else {
+          Logger.log(`⚠ [Warning] 已實現損益快進：${sell.date} ${sym} 賣出 ${remain} 股時庫存不足（已忽略短缺部分）`);
+        }
+      }
+    });
+  }
+
+  const dayRows = buildDayTradePnLRows_(allTx, doneDayTradeKeys);
+  rows.push(...dayRows);
+
+  if (rows.length) {
+    const startRow = out.getLastRow() + 1;
+    out.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
+    out.getRange(startRow, 16, rows.length, 1).setNumberFormat('0.0'); // 含息報酬率(%)
+  }
+  Logger.log(`已實現損益：新增 ${rows.length} 筆（其中當沖 ${dayRows.length} 筆；增量，每股票各自游標；快進處理 ${ffCount} 筆舊賣出、新處理 ${newCount} 筆）`);
+}
+
+/**
+ * 當沖損益：同一天、同一檔股票的「沖買」與「沖賣」互相配對（先買後賣、先賣後買都算）。
+ * 每組（股票＋日期）產生一列已實現損益；持有天數固定為 0，用來和一般賣出區分。
+ * 損益 = 沖賣金額 − 沖買金額 − 雙邊手續費 − 交易稅（當沖 0.15%）。
+ * skipKeys：已經寫過的「股票|日期」，增量模式下不重複寫入。
+ */
+function buildDayTradePnLRows_(allTx, skipKeys) {
+  const groups = new Map();
+  allTx.filter(x => isDayLoopSide_(x.side)).forEach(x => {
+    const key = x.sym + '|' + x.date;
+    if (!groups.has(key)) groups.set(key, { sym: x.sym, name: x.name, date: x.date, buys: [], sells: [] });
+    groups.get(key)[x.side.includes('買') ? 'buys' : 'sells'].push(x);
+  });
+
+  const sum = (arr, f) => arr.reduce((t, x) => t + f(x), 0);
+  const amt = x => x.amount || round2_(x.price * x.qty);
+  const rows = [];
+  [...groups.keys()].sort().forEach(key => {
+    if (skipKeys && skipKeys.has(key)) return;
+    const g = groups.get(key);
+    const buyQty = sum(g.buys, x => x.qty), sellQty = sum(g.sells, x => x.qty);
+    const qty = Math.min(buyQty, sellQty);
+    if (qty <= 0) {
+      Logger.log(`⚠ [Warning] 當沖：${g.date} ${g.sym} 只有${buyQty ? '沖買' : '沖賣'}、沒有另一邊可配對，略過`);
+      return;
+    }
+    if (buyQty !== sellQty)
+      Logger.log(`⚠ [Warning] 當沖：${g.date} ${g.sym} 沖買 ${buyQty} 股、沖賣 ${sellQty} 股不一致，只計算 ${qty} 股`);
+
+    const buyAmt  = sum(g.buys,  amt), sellAmt = sum(g.sells, amt);
+    const buyFee  = sum(g.buys,  x => x.fee || R4_calcFee_(amt(x)));
+    const sellFee = sum(g.sells, x => x.fee || R4_calcFee_(amt(x)));
+    const sellTax = sum(g.sells, x => x.tax || R4_calcTax_(x.side, amt(x)));
+    const rb = qty / buyQty, rs = qty / sellQty; // 兩邊股數不一致時按比例
+    const buyCost   = round2_(buyAmt * rb),  sellGross = round2_(sellAmt * rs);
+    const bFee      = round2_(buyFee * rb),  sFee = round2_(sellFee * rs), sTax = round2_(sellTax * rs);
+    const pnl = round2_(sellGross - buyCost - bFee - sFee - sTax);
+    const pct = buyCost > 0 ? round2_(pnl / buyCost * 100) : '';
+    rows.push([g.sym, g.name, g.date, qty, round2_(buyAmt / buyQty), buyCost,
+               g.date, round2_(sellAmt / sellQty), sellGross, bFee, sFee, sTax, pnl,
+               0, pnl, pct, 0, pnl]);
+  });
+  return rows;
+}
+
+/** ===== 診斷用：庫存缺口檢查 =====
+ * 依〈期初庫存〉起始股數 + 〈交易紀錄〉(排除當沖) 依時間順序模擬買賣，
+ * 找出「累計庫存第一次變成負數」的那一筆賣出——代表在這之前一定有買進
+ * (或期初持股) 沒有被記錄到，導致 FIFO 找不到對應批次可扣。
+ * 執行後在《庫存缺口檢查》分頁輸出：每檔股票第一次出現負庫存的日期、
+ * 歷史上最大的缺口股數（= 建議至少要補進〈期初庫存〉的股數），
+ * 以及依交易紀錄算到最後的目前庫存（可跟〈庫存紀錄〉現況互相對照）。
+ * 這是唯讀診斷，不會更動任何交易或庫存資料。
+ */
+function auditInventoryGaps_() {
+  const C = getCfg_();
+  const ss = getSS_();
+  const shT = ensureSheetWithHeader_(C.SHEET_TRADES, []);
+  const shOpen = ensureSheetWithHeader_(C.SHEET_OPENING, []);
+
+  const openingBySym = new Map();
+  readTableAsObjects_(shOpen).forEach(r => {
+    const sym = String(r['股票代碼'] || '').trim();
+    if (!sym) return;
+    const qty = Number(r['持有股數'] || 0);
+    openingBySym.set(sym, (openingBySym.get(sym) || 0) + qty);
+  });
+
+  const txAll = readTableAsObjects_(shT).map(r => ({
+    sym:  String(r['股票代碼'] || '').trim(),
+    name: String(r['股票名稱'] || '').trim(),
+    date: toYMDslash_(r['成交日期'] || ''),
+    time: normTime_(String(r['成交時間'] || '')),
+    side: String(r['成交類別'] || ''),
+    qty:  Number(r['股數'] || 0)
+  })).filter(x => x.sym && x.date && x.qty > 0 && !isDayLoopSide_(x.side));
+
+  txAll.sort((a, b) =>
+    a.sym.localeCompare(b.sym) || a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+
+  const bySym = new Map();
+  txAll.forEach(x => { if (!bySym.has(x.sym)) bySym.set(x.sym, []); bySym.get(x.sym).push(x); });
+
+  const report = [];
+  bySym.forEach((list, sym) => {
+    let bal = openingBySym.get(sym) || 0;
+    let minBal = bal, firstNegDate = '', firstNegQty = '', everNeg = false;
+    list.forEach(x => {
+      if (x.side.includes('買') || isStockBonusSide_(x.side)) {
+        bal += x.qty;
+      } else if (x.side.includes('賣')) {
+        bal -= x.qty;
+        if (bal < -0.001 && !everNeg) { everNeg = true; firstNegDate = x.date; firstNegQty = x.qty; }
+        if (bal < minBal) minBal = bal;
+      }
+    });
+    if (everNeg) {
+      report.push([sym, list[0].name, firstNegDate, firstNegQty, round2_(Math.abs(minBal)), round2_(bal)]);
+    }
+  });
+
+  const SHEET_NAME = '庫存缺口檢查';
+  let sh = ss.getSheetByName(SHEET_NAME);
+  if (sh) sh.clear(); else sh = ss.insertSheet(SHEET_NAME);
+  sh.appendRow(['股票代碼', '股票名稱', '第一次出現負庫存的賣出日期', '當筆賣出股數',
+                '建議至少補進期初庫存的股數', '依交易紀錄算到最後的目前庫存']);
+  sh.getRange(1, 1, 1, 6).setFontWeight('bold');
+  if (report.length) {
+    sh.getRange(2, 1, report.length, report[0].length).setValues(report);
+    sh.getRange(2, 1, report.length, 1).setNumberFormat('@');
+  }
+  Logger.log(`庫存缺口檢查：共 ${report.length} 檔股票在交易紀錄中出現過負庫存（可能漏記期初持股或配股），請看《${SHEET_NAME}》分頁。補期初庫存時，買進日期只要早於「第一次出現負庫存的賣出日期」即可。`);
+}
+
+function buildBuyQueuesFromOpeningAndTrades_R4_(shOpen, shT) {
+  const map = new Map();
+  
+  readTableAsObjects_(shOpen).forEach(r => {
+    const sym = String(r['股票代碼']).trim();
+    if (sym) {
+      if (!map.has(sym)) map.set(sym, []);
+      const qty = Number(r['持有股數']);
+      map.get(sym).push({
+        name: r['股票名稱'],
+        buyDate: toYMDslash_(r['買進日期']) || '1900/01/01',
+        buyPrice: Number(r['買入價']),
+        buyFeePerShare: Number(r['手續費']) / qty,
+        remainQty: Math.round(qty)
+      });
+    }
+  });
+
+  readTableAsObjects_(shT)
+    .filter(r => {
+      const side = String(r['成交類別']);
+      // ✅ 加入配股判斷
+      return (side.includes('買') || isStockBonusSide_(side)) && !isDayLoopSide_(side);
+    })
+    .forEach(x => {
+      const sym = String(x['股票代碼']).trim();
+      if (sym) {
+        if (!map.has(sym)) map.set(sym, []);
+        const qty = Number(x['股數']);
+        const isBonu = isStockBonusSide_(String(x['成交類別']));
+        map.get(sym).push({
+          name: x['股票名稱'],
+          buyDate: toYMDslash_(x['成交日期']),
+          buyPrice: isBonu ? 0 : Number(x['成交價']),       // 配股成本為 0
+          buyFeePerShare: isBonu ? 0 : Number(x['手續費']) / qty, // 配股手續費為 0
+          remainQty: Math.round(qty)
+        });
+      }
+    });
+
+  for (const arr of map.values())
+    arr.sort((a, b) => a.buyDate.localeCompare(b.buyDate));
+  
+  return map;
+}
+
+/** ===== 定期定額：從〈庫存紀錄〉複製並計算殖利率 =====
+ * 邏輯升級：
+ * 1. 讀取〈股利狀況〉建立快取 (代碼 -> [ {除息日, 現金股利}, ... ])
+ * 2. 針對每一筆 DCA 買進，計算「買進後累計領到的總股息」
+ * 3. 殖利率 = 累計總股息 / 總成本
+ */
+function appendDCAFromHoldings() {
+  const C = getCfg_();
+  const ss = getSS_();
+
+  // 1. 準備分頁
+  const shHold = ensureSheetWithHeader_(C.SHEET_HOLD, []);
+  // 🆕 修改表頭：加入「累計已領股息」與「個人殖利率(%)」
+  const shOut = ensureSheetWithHeader_(C.SHEET_DCA || '定期定額', [
+    '買入日期','股票代碼','股票名稱','成交價','股數',
+    '買入成本','手續費','總成本','累計已領股息','個人殖利率(%)'
+  ]);
+
+  // 2. 讀取並整理〈股利狀況〉資料 (用來查配息)
+  const divMap = new Map(); // Key: 股票代碼, Value: Array of { exDate, cash }
+  const shDiv = ss.getSheetByName(C.SHEET_DIV || '股利狀況');
+  if (shDiv && shDiv.getLastRow() > 1) {
+    const divRows = readTableAsObjects_(shDiv);
+    divRows.forEach(r => {
+      const sym = String(r['股票代碼']||'').trim();
+      const exDate = toYMDslash_(r['除息日']||'');
+      const cash = Number(r['現金股利 (元/股)']||0);
+      
+      if (sym && exDate && cash > 0) {
+        if (!divMap.has(sym)) divMap.set(sym, []);
+        divMap.get(sym).push({ exDate, cash });
+      }
+    });
+  }
+
+  // 3. 收集 DCA 設定 (DCA_1 ~ DCA_10)
+  const dcaConfigs = [];
+  for (let i=1; i<=10; i++){
+    const sym   = String(C[`DCA_${i}_SYMBOL`]||'').trim();
+    const start = toYMDslash_(C[`DCA_${i}_START`]||'');
+    const end   = toYMDslash_(C[`DCA_${i}_END`]||''); // 留空＝至今
+    if (sym && start) dcaConfigs.push({ sym, start, end });
+  }
+  if (dcaConfigs.length === 0) {
+    Logger.log('DCA：〈設定〉沒有可用的 DCA_* 組合');
+    return;
+  }
+
+  // 4. 讀取庫存紀錄 (來源)
+  const holdRows = readTableAsObjects_(shHold).map(r => ({
+    date: toYMDslash_(r['買進日期']||''),
+    sym:  String(r['股票代碼']||'').trim(),
+    name: String(r['股票名稱']||'').trim(),
+    px:   Number(r['買入價']||0),
+    qty:  Number(r['持有股數']||0),
+    fee:  Number(r['手續費']||0)
+  })).filter(r => r.sym && r.date && r.qty > 0);
+
+  // 5. 既有資料去重 (避免重複寫入)
+  const existed = new Set();
+  if (shOut.getLastRow() > 1) {
+    const data = shOut.getRange(2, 1, shOut.getLastRow()-1, 5).getValues(); // 只讀前5欄做key
+    data.forEach(r => {
+      // Key: 日期|代碼|單價|股數
+      const key = [toYMDslash_(r[0]), String(r[1]).trim(), round2_(Number(r[3]||0)), Math.round(Number(r[4]||0))].join('|');
+      existed.add(key);
+    });
+  }
+
+  const toAppend = [];
+  const inRange = (d, s, e) => (!s && !e) ? true : (s && !e) ? (d >= s) : (d >= s && d <= e);
+
+  // 6. 遍歷並計算
+  dcaConfigs.forEach(cfg => {
+    holdRows
+      .filter(r => r.sym === cfg.sym && inRange(r.date, cfg.start, cfg.end || null))
+      .forEach(r => {
+        const px  = round2_(r.px);
+        const qty = Math.round(r.qty);
+        const key = [r.date, r.sym, px, qty].join('|');
+
+        if (existed.has(key)) return; // 若已存在則跳過
+        existed.add(key); // 標記本次已處理
+
+        // 成本計算
+        const buyCost = round2_(px * qty);
+        const totalCost = round2_(buyCost + Math.round(r.fee));
+
+        // ★ 核心邏輯：計算這筆 DCA 領了多少股息
+        let totalReceivedDiv = 0;
+        const divs = divMap.get(r.sym) || [];
+        divs.forEach(d => {
+          // 如果「除息日」 >= 「買入日期」，代表這筆庫存有參與到除息
+          if (d.exDate >= r.date) {
+            totalReceivedDiv += (d.cash * qty);
+          }
+        });
+        totalReceivedDiv = Math.round(totalReceivedDiv);
+
+        // ★ 核心邏輯：殖利率 = 領到的總股息 / 總成本
+        const yieldPct = (totalCost > 0) ? round2_((totalReceivedDiv / totalCost) * 100) : 0;
+
+        toAppend.push([
+          r.date, 
+          r.sym, 
+          r.name, 
+          px, 
+          qty,
+          buyCost, 
+          Math.round(r.fee), 
+          totalCost,
+          totalReceivedDiv, // 🆕 累計已領股息
+          yieldPct          // 🆕 個人殖利率(%)
+        ]);
+      });
+  });
+
+  // 7. 寫入
+  if (toAppend.length) {
+    const startRow = shOut.getLastRow() + 1;
+    shOut.getRange(startRow, 1, toAppend.length, toAppend[0].length).setValues(toAppend);
+    
+    // 設定格式 (第10欄是殖利率)
+    shOut.getRange(startRow, 10, toAppend.length, 1).setNumberFormat("0.00");
+    // 設定格式 (第4,6,7,8,9欄是金額)
+    shOut.getRange(startRow, 4, toAppend.length, 6).setNumberFormat("#,##0");
+  }
+  
+  Logger.log(`DCA：追加 ${toAppend.length} 筆 (含殖利率計算)`);
+}
+function runDividendsFullCycle_() {
+  const props = getProps_();
+  const CUR_KEY = 'DIV_CURSOR';
+  if (props.getProperty(CUR_KEY) === null || props.getProperty(CUR_KEY) === '0') props.deleteProperty(CUR_KEY);
+  props.setProperty('DIV_CYCLE_ACTIVE', '1');
+  const startMs = Date.now();
+  try {
+    while (true) {
+      updateDividendsFromFinMind_SAFE();
+      const after = props.getProperty(CUR_KEY);
+      if (after === '0' || after === null) return;
+      if (Date.now() - startMs > 280000) {
+        getScriptApp_().newTrigger('runDividendsFullCycle_SAFE').timeBased().at(new Date(Date.now()+60000)).create();
+        return;
+      }
+      Utilities.sleep(500);
+    }
+  } finally { props.deleteProperty('DIV_CYCLE_ACTIVE'); }
+}
+
+function fixStockCodes_OneTime() {
+  const ss = getSS_();
+  ['交易紀錄', '庫存紀錄', '期初庫存'].forEach(sheetName => {
+    const sh = ss.getSheetByName(sheetName);
+    if (!sh || sh.getLastRow() < 2) return;
+    const rng = sh.getRange(2, 3, sh.getLastRow() - 1, 1);
+    rng.setNumberFormat('@');
+    const values = rng.getValues().map(r => {
+      const val = r[0];
+      if (!isNaN(val) && val !== '') {
+        const num = Number(val); const str = String(val).trim();
+        if (num < 100 && str.length < 4) return ["'" + ('0000' + num).slice(-4)];
+        if (num >= 100 && num < 1000 && str.length < 5) return ["'" + ('00000' + num).slice(-5)];
+        return [String(val)];
+      }
+      return [val];
+    });
+    rng.setValues(values);
+  });
+  Logger.log('🎉 代碼修復完成');
+}
+
+function tool_AuditBrokerInventory() {
+  const ss = getSS_();
+  const C = getCfg_();
+  let sh = ss.getSheetByName('【對帳】券商庫存比對');
+  if (sh) sh.clear(); else sh = ss.insertSheet('【對帳】券商庫存比對');
+  
+  const holdRows = readTableAsObjects_(ss.getSheetByName(C.SHEET_HOLD));
+  const map = new Map();
+  holdRows.forEach(r => {
+    let sym = String(r['股票代碼']).trim();
+    if(/^\d{1,3}$/.test(sym)) sym = sym.padStart(4,'0');
+    const qty = Number(r['持有股數']);
+    if (qty > 0) {
+        if(!map.has(sym)) map.set(sym, {name:r['股票名稱'], qty:0});
+        map.get(sym).qty += qty;
+    }
+  });
+  const out = Array.from(map.keys()).sort().map(k => [k, map.get(k).name, map.get(k).qty, '', '', '']);
+  sh.getRange(1,1,1,6).setValues([['股票代碼', '股票名稱', '系統總股數(A)', '券商實際股數(B)', '差異', '狀態']]).setFontWeight('bold').setBackground('#dad7cd');
+  if (out.length) {
+      sh.getRange(2,1,out.length,1).setNumberFormat('@');
+      sh.getRange(2,1,out.length,6).setValues(out);
+      sh.getRange(2,5,out.length,1).setFormulaR1C1('=IF(ISNUMBER(R[0]C[-1]), R[0]C[-1] - R[0]C[-2], "")');
+      sh.getRange(2,6,out.length,1).setFormulaR1C1('=IF(NOT(ISNUMBER(R[0]C[-2])), "請輸入", IF(R[0]C[-1]=0, "✅", "❌"))');
+  }
+}
+
+function cleanDuplicateDividends_OneTime() {
+  const ss = getSS_();
+  const sh = ss.getSheetByName('股利狀況');
+  if (!sh || sh.getLastRow()<2) return;
+  const data = sh.getRange(2,1,sh.getLastRow()-1,sh.getLastColumn()).getValues();
+  const seen = new Set(); const kept = [];
+  data.forEach(r => {
+      const key = `${r[0]}|${toYMDslash_(r[3])}`;
+      if(!seen.has(key)) { seen.add(key); kept.push(r); }
+  });
+  sh.getRange(2,1,sh.getLastRow()-1,sh.getLastColumn()).clearContent();
+  if(kept.length) sh.getRange(2,1,kept.length,kept[0].length).setValues(kept);
+  Logger.log(`清理完成，保留 ${kept.length} 筆`);
+}
+/* =========================================
+   補強漏掉的 R4 小工具 (請貼在檔案最下方)
+   ========================================= */
+
+function daysBetween_R4_(d1, d2) { 
+  const a = new Date(d1);
+  const b = new Date(d2); 
+  return Math.floor((b - a) / (24 * 3600 * 1000)); 
+}
+
+function R4_calcFee_(amount) {
+  if (!amount || amount <= 0) return 0;
+  const discount = (typeof getFeeDiscount_ === 'function') ? getFeeDiscount_() : 0.28;
+  const raw = amount * 1.425 / 1000 * discount;
+  return Math.max(1, Math.floor(raw));
+}
+
+function R4_calcTax_(sideText, amount) { 
+  const s = String(sideText || '').trim(); 
+  if (s.includes('現賣') || s === '賣') return Math.round(amount * 0.003); 
+  if (s.includes('沖賣')) return Math.round(amount * 0.0015); 
+  return 0; 
+}
+
+
+/**
+ * [庫存追蹤器 V2] 強制時間排序修正版
+ * 解決日期格式不一致導致的排序錯亂問題
+ */
+function debug_TraceStock_V2() {
+  // ▼▼▼ 請在這裡輸入要檢查的股票代碼 ▼▼▼
+  const TARGET_STOCK = '2330'; 
+  // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+  const ss = getSS_();
+  const shOpen = ss.getSheetByName('期初庫存');
+  const shTrade = ss.getSheetByName('交易紀錄');
+  const logs = [];
+
+  logs.push(`🔍 開始追蹤股票：【${TARGET_STOCK}】 (時間邏輯修正版)`);
+
+  // 讀取資料通用函式
+  const getRows = (sh) => {
+    if (!sh || sh.getLastRow() < 2) return [];
+    const raw = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+    const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    return raw.map(r => {
+      const o = {};
+      headers.forEach((h, i) => o[String(h).trim()] = r[i]);
+      return o;
+    });
+  };
+
+  const openRows = getRows(shOpen);
+  const tradeRows = getRows(shTrade);
+
+  // === 1. 建立期初庫存 ===
+  const inventory = new Map(); // Key: Broker, Value: Qty
+  
+  openRows.forEach(r => {
+    const sym = String(r['股票代碼']).trim();
+    if (sym === TARGET_STOCK) {
+      const qty = Number(r['持有股數']);
+      const broker = String(r['證券商'] || '預設').trim();
+      if (!inventory.has(broker)) inventory.set(broker, 0);
+      inventory.set(broker, inventory.get(broker) + qty);
+      logs.push(`[期初] 發現庫存：${qty} 股 | 券商：[${broker}]`);
+    }
+  });
+
+  // === 2. 整理與標準化交易紀錄 ===
+  // 輔助函式：將各種格式的日期轉為標準 Date 物件
+  const parseDateTime = (d, t) => {
+    let dateObj;
+    if (d instanceof Date) {
+      dateObj = new Date(d);
+    } else {
+      // 嘗試解析字串 "2023/01/01" 或 "2023-01-01"
+      dateObj = new Date(String(d).replace(/\-/g, '/'));
+    }
+    
+    // 處理時間
+    let timeStr = "00:00:00";
+    if (t instanceof Date) {
+      // 如果時間欄位是 Date 物件 (Google Sheet 常見情況)，提取時分秒
+      timeStr = Utilities.formatDate(t, 'GMT+8', 'HH:mm:ss');
+    } else if (t) {
+      timeStr = String(t).trim();
+    }
+    
+    // 合併
+    const dateStr = Utilities.formatDate(dateObj, 'GMT+8', 'yyyy/MM/dd');
+    return {
+      fullTime: new Date(`${dateStr} ${timeStr}`).getTime(), // 轉成毫秒數，絕對準確
+      displayDate: dateStr,
+      displayTime: timeStr
+    };
+  };
+
+  const txs = tradeRows.filter(r => String(r['股票代碼']).trim() === TARGET_STOCK)
+    .map(r => {
+      const dt = parseDateTime(r['成交日期'], r['成交時間']);
+      return {
+        ts: dt.fullTime,          // 排序用的毫秒數
+        dateStr: dt.displayDate,  // 顯示用的日期
+        timeStr: dt.displayTime,  // 顯示用的時間
+        type: String(r['成交類別']).trim(),
+        qty: Number(r['股數']),
+        broker: String(r['證券商'] || '預設').trim(),
+        rowNum: r['__ROW_NUM__'] // 若有需要除錯行號
+      };
+    });
+
+  // === 3. 強力排序 (依照毫秒數) ===
+  txs.sort((a, b) => a.ts - b.ts);
+
+  // === 4. 逐筆模擬 ===
+  logs.push(`\n--- 開始模擬交易流程 (依時間戳記排序) ---`);
+  
+  txs.forEach(tx => {
+    const key = tx.broker;
+    let currentQty = inventory.get(key) || 0;
+    
+    const isBuy = tx.type.includes('買') || tx.type.includes('股利') || tx.type.includes('配股');
+    const isSell = tx.type.includes('賣');
+
+    if (tx.type.includes('沖')) {
+       // logs.push(`⏭️ [跳過] ${tx.dateStr} (當沖)`);
+       return;
+    }
+
+    if (isBuy) {
+      currentQty += tx.qty;
+      inventory.set(key, currentQty);
+      logs.push(`➕ [買入] ${tx.dateStr} ${tx.timeStr} | +${tx.qty} | 券商:[${key}] | 結餘: ${currentQty}`);
+    } 
+    else if (isSell) {
+      if (currentQty < tx.qty) {
+        logs.push(`❌❌❌ [賣出失敗] ${tx.dateStr} ${tx.timeStr} | 要賣 ${tx.qty} | 券商:[${key}] | 庫存剩: ${currentQty}`);
+        logs.push(`    ⚠️ 庫存不足！請檢查這一天之前的買入紀錄是否正確？`);
+        // 檢查是否有別家券商有貨
+        let otherHas = false;
+        inventory.forEach((q, k) => {
+          if (k !== key && q > 0) {
+             logs.push(`    💡 提示：券商 [${k}] 還有 ${q} 股，但無法跨券商扣抵。`);
+             otherHas = true;
+          }
+        });
+        if(!otherHas) logs.push(`    💡 提示：所有券商都沒有庫存了。`);
+        
+        // 強制扣到負數繼續模擬
+        currentQty -= tx.qty;
+        inventory.set(key, currentQty);
+      } else {
+        currentQty -= tx.qty;
+        inventory.set(key, currentQty);
+        logs.push(`➖ [賣出] ${tx.dateStr} ${tx.timeStr} | -${tx.qty} | 券商:[${key}] | 結餘: ${currentQty}`);
+      }
+    } 
+    else {
+      logs.push(`❓ [無視] ${tx.dateStr} 類別:[${tx.type}]`);
+    }
+  });
+
+  // 輸出結果
+  const result = logs.join('\n');
+  Logger.log(result);
+  SpreadsheetApp.getUi().showModalDialog(
+    SpreadsheetApp.createHtmlOutput(`<textarea style="width:100%; height:400px; font-family:monospace;">${result}</textarea>`).setWidth(600).setHeight(500),
+    '庫存追蹤報告 V2'
+  );
+}
+
+
+/**
+ * [工具] 強力清除〈股利狀況〉重複資料
+ * 邏輯：以「股票代碼 + 除息日」為唯一鍵值 (Key)
+ * 修正：強化代碼 (補零/轉字串) 與 日期格式 (統一轉 yyyy/MM/dd) 的比對能力
+ */
+function cleanDuplicateDividends_Safe() {
+  const ss = getSS_();
+  const sh = ss.getSheetByName('股利狀況');
+  
+  if (!sh || sh.getLastRow() < 2) {
+    Logger.log('❌ 找不到〈股利狀況〉分頁或無資料。');
+    return;
+  }
+
+  // 1. 讀取所有資料
+  const lastRow = sh.getLastRow();
+  const lastCol = sh.getLastColumn();
+  const range = sh.getRange(2, 1, lastRow - 1, lastCol);
+  const data = range.getValues();
+  
+  const seen = new Set();
+  const kept = [];
+  let duplicateCount = 0;
+
+  // 2. 輔助函式：標準化代碼 (去除空白, 轉字串, 若是純數字補滿4位)
+  const normSym = (v) => {
+    let s = String(v || '').trim();
+    if (/^\d{1,3}$/.test(s)) s = ('0000' + s).slice(-4); // 50 -> 0050
+    return s;
+  };
+
+  // 3. 遍歷並篩選
+  data.forEach(row => {
+    // 欄位索引：0=代碼, 3=除息日
+    const sym = normSym(row[0]);
+    const dateRaw = row[3];
+    
+    // 如果代碼或除息日是空的，視為無效行，暫時保留或略過 (這裡選擇保留以免誤刪手動資料)
+    if (!sym || !dateRaw) {
+      kept.push(row);
+      return;
+    }
+
+    // 標準化日期
+    const dateStr = toYMDslash_(dateRaw);
+    
+    // 產生唯一 Key: "00878|2023/08/16"
+    const key = `${sym}|${dateStr}`;
+
+    if (seen.has(key)) {
+      duplicateCount++;
+      // 發現重複！跳過此行，不加入 kept 陣列
+    } else {
+      seen.add(key);
+      kept.push(row);
+    }
+  });
+
+  // 4. 如果有發現重複，才執行寫入
+  if (duplicateCount > 0) {
+    // 清空舊資料
+    range.clearContent();
+    
+    // 寫入去重後的資料
+    if (kept.length > 0) {
+      sh.getRange(2, 1, kept.length, kept[0].length).setValues(kept);
+      
+      // 順便修復格式：股票代碼欄位設為純文字
+      sh.getRange(2, 1, kept.length, 1).setNumberFormat('@');
+    }
+    
+    const msg = `✅ 清理完成！移除了 ${duplicateCount} 筆重複的股利資料，保留 ${kept.length} 筆。`;
+    Logger.log(msg);
+    SpreadsheetApp.getUi().alert(msg);
+  } else {
+    const msg = '🎉 檢查完畢，沒有發現重複資料。';
+    Logger.log(msg);
+    SpreadsheetApp.getUi().alert(msg);
+  }
+}
+
+/**
+ * [工具] 全域股票代碼修復 (修正版：區分 4碼 與 5碼 ETF)
+ * 適用範圍：交易紀錄、待確認交易、庫存紀錄、期初庫存、股利狀況、已實現損益、定期定額
+ * 可安全從排程（無 UI 環境）呼叫：結尾的 getUi().alert 包了 try/catch，沒有 UI 時只會跳過彈窗，
+ * 不會讓整個排程失敗；訊息一律會寫進 Logger.log。
+ */
+function fixStockCodes_Global() {
+  const ss = getSS_();
+
+  const targets = [
+    { name: '交易紀錄', col: 3 },
+    { name: '待確認交易', col: 3 },
+    { name: '庫存紀錄', col: 1 },
+    { name: '期初庫存', col: 1 },
+    { name: '股利狀況', col: 1 },
+    { name: '已實現損益', col: 1 },
+    { name: '定期定額', col: 2 }
+  ];
+
+  let totalFixed = 0;
+
+  targets.forEach(t => {
+    const sh = ss.getSheetByName(t.name);
+    if (!sh || sh.getLastRow() < 2) return;
+
+    const lastRow = sh.getLastRow();
+    const range = sh.getRange(2, t.col, lastRow - 1, 1);
+    const values = range.getValues();
+    let hasChange = false;
+
+    const newValues = values.map(r => {
+      let val = String(r[0]).trim();
+      
+      // 檢查是否為 1~3 位數的純數字
+      if (/^\d{1,3}$/.test(val)) {
+        const num = Number(val);
+        
+        // ★ 修正邏輯：
+        // 1. 如果是 2 位數或更少 (如 50, 56, 8) -> 視為 00xx (4碼)
+        if (num < 100) {
+           val = ('0000' + num).slice(-4);
+        } 
+        // 2. 如果是 3 位數 (如 878, 929, 940) -> 視為 00xxx (5碼)
+        else {
+           val = ('00000' + num).slice(-5);
+        }
+
+        hasChange = true;
+        totalFixed++;
+        return [val]; 
+      }
+      
+      // ★ 二次檢查：如果是錯誤的 0878 (4碼且0開頭，但應該是5碼的ETF)
+      // 邏輯：如果是 "0" 開頭，且長度為 4，且轉數字後大於等於 100 (例如 "0878" -> 878)
+      // 這代表它應該要是 00878
+      if (val.length === 4 && val.startsWith('0') && Number(val) >= 100) {
+         val = '0' + val; // 0878 -> 00878
+         hasChange = true;
+         totalFixed++;
+         return [val];
+      }
+
+      return [val];
+    });
+
+    if (hasChange) {
+      range.setNumberFormat('@'); // 強制純文字
+      range.setValues(newValues);
+      Logger.log(`✅ 已修復 [${t.name}] 的股票代碼格式`);
+    }
+  });
+
+  const msg = totalFixed > 0
+    ? `🎉 修復完成！共修正了 ${totalFixed} 筆代碼 (含 00878 修正)。`
+    : `👍 檢查完畢，代碼格式皆正確。`;
+
+  Logger.log(msg);
+  // 從排程（時間觸發器）呼叫時沒有試算表 UI，getUi() 會直接拋錯，
+  // 用 try/catch 包起來：手動執行時仍會跳彈窗，排程執行時就靜默略過、只留 log。
+  try { SpreadsheetApp.getUi().alert(msg); } catch (e) { /* 無 UI 環境（排程），略過彈窗 */ }
+  return totalFixed;
+}
+
+/**
+ * [手動修復用] 把所有相關分頁裡，股票代碼欄「完全等於 oldCode」的值，一次性改成 newCode。
+ * 用在少數已經發生過的既有代碼寫錯資料需要一次性修正時（例如 00981A 曾被舊版 Gmail 解析
+ * 邏輯誤判成「名稱」、截斷成 00981，字母 A 不見了）。修復範圍跟 fixStockCodes_Global 一樣，
+ * 外加《股票代碼對照表》。之後同一支股票就不會再錯了（root cause 已在解析邏輯修好），
+ * 這支只是拿來清掉「修好之前」已經寫進表格裡的舊錯誤資料。
+ */
+function fixSpecificCode_ONCE(oldCode, newCode) {
+  if (!oldCode || !newCode) { Logger.log('請提供 oldCode 與 newCode'); return; }
+  const ss = getSS_();
+  const targets = [
+    { name: '交易紀錄', col: 3 },
+    { name: '待確認交易', col: 3 },
+    { name: '庫存紀錄', col: 1 },
+    { name: '期初庫存', col: 1 },
+    { name: '股利狀況', col: 1 },
+    { name: '已實現損益', col: 1 },
+    { name: '定期定額', col: 2 },
+    { name: '股票代碼對照表', col: 1 },
+  ];
+  let totalFixed = 0;
+  targets.forEach(t => {
+    const sh = ss.getSheetByName(t.name);
+    if (!sh || sh.getLastRow() < 2) return;
+    const lastRow = sh.getLastRow();
+    const range = sh.getRange(2, t.col, lastRow - 1, 1);
+    const values = range.getValues();
+    let changed = false;
+    const newValues = values.map(r => {
+      const val = String(r[0]).trim();
+      if (val === oldCode) { changed = true; totalFixed++; return [newCode]; }
+      return [val];
+    });
+    if (changed) {
+      range.setNumberFormat('@');
+      range.setValues(newValues);
+      Logger.log(`✅ 已在 [${t.name}] 把「${oldCode}」修正為「${newCode}」`);
+    }
+  });
+  const msg = totalFixed > 0
+    ? `🎉 完成！共修正 ${totalFixed} 筆「${oldCode}」→「${newCode}」。`
+    : `👍 沒有找到需要修正的「${oldCode}」。`;
+  Logger.log(msg);
+  try { SpreadsheetApp.getUi().alert(msg); } catch (e) { /* 無 UI 環境，略過彈窗 */ }
+  return totalFixed;
+}
+// 專門修這次回報的案例：00981（被截斷，缺字母 A）→ 00981A。
+// 在 GAS 編輯器的函式下拉選單選這支直接執行即可，不用自己輸入參數。
+function fixSpecificCode_00981A_ONCE() { return fixSpecificCode_ONCE('00981', '00981A'); }
+
+/**
+ * 確保《股票代碼對照表》存在。這張表是「我實際會買賣的股票」清單，只放代碼＋名稱兩欄，
+ * 用途有三個：
+ *   1. 給交易紀錄／待確認交易的「股票代碼」欄掛下拉選單驗證（見 setupStockCodeValidation_ONCE）
+ *   2. 給 Gmail 解析（ingestFromGmail_*）當作最優先、最權威的名稱→代碼對照來源
+ *   3. 給 fillMissingStockCodes_ 用來把缺代碼的列，依「股票名稱」補回代碼
+ * 第一次建立時，會自動從既有的交易紀錄／期初庫存／庫存紀錄掃出目前已經在用的代碼＋名稱，
+ * 當作起始內容。之後買進新股票，不需要自己手動來加這張表——每天的 dailyDataMaintenance_
+ * 會透過 learnNewCodesIntoRefSheet_ 自動把交易紀錄裡出現的新代碼學進來；你也可以隨時自己
+ * 手動加一行，兩者不衝突（自動學習只會新增、不會蓋掉你手動加/改過的列）。
+ */
+function ensureStockCodeRefSheet_() {
+  const ss = getSS_();
+  let sh = ss.getSheetByName('股票代碼對照表');
+  if (sh) return sh;
+
+  sh = ss.insertSheet('股票代碼對照表');
+  sh.getRange(1, 1, 1, 2).setValues([['股票代碼', '股票名稱']])
+    .setFontWeight('bold').setBackground('#344e41').setFontColor('white');
+  sh.setFrozenRows(1);
+  sh.setColumnWidth(1, 100);
+  sh.setColumnWidth(2, 160);
+
+  // 首次建立時，從既有資料自動掃出目前有在用的代碼＋名稱，當作起始清單
+  const map = new Map(); // code -> name
+  const learn = (sheetName) => {
+    const s = ss.getSheetByName(sheetName);
+    if (!s || s.getLastRow() < 2) return;
+    readSheetAsObjects_(s).forEach(r => {
+      const c = String(r['股票代碼'] || '').trim();
+      const n = String(r['股票名稱'] || '').trim().replace(/\s+/g, '');
+      if (c && n && isValidStockCode_(c) && !map.has(c)) map.set(c, n);
+    });
+  };
+  const C = getCfg_();
+  learn(C.SHEET_TRADES);
+  learn(C.SHEET_OPENING);
+  learn(C.SHEET_HOLD);
+
+  const rows = Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  if (rows.length) {
+    sh.getRange(2, 1, rows.length, 1).setNumberFormat('@');
+    sh.getRange(2, 1, rows.length, 2).setValues(rows);
+  }
+  Logger.log(`✅ 已建立《股票代碼對照表》，從既有資料帶入 ${rows.length} 筆起始資料。`);
+  return sh;
+}
+
+/**
+ * 依《股票代碼對照表》，把 交易紀錄／待確認交易 裡「股票代碼空白、但股票名稱對得到表裡」的列自動補上代碼。
+ * 這個解決的是跟 fixStockCodes_Global（修「格式錯」如 50→0050）不同的另一種問題：
+ * 代碼欄位「完全是空的」——通常發生在 Gmail 解析到一支從沒出現過的新股票時。
+ * 只要你在《股票代碼對照表》裡有登記這支股票的代碼＋名稱，這裡就會自動幫你補上去。
+ */
+function fillMissingStockCodes_() {
+  const ss = getSS_();
+  const shRef = ss.getSheetByName('股票代碼對照表');
+  if (!shRef || shRef.getLastRow() < 2) return 0;
+
+  const nameToCode = new Map();
+  shRef.getRange(2, 1, shRef.getLastRow() - 1, 2).getValues().forEach(r => {
+    const c = String(r[0] || '').trim();
+    const n = String(r[1] || '').trim().replace(/\s+/g, '');
+    if (c && n) nameToCode.set(n, c);
+  });
+  if (!nameToCode.size) return 0;
+
+  const targets = ['待確認交易', '交易紀錄'];
+  let filled = 0;
+
+  targets.forEach(sheetName => {
+    const sh = ss.getSheetByName(sheetName);
+    if (!sh || sh.getLastRow() < 2) return;
+
+    const lastRow  = sh.getLastRow();
+    const lastCol  = sh.getLastColumn();
+    const headers  = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h || '').trim());
+    const codeCol  = headers.indexOf('股票代碼');
+    const nameCol  = headers.indexOf('股票名稱');
+    if (codeCol < 0 || nameCol < 0) return;
+
+    const codeVals = sh.getRange(2, codeCol + 1, lastRow - 1, 1).getValues();
+    const nameVals = sh.getRange(2, nameCol + 1, lastRow - 1, 1).getValues();
+    let changed = false;
+
+    for (let i = 0; i < codeVals.length; i++) {
+      const code = String(codeVals[i][0] || '').trim();
+      const name = String(nameVals[i][0] || '').trim().replace(/\s+/g, '');
+      if (!code && name && nameToCode.has(name)) {
+        codeVals[i][0] = nameToCode.get(name);
+        changed = true;
+        filled++;
+      }
+    }
+    if (changed) {
+      sh.getRange(2, codeCol + 1, lastRow - 1, 1).setNumberFormat('@').setValues(codeVals);
+      Logger.log(`✅ 已在 [${sheetName}] 依名稱補上 ${filled} 筆缺漏的股票代碼`);
+    }
+  });
+
+  return filled;
+}
+
+/**
+ * 讓《股票代碼對照表》自己學會新股票，不用每次都手動去那張表加一行。
+ * 掃描 交易紀錄／期初庫存／庫存紀錄裡「代碼是純數字、名稱不為空」的乾淨資料列，
+ * 把對照表裡還沒有的代碼＋名稱補進去（append，不覆蓋既有列——你在對照表手動改過的
+ * 名稱不會被蓋掉，只會新增全新的代碼）。
+ * 注意：這解決的是「同一支股票之後不用再手動登記」，不是「憑空生出從沒出現過的代碼」——
+ * 一支全新股票第一次從 Gmail 解析進來、又剛好回報信只有名稱沒有代碼時，你還是得在
+ * 待確認交易／交易紀錄裡手動補一次正確代碼（本來確認交易時就會做的事），之後這支就會
+ * 被這裡自動學進對照表，不用再手動維護第二次。
+ */
+function learnNewCodesIntoRefSheet_() {
+  const ss = getSS_();
+  const shRef = ensureStockCodeRefSheet_();
+
+  const known = new Set();
+  if (shRef.getLastRow() > 1) {
+    shRef.getRange(2, 1, shRef.getLastRow() - 1, 1).getValues().forEach(r => {
+      const c = String(r[0] || '').trim();
+      if (c) known.add(c);
+    });
+  }
+
+  const newMap = new Map(); // code -> name，這次新發現、對照表裡還沒有的
+  const learnFrom = (sheetName) => {
+    const s = ss.getSheetByName(sheetName);
+    if (!s || s.getLastRow() < 2) return;
+    readSheetAsObjects_(s).forEach(r => {
+      const c = String(r['股票代碼'] || '').trim();
+      const n = String(r['股票名稱'] || '').trim().replace(/\s+/g, '');
+      if (!c || !n || !isValidStockCode_(c)) return; // 只採信代碼形狀合法、名稱不為空的乾淨資料
+      if (!known.has(c) && !newMap.has(c)) newMap.set(c, n);
+    });
+  };
+  const C = getCfg_();
+  learnFrom(C.SHEET_TRADES);
+  learnFrom(C.SHEET_OPENING);
+  learnFrom(C.SHEET_HOLD);
+
+  if (!newMap.size) return 0;
+
+  const rows = Array.from(newMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  const startRow = shRef.getLastRow() + 1;
+  shRef.getRange(startRow, 1, rows.length, 1).setNumberFormat('@');
+  shRef.getRange(startRow, 1, rows.length, 2).setValues(rows);
+  Logger.log(`✅ 《股票代碼對照表》自動學到 ${rows.length} 筆新股票代碼：${rows.map(r => r[0] + ' ' + r[1]).join('、')}`);
+  return rows.length;
+}
+
+/**
+ * 每日資料維護：先讓對照表自己學新代碼，再依對照表補缺代碼（依名稱），
+ * 最後修格式錯的代碼（如 50→0050）。
+ * 排程順序：ingestFromGmail_Plaintext(18:00) → rebuildAll_B(18:30) →
+ *           dailyDataMaintenance(18:45，這裡) → rebuildRealizedPnL_FIFO(19:00)
+ * 這樣當天新解析／新確認的交易，代碼會在重算已實現損益之前就先清乾淨。
+ */
+function dailyDataMaintenance_() {
+  ensureStockCodeRefSheet_();
+  const learned = learnNewCodesIntoRefSheet_();
+  const filled  = fillMissingStockCodes_();
+  const fixed   = fixStockCodes_Global();
+  Logger.log(`📋 每日資料維護完成：對照表自動學到新代碼 ${learned} 筆、補上缺代碼 ${filled} 筆、修正代碼格式 ${fixed} 筆。`);
+  // 順便確保月報排程存在（舊使用者不用重跑 setupAllSuggestedTriggers_SAFE）
+  try { ensureMonthlyReportTrigger_(); } catch (e) { Logger.log('月報排程檢查失敗：' + e.message); }
+}
+
+/**
+ * [一次性設定] 在《股票代碼對照表》不存在時先建立它，然後把「交易紀錄」「待確認交易」的
+ * 股票代碼欄掛上下拉選單驗證，選項就是《股票代碼對照表》A欄目前的內容。
+ * 用 setAllowInvalid(true)：手動打字打了清單以外的代碼，Sheets 只會顯示小紅色警告三角形提示，
+ * 不會硬擋輸入（Gmail 解析／App 手動新增這些走程式寫入的路徑，本來就不受資料驗證影響）。
+ * 之後買了新股票，對照表會由每日排程（learnNewCodesIntoRefSheet_）自動長出新的一行，
+ * 下拉選單也會跟著自動包含新選項；完全不需要重新執行這個函式或改任何驗證設定——
+ * 只有在你想擴大驗證涵蓋的列數範圍時才需要重跑。
+ */
+function setupStockCodeValidation_ONCE() {
+  const ss = getSS_();
+  const shRef = ensureStockCodeRefSheet_();
+
+  const REF_ROWS = 2000; // 對照表預留的列數空間，未來新增股票代碼都算在這個範圍內
+  const refRange = shRef.getRange(2, 1, REF_ROWS, 1); // 股票代碼對照表 A2:A2001
+
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInRange(refRange, true)
+    .setAllowInvalid(true)
+    .setHelpText('請從《股票代碼對照表》挑選股票代碼；買了新股票的話，先去那張表加一行代碼＋名稱')
+    .build();
+
+  const TARGET_ROWS = 3000; // 交易紀錄／待確認交易套用驗證的列數範圍
+  const targets = [
+    { name: '交易紀錄', col: 3 },
+    { name: '待確認交易', col: 3 },
+  ];
+  targets.forEach(t => {
+    const sh = ss.getSheetByName(t.name);
+    if (!sh) return;
+    sh.getRange(2, t.col, TARGET_ROWS, 1).setDataValidation(rule);
+  });
+
+  Logger.log('✅ 已在「交易紀錄」「待確認交易」的股票代碼欄掛上下拉選單（對照《股票代碼對照表》）。');
+}
+
+/* =========================================
+   Part 5: 系統初始化與註冊 (分發專用)
+   ========================================= */
+
+/**
+ * API: 檢查系統是否已初始化 (是否有帳號存在)
+ * 回傳: { initialized: boolean }
+ */
+function api_checkSystemStatus() {
+  const ss = getSS_();
+  const sh = ss.getSheetByName('帳號管理'); // 或是您原本設定的 User Sheet 名稱
+  
+  // 如果分頁不存在，或只有標題列(沒有內容)，視為未初始化
+  if (!sh || sh.getLastRow() < 2) {
+    return { initialized: false };
+  }
+  return { initialized: true };
+}
+
+/**
+ * API: 註冊第一個管理員 (只在系統未初始化時允許執行)
+ */
+function api_registerFirstUser(id, pwd) {
+  const status = api_checkSystemStatus();
+  if (status.initialized) {
+    return { ok: false, msg: '系統已初始化，禁止註冊。請直接登入。' };
+  }
+
+  if (!id || !pwd) return { ok: false, msg: '帳號密碼不能為空' };
+
+  const ss = getSS_();
+  let sh = ss.getSheetByName('帳號管理');
+  
+  // 如果分頁不存在，自動建立
+  if (!sh) {
+    sh = ss.insertSheet('帳號管理');
+    // 建立表頭: ID, Password, Name, Role
+    sh.appendRow(['ID', 'Password', 'Name', 'Role']);
+  }
+
+  // 寫入第一個使用者 (Admin)
+  // 欄位順序: ID, Password, Name, Role
+  sh.appendRow([id, pwd, 'Admin', 'admin']);
+
+  return { ok: true, msg: '初始化成功！請使用新帳號登入。' };
+}
+
+
+/* =========================================
+   Part 6: 手動工具
+   ========================================= */
+
+// api_getSettingsSchema 與 api_saveSettings 已移至 WebAPI.js，此處不重複定義
+
+/** @deprecated 已移至 WebAPI.js */
+function api_getSettingsSchema_UNUSED_() {
+  const C = getCfg_(); // 讀取目前的設定值
+  
+  // 定義前端顯示的結構 (Schema)
+  const schema = [
+    // --- 第一組：核心與安全 ---
+    {
+      header: '核心與安全',
+      group: '基本資料',
+      items: [
+        { key: 'ID_NUMBER', label: '身分證字號 (解鎖PDF用)', placeholder: 'A123456789' },
+        { key: 'CLOUD_RUN_URL', label: 'Cloud Run 解鎖服務網址', placeholder: 'https://...' },
+        { key: 'TZ', label: '系統時區', placeholder: 'Asia/Taipei', disabled: true }
+      ]
+    },
+
+    // --- 第二組：Gmail 自動擷取 ---
+    {
+      header: 'Gmail 擷取設定',
+      group: '信件標籤與範圍',
+      items: [
+        { key: 'GMAIL_LABEL_PDF', label: 'PDF 電子對帳單標籤', placeholder: 'Stock_PDF' },
+        { key: 'GMAIL_LABEL_HTML', label: 'HTML 成交回報標籤', placeholder: 'Stock_Text' },
+        { key: 'GMAIL_QUERY_DAYS', label: '每次往回抓取天數', type: 'number', placeholder: '7' }
+      ]
+    },
+
+    // --- 第三組：券商與費率 ---
+    {
+      header: '券商與費率',
+      group: '預設券商',
+      items: [
+        { key: 'BROKER_DEFAULT_NAME', label: '主要券商名稱', placeholder: '國泰證券' },
+        { key: 'FEE_DISCOUNT', label: '主要手續費折數 (0~1)', type: 'number', placeholder: '0.28' }
+      ]
+    },
+    {
+      group: '第二券商 (選填)',
+      items: [
+        { key: 'BROKER_2_KEYWORD', label: '判定關鍵字 (如: 統一)', placeholder: '統一' },
+        { key: 'BROKER_2_NAME', label: '顯示名稱', placeholder: '統一證券' },
+        { key: 'BROKER_2_DISCOUNT', label: '手續費折數', type: 'number', placeholder: '0.6' }
+      ]
+    },
+
+    // --- 第四組：股利設定 ---
+    {
+      header: '股利與 FinMind',
+      group: '股利參數',
+      items: [
+        { key: 'FINMIND_TOKEN', label: 'FinMind API Token', placeholder: '選填，增加抓取額度' },
+        { key: 'DIV_YEAR_FROM', label: '抓取起始年份', type: 'number', placeholder: '2015' },
+        { key: 'DIV_CASH_FEE_PER_PAYOUT', label: '匯費 (每筆扣除)', type: 'number', placeholder: '10' },
+        { key: 'DIV_STOCK_BONUS_TO_TRADES', label: '配股是否回寫交易紀錄', type: 'select', options: ['TRUE', 'FALSE'] }
+      ]
+    },
+    {
+      group: '進階控制',
+      items: [
+        { key: 'DIV_THROTTLE_MS', label: 'API 間隔 (毫秒)', type: 'number', placeholder: '1000' },
+        { key: 'DIV_SYMBOLS_PER_RUN', label: '每次更新檔數', type: 'number', placeholder: '10' }
+      ]
+    },
+
+    // --- 第五組：通知設定 ---
+    {
+      header: '系統通知',
+      group: 'Email 通知',
+      items: [
+        { key: 'ALERT_ENABLED', label: '啟用錯誤通知', type: 'select', options: ['TRUE', 'FALSE'] },
+        { key: 'ALERT_TO', label: '接收通知的 Email', placeholder: 'your@email.com' }
+      ]
+    },
+    
+    // --- 第六組：資料表名稱 (進階) ---
+    {
+      header: '資料表名稱 (進階)',
+      group: '分頁名稱設定 (修改請謹慎)',
+      items: [
+        { key: 'SHEET_TRADES', label: '交易紀錄分頁' },
+        { key: 'SHEET_HOLD', label: '庫存紀錄分頁' },
+        { key: 'SHEET_DIV', label: '股利狀況分頁' },
+        { key: 'SHEET_REALIZED', label: '已實現損益分頁' },
+        { key: 'SHEET_DCA', label: '定期定額分頁' }
+      ]
+    }
+  ];
+
+  // --- 第七組：DCA 設定 (動態生成 1~10) ---
+  const dcaItems = [];
+  for (let i = 1; i <= 5; i++) { 
+    dcaItems.push({ key: `DCA_${i}_NAME`, label: `[DCA ${i}] 股票名稱`, placeholder: '如: 國泰永續高股息' });
+    dcaItems.push({ key: `DCA_${i}_SYMBOL`, label: `[DCA ${i}] 股票代碼`, placeholder: '00878' });
+    dcaItems.push({ key: `DCA_${i}_START`, label: `[DCA ${i}] 開始日期`, type: 'text', placeholder: 'YYYY/MM/DD' });
+  }
+  
+  schema.push({
+    header: '定期定額設定 (DCA)',
+    group: '投資標的 (前5組)',
+    items: dcaItems
+  });
+
+  return { ok: true, schema: schema, values: C };
+}
+
+/** @deprecated 已移至 WebAPI.js */
+function api_saveSettings_UNUSED_(newSettings) {
+  const ss = getSS_();
+  const sh = ss.getSheetByName('設定');
+  if (!sh) return { ok: false, msg: '找不到設定分頁' };
+
+  const lastRow = sh.getLastRow();
+  const data = sh.getRange(2, 1, lastRow - 1, 2).getValues(); 
+
+  const newData = data.map(row => {
+    const key = String(row[0]).trim();
+    if (newSettings.hasOwnProperty(key)) {
+      return [row[0], String(newSettings[key])];
+    }
+    return row;
+  });
+
+  sh.getRange(2, 1, newData.length, 2).setValues(newData);
+  return { ok: true, msg: '設定已儲存！部分設定可能需要重新執行排程才能生效。' };
+}
+
+
+
+/**
+ * [手動工具] 依指定日期區間擷取 Gmail 交易紀錄 → 寫入獨立分頁
+ * 使用方式：修改下方三個參數後，在編輯器執行此函式
+ */
+function ingestFromGmail_ByDateRange() {
+  // ▼▼▼ 修改這三個參數 ▼▼▼
+  const START_DATE  = '2026/01/01';   // 起始日（含）YYYY/MM/DD
+  const END_DATE    = '2026/03/31';   // 結束日（含）YYYY/MM/DD
+  const OUTPUT_SHEET = '查詢結果';    // 輸出分頁名稱（不存在會自動建立）
+  // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+  const HEADERS = [
+    '成交日期','成交時間','股票代碼','股票名稱','成交類別',
+    '股數','成交價','成交金額','委託單號','手續費','交易稅','淨收付金額','備註'
+  ];
+
+  const C  = getCfg_();
+  const ss = getSS_();
+  const tz = C.TZ || 'Asia/Taipei';
+
+  // --- 準備輸出分頁（每次清空重建）---
+  let shOut = ss.getSheetByName(OUTPUT_SHEET);
+  if (shOut) {
+    shOut.clear();
+  } else {
+    shOut = ss.insertSheet(OUTPUT_SHEET);
+  }
+  shOut.appendRow(HEADERS);
+  shOut.getRange(1, 1, 1, HEADERS.length).setFontWeight('bold').setBackground('#cfe2f3');
+  shOut.setFrozenRows(1);
+
+  // --- Gmail 搜尋日期參數 ---
+  // Gmail 的 before 不含當天，所以要 +1 天
+  const afterStr = START_DATE.replace(/\//g, '/');
+  const beforeStr = (() => {
+    const d = new Date(END_DATE.replace(/\//g, '-'));
+    d.setDate(d.getDate() + 1);
+    const y = d.getFullYear();
+    const m = ('0' + (d.getMonth() + 1)).slice(-2);
+    const dd = ('0' + d.getDate()).slice(-2);
+    return `${y}/${m}/${dd}`;
+  })();
+
+  Logger.log(`📅 擷取範圍：${START_DATE} ～ ${END_DATE} → 輸出至〈${OUTPUT_SHEET}〉`);
+
+  // --- 建立名稱對照表 ---
+  const nameToCodeMap = new Map();
+  const dcaWhitelist  = new Set();
+  for (let i = 1; i <= 10; i++) {
+    const sym = String(C[`DCA_${i}_SYMBOL`] || '').trim();
+    const nm  = String(C[`DCA_${i}_NAME`]   || '').trim().replace(/\s+/g, '');
+    if (sym) { dcaWhitelist.add(sym); if (nm) nameToCodeMap.set(nm, sym); }
+  }
+  // ★ 改用「依欄位名稱」讀取，避免期初庫存／庫存紀錄（股票代碼在第1欄）跟交易紀錄
+  //    （股票代碼在第3欄）欄位序號不同、寫死序號讀錯欄位的問題
+  learnSymNameFromSheet_(ss, C.SHEET_TRADES, nameToCodeMap);
+  learnSymNameFromSheet_(ss, C.SHEET_OPENING, nameToCodeMap);
+  learnSymNameFromSheet_(ss, C.SHEET_HOLD, nameToCodeMap);
+  learnSymNameFromSheet_(ss, C.SHEET_STAGING || '待確認交易', nameToCodeMap, true);
+  learnSymNameFromSheet_(ss, '股票代碼對照表', nameToCodeMap, true, true);
+
+  let parsed = [];
+
+// --- 抓 PDF 信件 ---
+  const labelPdf = (C.GMAIL_LABEL_PDF || '').trim();
+  if (labelPdf) {
+    const qPdf = `label:${labelPdf} after:${afterStr} before:${beforeStr} has:attachment`;
+    Logger.log(`[PDF] 搜尋：${qPdf}`);
+    const threads = GmailApp.search(qPdf, 0, 50);
+    Logger.log(`[PDF] 找到 ${threads.length} 個對話串`);
+
+    // 先把所有 PDF 附件收集起來
+    const allPdfs = [];
+    threads.forEach(t => t.getMessages().forEach(m => {
+      m.getAttachments().forEach(att => {
+        if (att.getContentType() === 'application/pdf' || att.getName().toLowerCase().endsWith('.pdf')) {
+          allPdfs.push({ att, subject: m.getSubject() });
+        }
+      });
+    }));
+
+    Logger.log(`[PDF] 共找到 ${allPdfs.length} 個 PDF，開始逐一處理...`);
+
+    // 逐一處理，每個之間等待
+    for (let i = 0; i < allPdfs.length; i++) {
+      const { att, subject } = allPdfs[i];
+
+      if (i > 0) {
+        Logger.log(`⏳ 等待 10 秒 (${i}/${allPdfs.length})...`);
+        Utilities.sleep(10000);
+      }
+
+      try {
+        Logger.log(`[PDF] 處理第 ${i+1}/${allPdfs.length}：${subject}`);
+        const rawTable = callCloudRunToUnlock_(att, C.ID_NUMBER);
+        const rows = parseCloudRunData_(rawTable, tz);
+        const kept = [];
+        rows.forEach(r => {
+          let sym = r[2];
+          if (isNaN(Number(sym)) && nameToCodeMap.has(sym)) { sym = nameToCodeMap.get(sym); r[2] = sym; }
+          kept.push(r);
+        });
+        if (kept.length) {
+          parsed = parsed.concat(kept);
+          Logger.log(`[PDF] ✅ ${subject} → ${kept.length} 筆`);
+        }
+      } catch (e) {
+        Logger.log(`[PDF] ❌ 失敗 (${subject})：${e.message}`);
+      }
+    }
+  }
+
+  // --- 抓 HTML 信件 ---
+  const labelHtml = (C.GMAIL_LABEL_HTML || '').trim();
+  if (labelHtml) {
+    const qHtml = `label:${labelHtml} after:${afterStr} before:${beforeStr}`;
+    Logger.log(`[HTML] 搜尋：${qHtml}`);
+    const threads = GmailApp.search(qHtml, 0, 50);
+    Logger.log(`[HTML] 找到 ${threads.length} 個對話串`);
+
+    threads.forEach(t => t.getMessages().forEach(m => {
+      const html = m.getBody();
+      const body = m.getPlainBody();
+      let rows = parseBrokerMailHTMLTable_CN_(html, m, tz);
+      if (!rows.length) rows = parseBrokerMailPlainTable_CN_(body, m, tz);
+      if (rows.length) parsed = parsed.concat(rows);
+    }));
+  }
+
+  // --- 合併同委託單號 ---
+  const consolidated = consolidateByOrderNo_(parsed);
+
+  // --- 去重（同一次查詢內不重複）---
+  const seenOrder = new Set();
+  const seenNoOrd = new Set();
+  const toWrite   = [];
+
+  for (const r of consolidated) {
+    const sym = String(r[2] || '').trim();
+    const ord = normOrderNo_(r[8]);
+    if (ord) {
+      const k = makeKey_Order_(r[0], ord, sym);
+      if (seenOrder.has(k)) continue;
+      seenOrder.add(k); toWrite.push(r);
+    } else {
+      const k = makeKey_NoOrder_(r);
+      if (seenNoOrd.has(k)) continue;
+      seenNoOrd.add(k); toWrite.push(r);
+    }
+  }
+
+  // --- 寫入輸出分頁 ---
+  if (toWrite.length) {
+    const startRow = shOut.getLastRow() + 1;
+    shOut.getRange(startRow, 3, toWrite.length, 1).setNumberFormat('@'); // 股票代碼純文字
+    shOut.getRange(startRow, 9, toWrite.length, 1).setNumberFormat('@'); // 委託單號純文字
+    shOut.getRange(startRow, 1, toWrite.length, toWrite[0].length).setValues(toWrite);
+    shOut.autoResizeColumns(1, HEADERS.length);
+  }
+
+  // --- 在分頁第一行加上查詢說明 ---
+  // 插入一列說明在標題上方
+  shOut.insertRowBefore(1);
+  shOut.getRange(1, 1, 1, 4).setValues([[
+    `查詢區間：${START_DATE} ～ ${END_DATE}`,
+    `共 ${toWrite.length} 筆`,
+    `執行時間：${Utilities.formatDate(new Date(), tz, 'yyyy/MM/dd HH:mm:ss')}`,
+    ''
+  ]]);
+  shOut.getRange(1, 1, 1, HEADERS.length)
+    .setBackground('#f9cb9c')
+    .setFontWeight('bold');
+  shOut.setFrozenRows(2); // 說明列 + 表頭都凍結
+
+  const msg = `✅ 完成！${START_DATE} ～ ${END_DATE}，共 ${toWrite.length} 筆 → 已寫入〈${OUTPUT_SHEET}〉`;
+  Logger.log(msg);
+  SpreadsheetApp.getUi().alert(msg);
+}
+
+/***** =======================
+ * 月報：每月 1 號寄上個月的摘要 Email
+ * ======================== */
+
+var MONTHLY_SHEET_   = '月報紀錄';
+var MONTHLY_HEADERS_ = ['月份','產生時間','持股市值','持股成本','未實現損益','已實現損益','領到股利','收入合計'];
+var APP_URL_         = 'https://danveloper99.github.io/finance-dashboard/';
+
+/** 排程入口：每月 1 號寄「上個月」月報（《設定》MONTHLY_REPORT_ENABLED = FALSE 時不寄） */
+function monthlyReport_SAFE() {
+  return runWithAlert_(() => {
+    const C = getCfg_();
+    if (String(C.MONTHLY_REPORT_ENABLED || 'TRUE').toUpperCase() === 'FALSE') {
+      Logger.log('月報已停用（MONTHLY_REPORT_ENABLED = FALSE）');
+      return;
+    }
+    const tz = C.TZ || 'Asia/Taipei';
+    const now = new Date();
+    const y = Number(Utilities.formatDate(now, tz, 'yyyy'));
+    const m = Number(Utilities.formatDate(now, tz, 'M'));
+    return sendMonthlyReport_(m === 1 ? y - 1 : y, m === 1 ? 12 : m - 1);
+  }, 'monthlyReport');
+}
+
+/** 殼程式版本：舊版殼程式沒有 monthlyReport_SAFE，不能幫它建立月報排程 */
+function canScheduleMonthlyReport_() {
+  return !SCRIPT_APP_ || Number(SHELL_VERSION_) >= 2;
+}
+
+/** 依《設定》確保月報排程存在（每天的資料維護會順便呼叫） */
+function ensureMonthlyReportTrigger_() {
+  if (!canScheduleMonthlyReport_()) return;
+  const C = getCfg_();
+  const enabled = String(C.MONTHLY_REPORT_ENABLED || 'TRUE').toUpperCase() !== 'FALSE';
+  const app = getScriptApp_();
+  const existing = app.getProjectTriggers().filter(t => t.getHandlerFunction() === 'monthlyReport_SAFE');
+  if (enabled && !existing.length) {
+    app.newTrigger('monthlyReport_SAFE').timeBased().onMonthDay(1).atHour(8).inTimezone(C.TZ || 'Asia/Taipei').create();
+    Logger.log('📅 已建立月報排程（每月 1 號 8 點）');
+  } else if (!enabled && existing.length) {
+    existing.forEach(t => app.deleteTrigger(t));
+    Logger.log('📅 已移除月報排程');
+  }
+}
+
+/** 產生並寄出某年某月的月報，回傳 { to, subject } */
+function sendMonthlyReport_(year, month) {
+  const C  = getCfg_();
+  const to = String(C.ALERT_TO || '').trim();
+  if (!to) throw new Error('《設定》的「通知 Email」（ALERT_TO）沒有填，無法寄月報');
+  const data = buildMonthlyReport_(year, month);
+  const subject = `【你不理財】${year} 年 ${month} 月月報`;
+  MailApp.sendEmail({ to, subject, htmlBody: renderMonthlyReportHtml_(data) });
+  saveMonthlySnapshot_(data);
+  Logger.log(`📨 已寄出 ${subject} → ${to}`);
+  return { to, subject };
+}
+
+/** 各種日期格式 → 'yyyy/MM/dd'（Date 物件也可以） */
+function reportYMD_(v, tz) {
+  if (v instanceof Date) return Utilities.formatDate(v, tz || 'Asia/Taipei', 'yyyy/MM/dd');
+  return toYMDslash_(v);
+}
+
+/** 收集月報需要的所有數字 */
+function buildMonthlyReport_(year, month) {
+  const C  = getCfg_();
+  const ss = getSS_();
+  const tz = C.TZ || 'Asia/Taipei';
+  const mm     = ('0' + month).slice(-2);
+  const ym     = `${year}/${mm}`;
+  const nextYm = month === 12 ? `${year + 1}/01` : `${year}/${('0' + (month + 1)).slice(-2)}`;
+  const inMonth = v => reportYMD_(v, tz).slice(0, 7) === ym;
+  const rows = name => { const sh = name && ss.getSheetByName(name); return sh ? readTableAsObjects_(sh) : []; };
+  const num = v => { const n = Number(v); return isFinite(n) ? n : 0; };
+  const label = r => `${String(r['股票代碼'] || '').trim()} ${String(r['股票名稱'] || '').trim()}`.trim();
+
+  // 一、已實現損益（含當沖：持有天數 = 0）
+  const realRows = rows(C.SHEET_REALIZED);
+  const realMonth = realRows.filter(r => inMonth(r['賣出日期']));
+  const realized = realMonth.reduce((s, r) => s + num(r['淨獲利']), 0);
+  const dayTradePnl = realMonth.filter(r => r['持有天數'] === 0 || r['持有天數'] === '0').reduce((s, r) => s + num(r['淨獲利']), 0);
+  const bySym = new Map();
+  realMonth.forEach(r => {
+    const k = label(r);
+    const o = bySym.get(k) || { name: k, qty: 0, pnl: 0, cost: 0 };
+    o.qty += num(r['股數']); o.pnl += num(r['淨獲利']); o.cost += num(r['買進成本']);
+    bySym.set(k, o);
+  });
+  const realizedList = [...bySym.values()]
+    .map(o => ({ ...o, pct: o.cost > 0 ? o.pnl / o.cost * 100 : null }))
+    .sort((a, b) => b.pnl - a.pnl);
+
+  // 年初至今收入（已實現 + 領到股利，算到這個月底）
+  const ytd = v => { const d = reportYMD_(v, tz); return d.slice(0, 4) === String(year) && d.slice(0, 7) <= ym; };
+  const ytdRealized = realRows.filter(r => ytd(r['賣出日期'])).reduce((s, r) => s + num(r['淨獲利']), 0);
+
+  // 四、股利：依「現金股利發放日」算實際入帳
+  const divRows = rows(C.SHEET_DIV);
+  const divAmt = r => num(r['實際領取金額 (扣除每筆手續費10元)']);
+  const divMonth = divRows.filter(r => inMonth(r['現金股利發放日']) && divAmt(r) > 0)
+    .map(r => ({ name: label(r), amount: divAmt(r), date: reportYMD_(r['現金股利發放日'], tz) }));
+  const dividends = divMonth.reduce((s, d) => s + d.amount, 0);
+  const divNext = divRows.filter(r => reportYMD_(r['現金股利發放日'], tz).slice(0, 7) === nextYm && divAmt(r) > 0)
+    .map(r => ({ name: label(r), amount: divAmt(r), date: reportYMD_(r['現金股利發放日'], tz) }));
+  const ytdDividends = divRows.filter(r => ytd(r['現金股利發放日'])).reduce((s, r) => s + divAmt(r), 0);
+
+  // 二、交易摘要
+  const tradeRows = rows(C.SHEET_TRADES).filter(r => inMonth(r['成交日期']));
+  const isDay = r => isDayLoopSide_(r['成交類別']);
+  const side  = r => String(r['成交類別'] || '');
+  const tAmt  = r => num(r['成交金額']) || num(r['成交價']) * num(r['股數']);
+  const buys  = tradeRows.filter(r => !isDay(r) && side(r).includes('買'));
+  const sells = tradeRows.filter(r => !isDay(r) && side(r).includes('賣'));
+  const dayKeys = new Set(tradeRows.filter(isDay).map(r => `${r['股票代碼']}|${reportYMD_(r['成交日期'], tz)}`));
+  const trades = {
+    buyCount: buys.length,   buyAmount: buys.reduce((s, r) => s + tAmt(r), 0),
+    sellCount: sells.length, sellAmount: sells.reduce((s, r) => s + tAmt(r), 0),
+    dayTradeCount: dayKeys.size,
+    feeTax: tradeRows.reduce((s, r) => s + num(r['手續費']) + num(r['交易稅']), 0),
+  };
+
+  // 五、持股（寄送當下的價格；1 號早上寄 ≈ 上個月最後一個交易日收盤價）
+  const holdMap = new Map();
+  rows(C.SHEET_HOLD).forEach(r => {
+    const k = label(r); if (!String(r['股票代碼'] || '').trim()) return;
+    const qty = num(r['持有股數']), cost = num(r['買入成本 (單純買入價*股數)']);
+    const px = num(r['現價']);
+    const o = holdMap.get(k) || { name: k, qty: 0, cost: 0, value: 0 };
+    o.qty += qty; o.cost += cost; o.value += px > 0 ? qty * px : cost;
+    holdMap.set(k, o);
+  });
+  const holdings = [...holdMap.values()].filter(h => h.qty > 0.1).sort((a, b) => b.value - a.value);
+  const marketValue = holdings.reduce((s, h) => s + h.value, 0);
+  const holdCost    = holdings.reduce((s, h) => s + h.cost, 0);
+  const top5 = holdings.slice(0, 5).map(h => ({
+    ...h, share: marketValue > 0 ? h.value / marketValue * 100 : 0, pct: h.cost > 0 ? (h.value - h.cost) / h.cost * 100 : null,
+  }));
+
+  // 上個月的月報紀錄（比較市值用）
+  const prevYm = month === 1 ? `${year - 1}/12` : `${year}/${('0' + (month - 1)).slice(-2)}`;
+  const prevSnap = rows(MONTHLY_SHEET_).find(r => String(r['月份']).trim() === prevYm) || null;
+
+  // 六、定期定額（欄位名稱新舊版都相容）
+  const pick = (r, keys) => { for (const k of keys) if (r[k] !== undefined && r[k] !== '') return r[k]; return ''; };
+  const dcaTotal = r => num(pick(r, ['總成本', '總成本 (=買入成本+手續費)'])) || num(r['成交價']) * num(r['股數']);
+  const dcaAll = rows(C.SHEET_DCA || '定期定額').filter(r => String(r['股票代碼'] || '').trim());
+  const groupDca = list => {
+    const m = new Map();
+    list.forEach(r => {
+      const k = label(r);
+      const o = m.get(k) || { name: k, sym: String(r['股票代碼']).trim(), count: 0, qty: 0, gross: 0, cost: 0, div: 0 };
+      o.count += 1; o.qty += num(r['股數']); o.gross += num(r['成交價']) * num(r['股數']);
+      o.cost += dcaTotal(r); o.div += num(r['累計已領股息']);
+      m.set(k, o);
+    });
+    return [...m.values()].sort((a, b) => b.cost - a.cost);
+  };
+  // 本月扣款：每檔的股數、成交均價、金額
+  const dcaMonthItems = groupDca(dcaAll.filter(r => inMonth(r['買入日期'])))
+    .map(o => ({ ...o, avgPrice: o.qty > 0 ? o.gross / o.qty : 0 }));
+  // 目前持有：均價（含手續費）、現價、未實現、報酬率、累計已領股息（與 App 定期定額頁同算法）
+  const priceBySym = new Map();
+  rows(C.SHEET_HOLD).forEach(r => { const px = num(r['現價']); if (px > 0) priceBySym.set(String(r['股票代碼']).trim(), px); });
+  const dcaHoldItems = groupDca(dcaAll).map(o => {
+    const px = priceBySym.get(o.sym) || 0;
+    const value = px > 0 ? o.qty * px : null;
+    return { ...o, avgCost: o.qty > 0 ? o.cost / o.qty : 0, price: px || null, value,
+             unrealized: value == null ? null : value - o.cost,
+             pct: value == null || o.cost <= 0 ? null : (value - o.cost) / o.cost * 100 };
+  });
+  const dca = {
+    count: dcaMonthItems.reduce((s, o) => s + o.count, 0), amount: dcaMonthItems.reduce((s, o) => s + o.cost, 0),
+    monthItems: dcaMonthItems, holdItems: dcaHoldItems,
+    holdCost: dcaHoldItems.reduce((s, o) => s + o.cost, 0),
+    holdUnrealized: dcaHoldItems.reduce((s, o) => s + (o.unrealized || 0), 0),
+    holdDiv: dcaHoldItems.reduce((s, o) => s + o.div, 0),
+  };
+
+  // 七、待辦提醒
+  const pending = rows(C.SHEET_STAGING || '待確認交易').filter(r => !r['確認狀態'] || r['確認狀態'] === '待確認').length;
+  const errors  = rows(C.ALERT_LOG_SHEET || '錯誤通知紀錄').filter(r => inMonth(r['時間'])).length;
+  const wealthDates = rows('資產快照明細').concat(rows('資產快照')).map(r => reportYMD_(r['記錄日期'], tz)).filter(Boolean).sort();
+  const lastWealth = wealthDates[wealthDates.length - 1] || '';
+  const wealthDays = lastWealth ? Math.floor((Date.now() - new Date(lastWealth.replace(/\//g, '-')).getTime()) / 86400000) : null;
+
+  return {
+    year, month, ym,
+    generatedAt: Utilities.formatDate(new Date(), tz, 'yyyy/MM/dd HH:mm'),
+    realized, dayTradePnl, dividends, income: realized + dividends,
+    ytdIncome: ytdRealized + ytdDividends,
+    marketValue, holdCost, unrealized: marketValue - holdCost,
+    unrealizedPct: holdCost > 0 ? (marketValue - holdCost) / holdCost * 100 : null,
+    prevMarketValue: prevSnap ? num(prevSnap['持股市值']) : null,
+    trades, realizedList, divMonth, divNext, top5, dca,
+    reminders: { pending, errors, wealthDays },
+  };
+}
+
+/** 存一筆月報紀錄（同月份覆蓋），下個月用來比較 */
+function saveMonthlySnapshot_(d) {
+  const ss = getSS_();
+  let sh = ss.getSheetByName(MONTHLY_SHEET_);
+  if (!sh) {
+    sh = ss.insertSheet(MONTHLY_SHEET_);
+    sh.getRange(1, 1, 1, MONTHLY_HEADERS_.length).setValues([MONTHLY_HEADERS_])
+      .setFontWeight('bold').setBackground('#344e41').setFontColor('white');
+    sh.setFrozenRows(1);
+    sh.getRange('A:A').setNumberFormat('@');
+  }
+  const row = [d.ym, d.generatedAt, Math.round(d.marketValue), Math.round(d.holdCost), Math.round(d.unrealized),
+               Math.round(d.realized), Math.round(d.dividends), Math.round(d.income)];
+  const last = sh.getLastRow();
+  const months = last > 1 ? sh.getRange(2, 1, last - 1, 1).getValues().map(r => String(r[0]).trim()) : [];
+  const idx = months.indexOf(d.ym);
+  sh.getRange(idx >= 0 ? idx + 2 : last + 1, 1, 1, row.length).setValues([row]);
+}
+
+/** 月報 HTML（Email 用：table 排版 + inline style） */
+function renderMonthlyReportHtml_(d) {
+  const POS = '#bc6c25', NEG = '#588157', INK = '#344e41', MUTED = '#8a8a80', LINE = '#ece9e2';
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const int = n => String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const money = n => (n < 0 ? '−' : '') + int(n);
+  const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '') + int(n);
+  const pctTxt = p => p == null ? '—' : (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(1) + '%';
+  const color = n => n > 0 ? POS : n < 0 ? NEG : INK;
+  const card = (title, inner) => `
+    <tr><td style="padding:0 16px 14px">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:14px;border:1px solid ${LINE}">
+        <tr><td style="padding:16px 18px 6px;font-size:15px;font-weight:700;color:#3a5a40">${title}</td></tr>
+        <tr><td style="padding:4px 18px 16px">${inner}</td></tr>
+      </table>
+    </td></tr>`;
+  const kv = (k, v, vColor, sub) => `
+    <tr>
+      <td style="padding:6px 0;font-size:14px;color:${MUTED}">${k}</td>
+      <td style="padding:6px 0;font-size:16px;font-weight:700;text-align:right;color:${vColor || INK}">${v}${sub ? `<div style="font-size:12px;font-weight:400;color:${MUTED}">${sub}</div>` : ''}</td>
+    </tr>`;
+  const table = (rowsHtml) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rowsHtml}</table>`;
+  const listRow = (left, right, rColor, sub) => `
+    <tr>
+      <td style="padding:7px 0;border-top:1px solid ${LINE};font-size:14px;color:${INK}">${esc(left)}${sub ? `<div style="font-size:12px;color:${MUTED}">${sub}</div>` : ''}</td>
+      <td style="padding:7px 0;border-top:1px solid ${LINE};font-size:14px;font-weight:700;text-align:right;color:${rColor || INK};white-space:nowrap">${right}</td>
+    </tr>`;
+  const empty = txt => `<div style="font-size:13px;color:${MUTED};padding:4px 0">${txt}</div>`;
+
+  // 一、總覽
+  const mvDiff = d.prevMarketValue == null ? null : d.marketValue - d.prevMarketValue;
+  const mvSub = mvDiff == null ? '較上月 —（下個月起開始比較）'
+    : `較上月 <span style="color:${color(mvDiff)}">${signed(mvDiff)}（${pctTxt(d.prevMarketValue ? mvDiff / d.prevMarketValue * 100 : null)}）</span>`;
+  const overview = table(
+    kv('已實現損益', signed(d.realized), color(d.realized), d.dayTradePnl ? `含當沖 ${signed(d.dayTradePnl)}` : '') +
+    kv('領到股利', signed(d.dividends), color(d.dividends)) +
+    kv('本月收入合計', signed(d.income), color(d.income)) +
+    kv('今年累計收入', signed(d.ytdIncome), color(d.ytdIncome), '已實現＋股利') +
+    `<tr><td colspan="2" style="padding:6px 0"><div style="border-top:1px dashed ${LINE}"></div></td></tr>` +
+    kv('持股市值', money(d.marketValue), INK, mvSub) +
+    kv('持股成本', money(d.holdCost)) +
+    kv('未實現損益', signed(d.unrealized), color(d.unrealized), pctTxt(d.unrealizedPct)));
+
+  // 二、交易摘要
+  const t = d.trades;
+  const tradesHtml = (t.buyCount + t.sellCount + t.dayTradeCount) === 0 ? empty('這個月沒有交易') : table(
+    kv('買進', `${t.buyCount} 筆　${money(t.buyAmount)}`) +
+    kv('賣出', `${t.sellCount} 筆　${money(t.sellAmount)}`) +
+    kv('當沖', `${t.dayTradeCount} 組`) +
+    kv('手續費＋交易稅', money(t.feeTax)));
+
+  // 三、已實現損益明細
+  const rl = d.realizedList;
+  let realizedHtml = empty('這個月沒有賣出');
+  if (rl.length) {
+    const best = rl[0], worst = rl[rl.length - 1];
+    const hl = [];
+    if (best.pnl > 0) hl.push(`🏆 賺最多：<b>${esc(best.name)}</b> <span style="color:${POS}">${signed(best.pnl)}</span>`);
+    if (worst.pnl < 0) hl.push(`📉 賠最多：<b>${esc(worst.name)}</b> <span style="color:${NEG}">${signed(worst.pnl)}</span>`);
+    realizedHtml = (hl.length ? `<div style="font-size:13px;line-height:1.9;margin-bottom:6px;color:${INK}">${hl.join('<br>')}</div>` : '') +
+      table(rl.map(o => listRow(o.name, signed(o.pnl), color(o.pnl), `${int(o.qty)} 股・報酬 ${pctTxt(o.pct)}`)).join(''));
+  }
+
+  // 四、股利
+  const divNextTotal = d.divNext.reduce((s, x) => s + x.amount, 0);
+  const divHtml =
+    table(kv('本月入帳總額', signed(d.dividends), color(d.dividends))) +
+    (d.divMonth.length ? table(d.divMonth.map(x => listRow(x.name, signed(x.amount), POS, x.date)).join('')) : '') +
+    `<div style="height:10px"></div>` +
+    table(kv('下個月預計發放總額', d.divNext.length ? '約 ' + int(divNextTotal) : '—', INK, d.divNext.length ? '' : '目前沒有已公告的發放')) +
+    (d.divNext.length ? table(d.divNext.map(x => listRow(x.name, '約 ' + int(x.amount), INK, x.date)).join('')) : '');
+
+  // 五、持股概況
+  const holdHtml = d.top5.length ? table(d.top5.map(h =>
+    listRow(h.name, money(h.value), INK, `佔 ${h.share.toFixed(1)}%・未實現 <span style="color:${color(h.pct || 0)}">${pctTxt(h.pct)}</span>`)).join(''))
+    : empty('目前沒有持股');
+
+  // 六、定期定額
+  const dc = d.dca;
+  const sub = txt => `<div style="font-size:13px;font-weight:700;color:${MUTED};margin:12px 0 2px">${txt}</div>`;
+  const dcaMonthHtml = dc.count
+    ? table(kv('本月扣款', `${dc.count} 筆　${money(dc.amount)}`)) +
+      table(dc.monthItems.map(o => listRow(o.name, money(o.cost), INK, `${int(o.qty)} 股・均價 ${o.avgPrice.toFixed(2)}`)).join(''))
+    : empty('這個月沒有定期定額扣款');
+  const dcaHoldHtml = dc.holdItems.length
+    ? table(
+        kv('投入成本', money(dc.holdCost)) +
+        kv('未實現損益', signed(dc.holdUnrealized), color(dc.holdUnrealized), pctTxt(dc.holdCost > 0 ? dc.holdUnrealized / dc.holdCost * 100 : null)) +
+        kv('累計已領股息', signed(dc.holdDiv), color(dc.holdDiv))) +
+      table(dc.holdItems.map(o => listRow(o.name,
+        o.unrealized == null ? '—' : signed(o.unrealized), color(o.unrealized || 0),
+        `${int(o.qty)} 股・報酬 <span style="color:${color(o.pct || 0)}">${pctTxt(o.pct)}</span>・累計股利 ${int(o.div)}`)).join(''))
+    : empty('目前沒有定期定額持股');
+  const dcaHtml = dcaMonthHtml + sub('目前持有（從開始到現在）') + dcaHoldHtml;
+
+  // 七、待辦提醒
+  const r = d.reminders, todo = [];
+  if (r.pending > 0)  todo.push(`⚠️ 有 <b>${r.pending}</b> 筆待確認交易還沒確認`);
+  if (r.errors > 0)   todo.push(`⚠️ 本月自動化錯誤 <b>${r.errors}</b> 次（詳見《錯誤通知紀錄》）`);
+  if (r.wealthDays != null && r.wealthDays > 90) todo.push(`⚠️ 資產快照已經 <b>${Math.floor(r.wealthDays / 30)}</b> 個月沒記錄了`);
+  if (r.wealthDays == null) todo.push('⚠️ 還沒有任何資產快照紀錄');
+  const todoHtml = todo.length ? `<div style="font-size:14px;line-height:2;color:${INK}">${todo.join('<br>')}</div>` : empty('✅ 沒有待辦事項');
+
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#dad7cd">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#dad7cd">
+    <tr><td align="center" style="padding:20px 8px">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;font-family:'Noto Serif TC','PingFang TC','Microsoft JhengHei',sans-serif">
+        <tr><td style="padding:0 16px 14px">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#3a5a40;border-radius:14px">
+            <tr><td style="padding:20px 20px 4px;font-size:13px;color:rgba(255,255,255,.75);letter-spacing:.1em"><img src="${APP_URL_}icon-128.png" width="22" height="22" alt="" style="vertical-align:middle;border-radius:5px;margin-right:6px;border:0">你不理財，才不理你</td></tr>
+            <tr><td style="padding:0 20px 4px;font-size:22px;font-weight:700;color:#ffffff">${d.year} 年 ${d.month} 月月報</td></tr>
+            <tr><td style="padding:6px 20px 20px">
+              <span style="font-size:13px;color:rgba(255,255,255,.75)">本月收入合計</span>
+              <span style="font-size:24px;font-weight:700;color:#ffffff;margin-left:8px">${signed(d.income)}</span>
+            </td></tr>
+          </table>
+        </td></tr>
+        ${card('一、本月總覽', overview)}
+        ${card('二、本月交易', tradesHtml)}
+        ${card('三、已實現損益明細', realizedHtml)}
+        ${card('四、股利', divHtml)}
+        ${card('五、持股概況（前 5 大）', holdHtml)}
+        ${card('六、定期定額', dcaHtml)}
+        ${card('七、待辦提醒', todoHtml)}
+        <tr><td align="center" style="padding:6px 16px 10px">
+          <a href="${APP_URL_}" style="display:inline-block;background:#3a5a40;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:12px 28px;border-radius:12px">打開 App</a>
+        </td></tr>
+        <tr><td align="center" style="padding:4px 16px 20px;font-size:11px;color:${MUTED};line-height:1.7">
+          市值以 ${d.generatedAt} 的價格計算・正數為橘色、負數為綠色<br>
+          不想收到月報：到 App「設定 → 通知設定」把「每月月報」改成 FALSE
+        </td></tr>
+      </table>
+    </td></tr>
+  </table></body></html>`;
+}
+
+/***** =======================
+ * 線上載入模式（範本殼程式 v4 起）
+ * 殼程式從 GitHub Pages 下載 releases/v{N}.js，用 new Function 執行後呼叫 setLoaderInfo。
+ * 這個模式下 ScriptApp / PropertiesService 都是使用者自己專案的，不需要 bindEnv。
+ * ======================== */
+
+var LOADER_ = null; // { shellVersion, version, latest, readyAt }
+function setLoaderInfo(info) { LOADER_ = info || null; }
+function isLoaderMode_() { return !!LOADER_; }
+
+/**
+ * 建立排程的統一入口（之後新增的排程請用這個）：
+ * 線上載入模式下，殼程式只有固定幾個函式名稱，新的排程一律掛在殼程式的 finTrigger，
+ * 再用指令碼屬性記住「這個觸發器要跑哪個函式」。
+ */
+function newTaskTrigger_(taskName) {
+  const app = getScriptApp_();
+  if (!LOADER_) return app.newTrigger(taskName);
+  const b = app.newTrigger('finTrigger');
+  const wrap = builder => new Proxy(builder, { get: (t, k) => {
+    if (k === 'create') return () => { const tr = t.create(); getProps_().setProperty('TASK_' + tr.getUniqueId(), taskName); return tr; };
+    const v = t[k];
+    return typeof v === 'function' ? (...a) => { const r = v.apply(t, a); return r && typeof r === 'object' ? wrap(r) : r; } : v;
+  } });
+  return wrap(b);
+}
+/** 排程對應的函式名稱（finTrigger 的要查表） */
+function triggerTaskName_(t) {
+  const h = t.getHandlerFunction();
+  return h === 'finTrigger' ? (getProps_().getProperty('TASK_' + t.getUniqueId()) || h) : h;
+}
+/** 殼程式 finTrigger 的落點 */
+function runTriggerTask(e) {
+  const name = e && e.triggerUid ? getProps_().getProperty('TASK_' + e.triggerUid) : '';
+  if (!name || typeof this[name] !== 'function') throw new Error('找不到排程對應的函式：' + (name || '(未記錄)'));
+  return this[name](e);
+}
+
+// ===== WebAPI.js =====
+/**
+ * ============================================================
+ * WebAPI.gs - 你不理財，才不理你後端 (完整版 v2.0)
+ * 包含：登入、儀表板、資料清單、設定、市場分析模組
+ * ============================================================
+ */
+
+/** Web App 入口 */
+function doGet(e) {
+  return HtmlService.createTemplateFromFile('Index')
+    .evaluate()
+    .setTitle('你不理財，才不理你')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+}
+
+/* ============================================================
+   帳號與認證
+   ============================================================ */
+
+/**
+ * 產生 HMAC-SHA256 Token（密碼 + 隨機 Salt）
+ * Token 無法反推密碼，比 base64 安全
+ */
+function makeToken_(pwd) {
+  const props = getProps_();
+  let salt = props.getProperty('TOKEN_SALT');
+  if (!salt) {
+    salt = Utilities.base64Encode(
+      Utilities.newBlob(String(Date.now()) + String(Math.random())).getBytes()
+    );
+    props.setProperty('TOKEN_SALT', salt);
+  }
+  const digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    pwd + salt
+  );
+  return Utilities.base64Encode(digest);
+}
+
+/**
+ * 後端版本號：每次發布新的程式庫版本時 +1，並同步修改 index.html 的 LATEST_BACKEND_VERSION。
+ * 前端會用它判斷朋友的後端是否過舊、需要更新程式庫版本。
+ */
+var APP_VERSION = 10;
+
+/**
+ * 帳號：每份後端（每個人用自己 Google 帳號部署的 GAS）只有一組帳號
+ * - APP_USER / APP_PASSWORD 存在 Script Properties，只有部署者本人看得到
+ * - 舊版沒有 APP_USER 時，帳號沿用《設定》的 ID_NUMBER
+ */
+function getAppUser_() {
+  const u = getProps_().getProperty('APP_USER');
+  return String(u || getCfg_()['ID_NUMBER'] || '').trim();
+}
+
+/** 這個後端是否已設定帳號（前端用來判斷要顯示「登入」還是「首次設定」） */
+function api_getSetupStatus() {
+  return { ok: true, configured: !!getProps_().getProperty('APP_PASSWORD') };
+}
+
+/** 首次設定帳號密碼：只有尚未設定過時可以呼叫 */
+function api_setupAccount(userInput, pwdInput) {
+  const user = String(userInput || '').trim();
+  const pwd  = String(pwdInput || '');
+  if (!/^[A-Za-z0-9_.@-]{3,40}$/.test(user)) return { ok: false, msg: '帳號限 3~40 個英數字（可含 _ . @ -）' };
+  if (pwd.length < 6) return { ok: false, msg: '密碼至少 6 個字元' };
+
+  const lock = getScriptLock_();
+  if (!lock.tryLock(10000)) return { ok: false, msg: '系統忙碌中，請稍後再試' };
+  try {
+    const props = getProps_();
+    if (props.getProperty('APP_PASSWORD')) return { ok: false, msg: '這個後端已經設定過帳號，請直接登入' };
+    props.setProperties({ APP_USER: user, APP_PASSWORD: pwd });
+    return { ok: true, token: makeToken_(pwd), user, version: APP_VERSION, autoUpdate: isLoaderMode_() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** 登入驗證，回傳 Token */
+function api_login(idInput, pwdInput) {
+  const id  = String(idInput  || '').trim();
+  const pwd = String(pwdInput || '');
+  if (!id || !pwd) return { ok: false, msg: '請輸入帳號與密碼' };
+
+  const storedPwd = getProps_().getProperty('APP_PASSWORD');
+  if (!storedPwd) return { ok: false, needSetup: true, msg: '這個後端還沒設定帳號，請先到「首次設定」' };
+
+  const storedUser = getAppUser_();
+  if (storedUser && id.toUpperCase() === storedUser.toUpperCase() && pwd === storedPwd)
+    return { ok: true, token: makeToken_(storedPwd), user: storedUser, version: APP_VERSION, autoUpdate: isLoaderMode_() };
+  return { ok: false, msg: '帳號或密碼錯誤' };
+}
+
+/** 驗證 Token；改密碼後舊 Token 自動失效 */
+function resolveAuth_(token) {
+  const storedPwd = getProps_().getProperty('APP_PASSWORD');
+  return !!(token && storedPwd && token === makeToken_(storedPwd));
+}
+
+/** 自動登入 Token 驗證 */
+function api_auth_token(tokenInput) {
+  return resolveAuth_(tokenInput) ? { ok: true, user: getAppUser_(), version: APP_VERSION, autoUpdate: isLoaderMode_() } : { ok: false };
+}
+
+/** 修改密碼（需登入），回傳新 Token */
+function api_changePassword(oldPwd, newPwd) {
+  const props     = getProps_();
+  const storedPwd = props.getProperty('APP_PASSWORD');
+  if (storedPwd && String(oldPwd) !== String(storedPwd))
+    return { ok: false, msg: '舊密碼不正確' };
+  if (String(newPwd || '').length < 6) return { ok: false, msg: '新密碼至少 6 個字元' };
+  props.setProperty('APP_PASSWORD', String(newPwd));
+  return { ok: true, msg: '密碼已更新', token: makeToken_(String(newPwd)) };
+}
+
+/* ============================================================
+   儀表板
+   ============================================================ */
+
+function api_getDashboard() {
+  const C  = getCfg_();
+  const ss = getSS_();
+
+  // 1. 庫存：計算成本與市值
+  const shHold = ss.getSheetByName(C.SHEET_HOLD);
+  const holds  = readSheetAsObjects_(shHold);
+  let totalCost = 0, totalMarketVal = 0;
+  holds.forEach(r => {
+    const qty   = Number(r['持有股數'] || 0);
+    const cost  = Number(r['買入成本 (單純買入價*股數)'] || 0);
+    let price   = Number(r['現價']); if (isNaN(price)) price = 0;
+    totalCost      += cost;
+    totalMarketVal += price > 0 ? qty * price : cost;
+  });
+
+  // 2. 已實現損益
+  const shReal = ss.getSheetByName(C.SHEET_REALIZED);
+  const reals  = readSheetAsObjects_(shReal);
+  let totalRealized = 0;
+  const pnlByYear   = {};
+  reals.forEach(r => {
+    const p = Number(r['淨獲利'] || 0);
+    totalRealized += p;
+    const d = String(r['賣出日期'] || '');
+    const y = d.length >= 4 ? d.substring(0, 4) : '未知';
+    if (y !== '未知') pnlByYear[y] = (pnlByYear[y] || 0) + p;
+  });
+
+  // 3. 股利
+  const shDiv  = ss.getSheetByName(C.SHEET_DIV);
+  const divs   = readSheetAsObjects_(shDiv);
+  let totalDiv = 0;
+  const divByYear  = {};
+  divs.forEach(r => {
+    const d    = Number(r['實際領取金額 (扣除每筆手續費10元)'] || 0);
+    totalDiv  += d;
+    const yStr = String(r['股利所屬年度'] || r['除息日'] || '');
+    const y    = yStr.length >= 4 ? yStr.substring(0, 4) : '未知';
+    if (y !== '未知') divByYear[y] = (divByYear[y] || 0) + d;
+  });
+
+  // 4. 歷年含息總報酬
+  const totalByYear = {};
+  new Set([...Object.keys(pnlByYear), ...Object.keys(divByYear)]).forEach(y => {
+    totalByYear[y] = (pnlByYear[y] || 0) + (divByYear[y] || 0);
+  });
+
+  return {
+    ok: true,
+    summary: {
+      investedCost:     totalCost,
+      marketValue:      totalMarketVal,
+      realizedProfit:   totalRealized,
+      totalDividend:    totalDiv,
+      unrealizedProfit: totalMarketVal - totalCost,
+      totalProfit:      totalRealized + totalDiv + (totalMarketVal - totalCost),
+    },
+    charts: { pnlByYear, divByYear, totalByYear },
+  };
+}
+
+/* ============================================================
+   資料清單
+   ============================================================ */
+
+function api_getDataList(type) {
+  const C  = getCfg_();
+  const ss = getSS_();
+  const sheetMap = {
+    holdings:  C.SHEET_HOLD,
+    dividends: C.SHEET_DIV,
+    realized:  C.SHEET_REALIZED,
+    dca:       C.SHEET_DCA,
+  };
+  const sh = ss.getSheetByName(sheetMap[type]);
+  if (!sh) return { ok: true, data: [] };
+
+  const config = type === 'holdings' ? {
+    defaultName:     C.BROKER_DEFAULT_NAME   || '預設券商',
+    defaultDiscount: Number(C.FEE_DISCOUNT   || 0.28),
+    broker2Key:      C.BROKER_2_KEYWORD      || '',
+    broker2Name:     C.BROKER_2_NAME         || '',
+    broker2Discount: Number(C.BROKER_2_DISCOUNT || 0.28),
+  } : {};
+
+  return { ok: true, data: readSheetAsObjects_(sh), config };
+}
+
+/* ============================================================
+   設定頁面
+   ============================================================ */
+
+function api_getSettingsSchema() {
+  const C = getCfg_();
+  const schema = [
+    { group: '基本設定', icon: 'ph-gear',
+      desc: '設定時區與手續費折數，影響所有損益計算的基礎。「解鎖對帳單密碼」填入 PDF 對帳單的解鎖密碼（通常為身分證字號），由 Cloud Run 服務使用。',
+      items: [
+      { key: 'ID_NUMBER',    label: '解鎖對帳單密碼',     type: 'text',   placeholder: '如: A123456789（身分證字號）' },
+      { key: 'TZ',           label: '時區',               type: 'text',   placeholder: 'Asia/Taipei' },
+      { key: 'FEE_DISCOUNT', label: '手續費折數 (0~1)',   type: 'number', placeholder: '0.28' },
+    ]},
+    { group: 'Gmail 擷取', icon: 'ph-envelope',
+      desc: '設定 Gmail 往回搜尋天數與郵件分類標籤（請先在 Gmail 建立對應標籤並套用至成交回報信件）。Cloud Run 網址為 PDF 解鎖服務，留空則跳過 PDF 解析。',
+      items: [
+      { key: 'GMAIL_QUERY_DAYS', label: '往回搜尋天數',  type: 'number', placeholder: '7' },
+      { key: 'GMAIL_LABEL_PDF',  label: 'PDF 郵件標籤',  type: 'text',   placeholder: '如: 對帳單' },
+      { key: 'GMAIL_LABEL_HTML', label: 'HTML 郵件標籤', type: 'text',   placeholder: '如: 成交回報' },
+      { key: 'CLOUD_RUN_URL',    label: 'Cloud Run 網址', type: 'text',  placeholder: 'https://...' },
+    ]},
+    { group: '券商設定', icon: 'ph-buildings',
+      desc: '設定主要券商名稱與手續費折數。若有第二家券商，填入其 Email 關鍵字，系統會自動依關鍵字區分兩家券商的成本計算。',
+      items: [
+      { key: 'BROKER_DEFAULT_NAME', label: '主要券商名稱',   type: 'text',   placeholder: '國泰證券' },
+      { key: 'BROKER_2_KEYWORD',    label: '第二券商關鍵字', type: 'text',   placeholder: '統一（Email 中出現的關鍵字）' },
+      { key: 'BROKER_2_NAME',       label: '第二券商名稱',   type: 'text',   placeholder: '統一證券' },
+      { key: 'BROKER_2_DISCOUNT',   label: '第二券商折數',   type: 'number', placeholder: '0.28' },
+    ]},
+    { group: '庫存與損益起算日', icon: 'ph-calendar',
+      desc: '若只需統計特定日期後的交易（例如從某年度開始），填入起算日；留空則計算全部歷史紀錄。',
+      items: [
+      { key: 'HOLDINGS_START_DATE', label: '庫存計算起算日', type: 'date', placeholder: '' },
+      { key: 'DIV_START_DATE',      label: '股利計算起算日', type: 'date', placeholder: '' },
+    ]},
+    { group: '股利設定', icon: 'ph-plant',
+      desc: '需在 FinMind 官網申請免費 Token 才能自動抓取配息資料。配股可選擇是否寫回交易紀錄（影響成本計算），以及零股的取整方式。',
+      items: [
+      { key: 'FINMIND_TOKEN',             label: 'FinMind Token',       type: 'text',   placeholder: '前往 finmindtrade.com 申請' },
+      { key: 'DIV_YEAR_FROM',             label: '股利起始年份',        type: 'number', placeholder: String(new Date().getFullYear() - 8) },
+      { key: 'DIV_CASH_FEE_PER_PAYOUT',   label: '每筆股利手續費 (元)', type: 'number', placeholder: '10' },
+      { key: 'DIV_STOCK_BONUS_TO_TRADES', label: '配股寫回交易紀錄',   type: 'select', options: ['TRUE', 'FALSE'] },
+      { key: 'DIV_STOCK_BONUS_ROUNDING',  label: '配股取整規則',       type: 'select', options: ['FLOOR', 'ROUND', 'CEIL'] },
+    ]},
+    { group: '通知設定', icon: 'ph-bell',
+      desc: '啟用後，系統執行發生錯誤時會自動寄信通知到指定信箱，方便排查問題。建議填入本人的 Gmail 地址。',
+      items: [
+      { key: 'ALERT_TO',      label: '通知 Email',    type: 'text',   placeholder: 'your@gmail.com' },
+      { key: 'ALERT_ENABLED', label: '啟用錯誤通知', type: 'select', options: ['TRUE', 'FALSE'] },
+      { key: 'MONTHLY_REPORT_ENABLED', label: '每月月報（1 號早上寄上個月摘要）', type: 'select', options: ['TRUE', 'FALSE'] },
+    ]},
+  ];
+
+  const dcaDesc = '設定一組定期定額標的。填入 PDF 信件中出現的關鍵字（用於識別此標的）、股票代碼與投資期間，系統會自動彙整累計股數、平均成本與殖利率。';
+  for (let i = 1; i <= 10; i++) {
+    schema.push({ group: `定期定額 #${i}`, icon: 'ph-calendar-check', desc: dcaDesc, items: [
+      { key: `DCA_${i}_NAME`,   label: 'PDF 關鍵字',       type: 'text', placeholder: '如: 國泰永續高股息' },
+      { key: `DCA_${i}_SYMBOL`, label: '股票代碼',         type: 'text', placeholder: '如: 00878' },
+      { key: `DCA_${i}_START`,  label: '開始日', type: 'date', placeholder: '' },
+      { key: `DCA_${i}_END`,    label: '結束日 (留空至今)', type: 'date', placeholder: '' },
+    ]});
+  }
+
+  return { ok: true, schema, values: C };
+}
+
+function api_saveSettings(newValues) {
+  const ss = getSS_();
+  const sh = ss.getSheetByName('設定');
+  if (!sh) return { ok: false, msg: '找不到設定頁' };
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return { ok: false, msg: '設定頁無資料' };
+
+  // 一次讀取全部 key-value，在記憶體更新，再一次 batch 寫回（比逐格 setValue 快 10x）
+  const data = sh.getRange(2, 1, lastRow - 1, 2).getValues();
+  const keyMap = new Map();
+  data.forEach(([k], i) => { if (k) keyMap.set(String(k).trim(), i); });
+
+  let changed = false;
+  const NEW_KEYS = new Set(['MONTHLY_REPORT_ENABLED', 'AUTO_UPDATE']); // schema 新增、舊試算表還沒有的 key
+  const toAppend = [];
+  Object.entries(newValues).forEach(([key, val]) => {
+    if (keyMap.has(key)) { data[keyMap.get(key)][1] = val; changed = true; }
+    else if (NEW_KEYS.has(key)) toAppend.push([key, val]);
+  });
+  if (toAppend.length) sh.getRange(sh.getLastRow() + 1, 1, toAppend.length, 2).setValues(toAppend);
+
+  if (changed) {
+    // 先將 DCA 日期欄位設為純文字格式，避免 Google Sheets 自動轉換日期
+    const dcaDateKeys = new Set();
+    for (let i = 1; i <= 10; i++) { dcaDateKeys.add('DCA_' + i + '_START'); dcaDateKeys.add('DCA_' + i + '_END'); }
+    data.forEach(([k], i) => {
+      if (k && dcaDateKeys.has(String(k).trim())) sh.getRange(i + 2, 2).setNumberFormat('@');
+    });
+    sh.getRange(2, 2, data.length, 1).setValues(data.map(r => [r[1]]));
+  }
+  return { ok: true, msg: '設定已儲存' };
+}
+
+/* ============================================================
+   市場分析模組（Gemini 版）
+   ============================================================ */
+
+/**
+ * 讀取《庫存紀錄》，依股票代碼彙總
+ * 現價直接使用工作表的 GOOGLEFINANCE 公式值
+ */
+function api_getHoldingsForAnalysis() {
+  const C  = getCfg_();
+  const ss = getSS_();
+  const sh = ss.getSheetByName(C.SHEET_HOLD || '庫存紀錄');
+  if (!sh || sh.getLastRow() < 2) return { ok: false, msg: '找不到庫存紀錄或無資料' };
+
+  const rows = readSheetAsObjects_(sh);
+  const map  = new Map();
+
+  // 讀取股利資料，累計每檔股票已領現金股息
+  const divTotals = new Map();
+  const divSh = ss.getSheetByName(C.SHEET_DIV || '股利狀況');
+  if (divSh && divSh.getLastRow() > 1) {
+    const divRows = readSheetAsObjects_(divSh);
+    divRows.forEach(r => {
+      const code = String(r['股票代碼'] || '').trim();
+      if (!code) return;
+      const amt = Number(r['實際領取金額 (扣除每筆手續費10元)'] || 0);
+      if (!isNaN(amt) && amt > 0) divTotals.set(code, (divTotals.get(code) || 0) + amt);
+    });
+  }
+
+  rows.forEach(r => {
+    const code = String(r['股票代碼'] || '').trim();
+    if (!code) return;
+    const name     = String(r['股票名稱'] || '').trim();
+    const qty      = Number(r['持有股數']  || 0);
+    const avgPrice = Number(r['買入價']    || 0);
+    const cost     = Number(r['買入成本 (單純買入價*股數)'] || 0) || avgPrice * qty;
+    let   curPrice = parseFloat(r['現價']);
+    if (isNaN(curPrice) || curPrice <= 0) curPrice = 0;
+
+    if (!map.has(code)) {
+      map.set(code, { code, name, totalQty: 0, totalCost: 0, totalPrincipal: 0, curPrice: 0 });
+    }
+    const item = map.get(code);
+    item.totalQty       += qty;
+    item.totalCost      += cost;
+    item.totalPrincipal += avgPrice * qty;
+    if (curPrice > 0) item.curPrice = curPrice;
+  });
+
+  const data = Array.from(map.values())
+    .filter(item => item.totalQty > 0.1)
+    .sort((a, b) => a.code.localeCompare(b.code))
+    .map(item => {
+      const avgCost = item.totalQty > 0 ? item.totalPrincipal / item.totalQty : 0;
+      const curVal  = item.curPrice > 0 ? item.curPrice * item.totalQty : null;
+      const capPnl  = curVal != null ? curVal - item.totalCost : null;
+      const pct     = capPnl != null && item.totalCost > 0
+                      ? Math.round(capPnl / item.totalCost * 1000) / 10 : null;
+      const totalDiv = Math.round(divTotals.get(item.code) || 0);
+      const totalReturn = capPnl != null ? capPnl + totalDiv : (totalDiv > 0 ? totalDiv : null);
+      const totalReturnPct = totalReturn != null && item.totalCost > 0
+        ? Math.round(totalReturn / item.totalCost * 1000) / 10 : null;
+      return {
+        code:           item.code,
+        name:           item.name,
+        qty:            Math.round(item.totalQty),
+        avgCost:        Math.round(avgCost * 100) / 100,
+        totalCost:      Math.round(item.totalCost),
+        curPrice:       item.curPrice || null,
+        curVal:         curVal  != null ? Math.round(curVal)  : null,
+        capPnl:         capPnl  != null ? Math.round(capPnl)  : null,
+        pct,
+        totalDiv,
+        totalReturn:    totalReturn != null ? Math.round(totalReturn) : null,
+        totalReturnPct,
+      };
+    });
+
+  return { ok: true, data };
+}
+
+/**
+ * 透過 GAS 後端呼叫 Gemini API
+ * API Key 存於 Script Properties，前端完全看不到
+ */
+/**
+ * images: [{mimeType:'image/jpeg', base64:'...'}] (選填)
+ * 支援 Gemini multimodal：同時傳入文字 + 圖片
+ */
+function api_callGemini(prompt, images) {
+  const key = getProps_().getProperty('GEMINI_API_KEY') || '';
+  if (!key) return { ok: false, msg: '尚未設定 Gemini API Key，請至「市場分析」頁儲存。' };
+
+  try {
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + key;
+
+    // 組合 parts：先放文字，再附加圖片
+    const parts = [{ text: prompt }];
+    if (Array.isArray(images)) {
+      images.forEach(img => {
+        if (img && img.mimeType && img.base64) {
+          parts.push({ inline_data: { mime_type: img.mimeType, data: img.base64 } });
+        }
+      });
+    }
+
+    const resp = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({
+        contents: [
+          { role: 'user', parts: parts }
+        ],
+        generationConfig: {
+          maxOutputTokens: 8192,
+          temperature: 0.7,
+        },
+      }),
+      muteHttpExceptions: true,
+    });
+
+    const code = resp.getResponseCode();
+    const body = JSON.parse(resp.getContentText('utf-8'));
+
+    if (code !== 200)
+      return { ok: false, msg: `API 錯誤 (${code}): ${body.error?.message || ''}` };
+
+    const text = body.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
+
+    const finishReason = body.candidates?.[0]?.finishReason || '';
+    Logger.log('Gemini finishReason: ' + finishReason);
+    Logger.log('Gemini response length: ' + text.length);
+
+    if (!text) return { ok: false, msg: 'Gemini 回傳空白內容，請稍後再試' };
+
+    return { ok: true, text, finishReason };
+  } catch (e) {
+    return { ok: false, msg: e.message };
+  }
+}
+
+/**
+ * 儲存分析結果到《市場分析紀錄》工作表
+ */
+function api_saveAnalysis(text) {
+  if (!text) return { ok: false };
+  const ss = getSS_();
+  let sh   = ss.getSheetByName('市場分析紀錄');
+  if (!sh) {
+    sh = ss.insertSheet('市場分析紀錄');
+    sh.appendRow(['時間', '分析內容']);
+    sh.getRange(1, 1, 1, 2)
+      .setFontWeight('bold')
+      .setBackground('#344e41')
+      .setFontColor('white');
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(1, 160);
+    sh.setColumnWidth(2, 900);
+  }
+  const now = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/MM/dd HH:mm:ss');
+  sh.appendRow([now, text]);
+  sh.getRange(sh.getLastRow(), 2).setWrap(true);
+  return { ok: true, ts: now };
+}
+
+/**
+ * 讀取《市場分析紀錄》歷史，最新在前，最多 30 筆
+ */
+function api_getAnalysisHistory() {
+  const ss = getSS_();
+  const sh = ss.getSheetByName('市場分析紀錄');
+  if (!sh || sh.getLastRow() < 2) return { ok: true, data: [] };
+
+  const raw = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
+  return {
+    ok: true,
+    data: raw
+      .map(r => ({
+        ts:   r[0] instanceof Date
+              ? Utilities.formatDate(r[0], 'Asia/Taipei', 'yyyy/MM/dd HH:mm')
+              : String(r[0] || ''),
+        text: String(r[1] || ''),
+      }))
+      .filter(r => r.text)
+      .reverse()
+      .slice(0, 30),
+  };
+}
+
+
+/* ============================================================
+   資產追蹤模組
+   ============================================================ */
+
+// 帳戶 key 清單（順序對應 Sheet 欄位）
+var WEALTH_KEYS_ = [
+  'ctbc_twd_saving','ctbc_twd_fixed',
+  'ctbc_usd_saving','ctbc_usd_fixed',
+  'ctbc_cny_saving','ctbc_cny_fixed',
+  'cathay_twd','cathay_usd',
+  'taishin_twd','taishin_jpy',
+  'richart_twd','richart_fund',
+  'chang_twd','land_twd','post_twd',
+  'uni_stock','cathay_stock','cathay_us_stock',
+  'rate_usd','rate_jpy','rate_cny'
+];
+
+var WEALTH_SHEET_HEADERS_ = ['記錄日期','期間',
+  '中信台幣活存','中信台幣定存','中信美金活存','中信美金定存','中信人民幣活存','中信人民幣定存',
+  '國泰台幣活存','國泰美金活存',
+  '台新台幣活存','台新日幣活存',
+  'Richart活存','Richart基金',
+  '彰銀台幣','合庫台幣','郵局台幣',
+  '統一證券','國泰證券','國泰證券（美）',
+  '匯率USD/TWD','匯率JPY/TWD','匯率CNY/TWD',
+  '台幣合計','備註'
+];
+
+function ensureWealthSheet_() {
+  const ss = getSS_();
+  let sh = ss.getSheetByName('資產快照');
+  if (!sh) {
+    sh = ss.insertSheet('資產快照');
+    sh.getRange(1,1,1,WEALTH_SHEET_HEADERS_.length).setValues([WEALTH_SHEET_HEADERS_])
+      .setFontWeight('bold').setBackground('#344e41').setFontColor('white');
+    sh.setFrozenRows(1);
+  } else {
+    const lastCol = sh.getLastColumn();
+    const col20Val = lastCol >= 20 ? sh.getRange(1, 20).getValue() : '';
+    const col21Val = lastCol >= 21 ? sh.getRange(1, 21).getValue() : '';
+    if (col20Val === '國泰美股') {
+      if (col21Val === '國泰證券（美）') {
+        // 舊版誤插了「國泰美股」空欄，刪除後「國泰證券（美）」自動回到 col20
+        sh.deleteColumn(20);
+      } else {
+        // 「國泰美股」存在但後面沒有「國泰證券（美）」，直接改名
+        sh.getRange(1, 20).setValue('國泰證券（美）')
+          .setFontWeight('bold').setBackground('#344e41').setFontColor('white');
+      }
+    } else if (col20Val !== '國泰證券（美）') {
+      // 兩個欄都不存在，補插入
+      sh.insertColumnAfter(19);
+      sh.getRange(1, 20).setValue('國泰證券（美）')
+        .setFontWeight('bold').setBackground('#344e41').setFontColor('white');
+    }
+    // col20Val === '國泰證券（美）' → 已正確，不需動
+  }
+  return sh;
+}
+
+function api_saveWealthSnapshot(data) {
+  try {
+    const sh = ensureWealthSheet_();
+    const now = Utilities.formatDate(new Date(),'Asia/Taipei','yyyy-MM-dd HH:mm');
+    const row = [now, data.period || ''];
+    WEALTH_KEYS_.forEach(k => row.push(Number(data[k]) || 0));
+
+    // 後端重新計算台幣合計，避免前端傳值有誤
+    const rU = Number(data.rate_usd) || 32;
+    const rJ = Number(data.rate_jpy) || 0.22;
+    const rC = Number(data.rate_cny) || 4.4;
+    const TWD_KEYS = ['ctbc_twd_saving','ctbc_twd_fixed','cathay_twd','taishin_twd',
+                      'richart_twd','richart_fund','chang_twd','land_twd','post_twd',
+                      'uni_stock','cathay_stock'];
+    const USD_KEYS = ['ctbc_usd_saving','ctbc_usd_fixed','cathay_usd','cathay_us_stock'];
+    const JPY_KEYS = ['taishin_jpy'];
+    const CNY_KEYS = ['ctbc_cny_saving','ctbc_cny_fixed'];
+    let total = 0;
+    TWD_KEYS.forEach(k => total += Number(data[k])||0);
+    USD_KEYS.forEach(k => total += (Number(data[k])||0) * rU);
+    JPY_KEYS.forEach(k => total += (Number(data[k])||0) * rJ);
+    CNY_KEYS.forEach(k => total += (Number(data[k])||0) * rC);
+    total = Math.round(total);
+
+    row.push(total, data.note || '');
+    sh.appendRow(row);
+    return { ok: true, msg: '快照已儲存', total: total };
+  } catch(e) { return { ok: false, msg: e.message }; }
+}
+
+function api_getWealthHistory() {
+  try {
+    const sh = ensureWealthSheet_(); // 確保欄位結構為最新（修正舊版欄位錯位問題）
+    if (sh.getLastRow() < 2) return { ok: true, data: [], last: null };
+    const rows = sh.getRange(2, 1, sh.getLastRow()-1, sh.getLastColumn()).getValues();
+    const data = rows.map(row => {
+      const obj = {
+        date:   row[0] instanceof Date ? Utilities.formatDate(row[0],'Asia/Taipei','yyyy-MM-dd') : String(row[0]||'').slice(0,10),
+        period: String(row[1]||''),
+      };
+      WEALTH_KEYS_.forEach((k,i) => { obj[k] = Number(row[i+2])||0; });
+      obj.totalTWD  = Number(row[WEALTH_KEYS_.length+2])||0;
+      obj.note      = String(row[WEALTH_KEYS_.length+3]||'');
+      return obj;
+    });
+    return { ok: true, data, last: data[data.length-1] || null };
+  } catch(e) { return { ok: false, msg: e.message, data: [], last: null }; }
+}
+
+/* --- 第二份資產紀錄（自訂帳戶清單）---
+ * 名稱與帳戶清單存在《設定》：WEALTH_BOOK_A_NAME / WEALTH_BOOK_B_NAME / WEALTH_B_ACCOUNTS（JSON）
+ * 快照存在《資產快照2》，一個帳戶一列（改名、刪除帳戶都不影響舊紀錄）
+ */
+var WEALTH_B_SHEET_    = '資產快照2';
+var WEALTH_B_HEADERS_  = ['記錄日期','期間','帳戶ID','帳戶名稱','幣別','類型','金額','匯率','台幣金額','備註'];
+var WEALTH_CURRENCIES_ = ['TWD','USD','JPY','CNY'];
+
+/** 寫入目前試算表《設定》的某個 key（沒有該列就新增） */
+function setCfgValue_(key, value) {
+  const sh = getSS_().getSheetByName('設定');
+  if (!sh) throw new Error('找不到設定頁');
+  const lastRow = sh.getLastRow();
+  const keys = lastRow > 1 ? sh.getRange(2, 1, lastRow - 1, 1).getValues().map(r => String(r[0]).trim()) : [];
+  const idx = keys.indexOf(key);
+  const row = idx >= 0 ? idx + 2 : lastRow + 1;
+  sh.getRange(row, 2).setNumberFormat('@');
+  sh.getRange(row, 1, 1, 2).setValues([[key, value]]);
+}
+
+function readWealthBooksCfg_() {
+  const C = getCfg_();
+  let accounts = [];
+  try { accounts = JSON.parse(C.WEALTH_B_ACCOUNTS || '[]'); } catch (e) { accounts = []; }
+  return {
+    nameA:    C.WEALTH_BOOK_A_NAME || '我的資產',
+    nameB:    C.WEALTH_BOOK_B_NAME || '第二份紀錄',
+    accounts: Array.isArray(accounts) ? accounts : [],
+  };
+}
+
+function api_getWealthBooks() {
+  return Object.assign({ ok: true }, readWealthBooksCfg_());
+}
+
+/** 儲存兩份紀錄的名稱 + 第二份的帳戶清單 */
+function api_saveWealthBooks(cfg) {
+  try {
+    cfg = cfg || {};
+    const clean = s => String(s || '').trim().slice(0, 30);
+    const seen = new Set();
+    const accounts = (Array.isArray(cfg.accounts) ? cfg.accounts : [])
+      .map(a => ({
+        id:       String((a && a.id) || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 20),
+        name:     clean(a && a.name),
+        currency: WEALTH_CURRENCIES_.includes(a && a.currency) ? a.currency : 'TWD',
+        type:     (a && a.type) === 'invest' ? 'invest' : 'bank',
+      }))
+      .filter(a => a.id && a.name && !seen.has(a.id) && seen.add(a.id));
+    if (accounts.length > 50) return { ok: false, msg: '帳戶最多 50 個' };
+    const nameA = clean(cfg.nameA) || '我的資產';
+    const nameB = clean(cfg.nameB) || '第二份紀錄';
+    setCfgValue_('WEALTH_BOOK_A_NAME', nameA);
+    setCfgValue_('WEALTH_BOOK_B_NAME', nameB);
+    setCfgValue_('WEALTH_B_ACCOUNTS', JSON.stringify(accounts));
+    return { ok: true, nameA, nameB, accounts };
+  } catch (e) { return { ok: false, msg: e.message }; }
+}
+
+function ensureWealthBSheet_() {
+  const ss = getSS_();
+  let sh = ss.getSheetByName(WEALTH_B_SHEET_);
+  if (!sh) {
+    sh = ss.insertSheet(WEALTH_B_SHEET_);
+    sh.getRange(1, 1, 1, WEALTH_B_HEADERS_.length).setValues([WEALTH_B_HEADERS_])
+      .setFontWeight('bold').setBackground('#344e41').setFontColor('white');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+/** data: { values:{帳戶ID:原幣金額}, rate_usd, rate_jpy, rate_cny, period, note } */
+function api_saveWealthSnapshotB(data) {
+  try {
+    data = data || {};
+    const cfg = readWealthBooksCfg_();
+    if (!cfg.accounts.length) return { ok: false, msg: '請先在「管理帳戶」新增帳戶' };
+    const rates = { TWD: 1, USD: Number(data.rate_usd) || 32, JPY: Number(data.rate_jpy) || 0.22, CNY: Number(data.rate_cny) || 4.4 };
+    const vals  = data.values || {};
+    const now   = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm');
+    let total = 0;
+    const rows = cfg.accounts.map(a => {
+      const amt  = Number(vals[a.id]) || 0;
+      const rate = rates[a.currency] || 1;
+      const twd  = Math.round(amt * rate);
+      total += twd;
+      return [now, data.period || '', a.id, a.name, a.currency, a.type === 'invest' ? '投資' : '存款', amt, rate, twd, data.note || ''];
+    });
+    const sh = ensureWealthBSheet_();
+    sh.getRange(sh.getLastRow() + 1, 1, rows.length, WEALTH_B_HEADERS_.length).setValues(rows);
+    return { ok: true, msg: '快照已儲存', total };
+  } catch (e) { return { ok: false, msg: e.message }; }
+}
+
+/** 依「記錄日期」把多列組回一筆快照 */
+function api_getWealthHistoryB() {
+  try {
+    const sh = getSS_().getSheetByName(WEALTH_B_SHEET_);
+    if (!sh || sh.getLastRow() < 2) return { ok: true, data: [], last: null };
+    const rows = sh.getRange(2, 1, sh.getLastRow() - 1, WEALTH_B_HEADERS_.length).getValues();
+    const map = new Map();
+    rows.forEach(r => {
+      const key = r[0] instanceof Date ? Utilities.formatDate(r[0], 'Asia/Taipei', 'yyyy-MM-dd HH:mm') : String(r[0] || '').trim();
+      const id  = String(r[2] || '').trim();
+      if (!key || !id) return;
+      if (!map.has(key)) map.set(key, { date: key, period: String(r[1] || ''), note: String(r[9] || ''), values: {}, twd: {}, accounts: {}, totalTWD: 0 });
+      const s = map.get(key);
+      const twd = Number(r[8]) || 0;
+      s.values[id]   = Number(r[6]) || 0;
+      s.twd[id]      = twd;
+      s.accounts[id] = { name: String(r[3] || ''), currency: String(r[4] || 'TWD'), type: r[5] === '投資' ? 'invest' : 'bank' };
+      s.totalTWD    += twd;
+    });
+    const data = [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
+    return { ok: true, data, last: data[data.length - 1] || null };
+  } catch (e) { return { ok: false, msg: e.message, data: [], last: null }; }
+}
+
+/* ============================================================
+   資產追蹤 v2：兩份紀錄都用「機構（銀行／證券商）→ 帳戶」的自訂結構
+   - 設定：《設定》WEALTH_CONFIG（JSON：{ books: { A: {name, institutions}, B: {...} } }）
+   - 快照：《資產快照明細》一個帳戶一列（改名、刪除都不影響舊紀錄）
+   - 第一次讀取時自動把舊版《資產快照》《資產快照2》轉過來；舊工作表保留當備份、不再寫入
+   ============================================================ */
+var WEALTH_V2_SHEET_   = '資產快照明細';
+var WEALTH_V2_HEADERS_ = ['記錄日期','紀錄','機構ID','機構','機構類別','帳戶ID','帳戶','幣別','類型','金額','匯率','台幣金額','備註'];
+var WEALTH_COLORS_     = ['#4a7a9b','#4a8a5e','#b85c3a','#c4883a','#7a6545','#5a7a6a','#9a4a4a','#6a4a8a','#3a7a7a','#8a6a3a'];
+var WEALTH_MAX_BOOKS_  = 10; // 資產紀錄最多幾份（預設 1 份，用「新增紀錄」加）
+var WEALTH_DEFAULT_NAMES_ = { A: '我的資產', B: '第二份紀錄' };
+function validBookId_(id) { return /^[A-Za-z0-9_-]{1,20}$/.test(String(id || '')); }
+// 舊版第一份紀錄寫死的機構與帳戶（只用於轉換舊資料；新使用者一開始是空白）
+var WEALTH_LEGACY_A_ = [
+  { id: 'ctbc',        name: '中國信託',          kind: 'bank',   color: '#4a7a9b', accounts: [['ctbc_twd_saving','台幣活存','TWD'],['ctbc_twd_fixed','台幣定存','TWD'],['ctbc_usd_saving','美金活存','USD'],['ctbc_usd_fixed','美金定存','USD'],['ctbc_cny_saving','人民幣活存','CNY'],['ctbc_cny_fixed','人民幣定存','CNY']] },
+  { id: 'cathay_bank', name: '國泰世華',          kind: 'bank',   color: '#4a8a5e', accounts: [['cathay_twd','台幣活存','TWD'],['cathay_usd','美金活存','USD']] },
+  { id: 'taishin',     name: '台新銀行',          kind: 'bank',   color: '#b85c3a', accounts: [['taishin_twd','台幣活存','TWD'],['taishin_jpy','日幣活存','JPY']] },
+  { id: 'richart',     name: 'Richart（台新數位）', kind: 'bank', color: '#c4883a', accounts: [['richart_twd','台幣活存','TWD'],['richart_fund','基金市值','TWD']] },
+  { id: 'chang',       name: '彰銀',              kind: 'bank',   color: '#7a6545', accounts: [['chang_twd','台幣活存','TWD']] },
+  { id: 'land',        name: '合庫',              kind: 'bank',   color: '#5a7a6a', accounts: [['land_twd','台幣活存','TWD']] },
+  { id: 'post',        name: '郵局',              kind: 'bank',   color: '#9a4a4a', accounts: [['post_twd','台幣活存','TWD']] },
+  { id: 'uni_sec',     name: '統一證券',          kind: 'broker', color: '#6a4a8a', accounts: [['uni_stock','台股總市值','TWD']] },
+  { id: 'cathay_sec',  name: '國泰證券',          kind: 'broker', color: '#3a7a7a', accounts: [['cathay_stock','台股總市值','TWD'],['cathay_us_stock','美股總市值','USD']] },
+];
+var WEALTH_LEGACY_INVEST_ = ['uni_stock', 'cathay_stock', 'cathay_us_stock', 'richart_fund'];
+
+function wealthRate_(rates, cur) {
+  if (cur === 'TWD') return 1;
+  return Number(rates && rates[cur]) || ({ USD: 32, JPY: 0.22, CNY: 4.4 })[cur] || 1;
+}
+function wealthDateKey_(v, tz) {
+  return v instanceof Date ? Utilities.formatDate(v, tz || 'Asia/Taipei', 'yyyy-MM-dd HH:mm') : String(v || '').trim();
+}
+
+/** 清理前端送來的一份紀錄設定 */
+function sanitizeWealthBook_(book, fallbackName) {
+  const clean = s => String(s == null ? '' : s).trim().slice(0, 30);
+  const toId  = s => String(s == null ? '' : s).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 30);
+  const seenI = new Set(), seenA = new Set();
+  const insts = (Array.isArray(book && book.institutions) ? book.institutions : []).map((it, i) => {
+    it = it || {};
+    const kind = it.kind === 'broker' ? 'broker' : 'bank';
+    return {
+      id: toId(it.id), name: clean(it.name), kind,
+      color: /^#[0-9a-fA-F]{6}$/.test(String(it.color || '')) ? it.color : WEALTH_COLORS_[i % WEALTH_COLORS_.length],
+      accounts: (Array.isArray(it.accounts) ? it.accounts : []).map(a => {
+        a = a || {};
+        return { id: toId(a.id), name: clean(a.name),
+                 currency: WEALTH_CURRENCIES_.includes(a.currency) ? a.currency : 'TWD',
+                 type: a.type === 'invest' || a.type === 'bank' ? a.type : (kind === 'broker' ? 'invest' : 'bank') };
+      }).filter(a => a.id && a.name && !seenA.has(a.id) && seenA.add(a.id)),
+    };
+  }).filter(it => it.id && it.name && !seenI.has(it.id) && seenI.add(it.id));
+  return { name: clean(book && book.name) || fallbackName, institutions: insts };
+}
+
+function readWealthConfig_() {
+  const raw = getCfg_().WEALTH_CONFIG;
+  if (!raw) return null;
+  try { const c = JSON.parse(raw); return c && c.books ? c : null; } catch (e) { return null; }
+}
+
+function ensureWealthV2Sheet_() {
+  const ss = getSS_();
+  let sh = ss.getSheetByName(WEALTH_V2_SHEET_);
+  if (!sh) {
+    sh = ss.insertSheet(WEALTH_V2_SHEET_);
+    sh.getRange(1, 1, 1, WEALTH_V2_HEADERS_.length).setValues([WEALTH_V2_HEADERS_])
+      .setFontWeight('bold').setBackground('#344e41').setFontColor('white');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+/** 第一次使用 v2：建立設定，並把舊工作表的快照轉成《資產快照明細》 */
+function migrateWealthToV2_() {
+  const lock = getScriptLock_();
+  if (!lock.tryLock(20000)) throw new Error('系統忙碌中，請稍後再試');
+  try {
+    const existing = readWealthConfig_();
+    if (existing) return existing;
+    const C = getCfg_(), ss = getSS_(), tz = C.TZ || 'Asia/Taipei';
+    const out = [];
+    const push = (date, book, inst, acc, amt, rate, twd, note) =>
+      out.push([date, book, inst.id, inst.name, inst.kind === 'broker' ? '證券商' : '銀行', acc.id, acc.name, acc.currency,
+                acc.type === 'invest' ? '投資' : '存款', amt, rate, twd, note || '']);
+
+    // 第一份：舊《資產快照》有資料才帶入原本的機構清單
+    let instA = [];
+    const shA = ss.getSheetByName('資產快照');
+    if (shA && shA.getLastRow() > 1) {
+      instA = WEALTH_LEGACY_A_.map(it => ({ id: it.id, name: it.name, kind: it.kind, color: it.color,
+        accounts: it.accounts.map(([id, name, currency]) => ({ id, name, currency, type: WEALTH_LEGACY_INVEST_.includes(id) ? 'invest' : 'bank' })) }));
+      // ★ 只讀不寫：依表頭名稱找欄位，完全不修改舊工作表（不呼叫會調整欄位的 ensureWealthSheet_）
+      const lastCol = shA.getLastColumn();
+      const hdr = shA.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h || '').trim());
+      const colOf = label => hdr.indexOf(label);
+      const colByKey = {};
+      WEALTH_KEYS_.forEach((k, i) => {
+        let c = colOf(WEALTH_SHEET_HEADERS_[i + 2]);
+        if (c < 0 && k === 'cathay_us_stock') c = colOf('國泰美股'); // 更早期的欄位名稱
+        colByKey[k] = c;
+      });
+      const noteCol = colOf('備註');
+      const vals = shA.getRange(2, 1, shA.getLastRow() - 1, lastCol).getValues();
+      vals.forEach(row => {
+        const date = wealthDateKey_(row[0], tz);
+        if (!date) return;
+        const o = {};
+        WEALTH_KEYS_.forEach(k => { o[k] = colByKey[k] >= 0 ? (Number(row[colByKey[k]]) || 0) : 0; });
+        const rates = { USD: o.rate_usd, JPY: o.rate_jpy, CNY: o.rate_cny };
+        const note = noteCol >= 0 ? String(row[noteCol] || '') : '';
+        instA.forEach(inst => inst.accounts.forEach(acc => {
+          const amt = o[acc.id] || 0, rate = wealthRate_(rates, acc.currency);
+          push(date, 'A', inst, acc, amt, rate, Math.round(amt * rate), note);
+        }));
+      });
+    }
+
+    // 第二份：舊版是單層帳戶，依「存款／投資」分成兩個機構
+    const oldB = readWealthBooksCfg_();
+    const instOf = type => type === 'invest'
+      ? { id: 'b_invest', name: '投資帳戶', kind: 'broker', color: WEALTH_COLORS_[1] }
+      : { id: 'b_bank',   name: '存款帳戶', kind: 'bank',   color: WEALTH_COLORS_[0] };
+    const instB = [];
+    ['bank', 'invest'].forEach(type => {
+      const accs = oldB.accounts.filter(a => (a.type === 'invest' ? 'invest' : 'bank') === type)
+        .map(a => ({ id: a.id, name: a.name, currency: a.currency, type }));
+      if (accs.length) instB.push(Object.assign(instOf(type), { accounts: accs }));
+    });
+    (api_getWealthHistoryB().data || []).forEach(snap => {
+      Object.keys(snap.values || {}).forEach(id => {
+        const a = (snap.accounts || {})[id] || {};
+        const acc = { id, name: a.name || id, currency: a.currency || 'TWD', type: a.type === 'invest' ? 'invest' : 'bank' };
+        const amt = Number(snap.values[id]) || 0, twd = Number((snap.twd || {})[id]) || 0;
+        push(snap.date, 'B', instOf(acc.type), acc, amt, amt ? Math.round(twd / amt * 10000) / 10000 : wealthRate_({}, acc.currency), twd, snap.note);
+      });
+    });
+
+    if (out.length) {
+      const sh = ensureWealthV2Sheet_();
+      sh.getRange(sh.getLastRow() + 1, 1, out.length, WEALTH_V2_HEADERS_.length).setValues(out);
+    }
+    // 預設只有一份紀錄；舊版第二份有帳戶或快照才保留
+    const cfg = { order: ['A'], books: { A: { name: C.WEALTH_BOOK_A_NAME || WEALTH_DEFAULT_NAMES_.A, institutions: instA } } };
+    if (instB.length || out.some(r => r[1] === 'B')) {
+      cfg.order.push('B');
+      cfg.books.B = { name: oldB.nameB || WEALTH_DEFAULT_NAMES_.B, institutions: instB };
+    }
+    setCfgValue_('WEALTH_CONFIG', JSON.stringify(cfg));
+    Logger.log(`資產追蹤 v2：已轉換 ${out.length} 列舊快照`);
+    return cfg;
+  } finally { lock.releaseLock(); }
+}
+
+function getWealthConfig_() { return readWealthConfig_() || migrateWealthToV2_(); }
+
+/** 《資產快照明細》依「紀錄 + 記錄日期」組回一筆筆快照 */
+function readWealthV2History_() {
+  const res = {};
+  const sh = getSS_().getSheetByName(WEALTH_V2_SHEET_);
+  if (!sh || sh.getLastRow() < 2) return res;
+  const tz = getCfg_().TZ || 'Asia/Taipei';
+  const map = new Map();
+  sh.getRange(2, 1, sh.getLastRow() - 1, WEALTH_V2_HEADERS_.length).getValues().forEach(r => {
+    const date = wealthDateKey_(r[0], tz), book = String(r[1] || '').trim(), id = String(r[5] || '').trim();
+    if (!date || !validBookId_(book) || !id) return;
+    const key = book + '|' + date;
+    if (!map.has(key)) map.set(key, { book, date, note: String(r[12] || ''), values: {}, twd: {}, accounts: {}, rates: {}, totalTWD: 0 });
+    const s = map.get(key), cur = String(r[7] || 'TWD'), twd = Number(r[11]) || 0;
+    s.values[id] = Number(r[9]) || 0;
+    s.twd[id] = twd;
+    s.accounts[id] = { name: String(r[6] || ''), instId: String(r[2] || ''), instName: String(r[3] || ''),
+                       kind: r[4] === '證券商' ? 'broker' : 'bank', currency: cur, type: r[8] === '投資' ? 'invest' : 'bank' };
+    if (cur !== 'TWD' && Number(r[10])) s.rates[cur] = Number(r[10]);
+    s.totalTWD += twd;
+  });
+  [...map.values()].sort((a, b) => a.date.localeCompare(b.date)).forEach(s => { const b = s.book; delete s.book; (res[b] = res[b] || []).push(s); });
+  return res;
+}
+
+/** 資產追蹤頁一次拿齊：各份紀錄的設定（依 order 排列）+ 歷史快照 */
+function api_getWealth() {
+  try {
+    const cfg = getWealthConfig_();
+    const hist = readWealthV2History_();
+    if (!Array.isArray(cfg.order)) {
+      // v9 的設定固定有 A、B 兩份：改成「預設一份」，空白的其他紀錄直接拿掉
+      cfg.order = Object.keys(cfg.books).filter(id =>
+        id === 'A' || (cfg.books[id].institutions || []).length || (hist[id] || []).length);
+      if (!cfg.order.length) cfg.order = [Object.keys(cfg.books)[0] || 'A'];
+      Object.keys(cfg.books).forEach(id => { if (!cfg.order.includes(id)) delete cfg.books[id]; });
+      if (!cfg.books[cfg.order[0]]) cfg.books[cfg.order[0]] = { name: WEALTH_DEFAULT_NAMES_.A, institutions: [] };
+      setCfgValue_('WEALTH_CONFIG', JSON.stringify(cfg));
+    }
+    const history = {};
+    cfg.order.forEach(id => { history[id] = hist[id] || []; });
+    return { ok: true, order: cfg.order, books: cfg.books, history };
+  } catch (e) { return { ok: false, msg: e.message }; }
+}
+
+function wealthOrder_(cfg) { return Array.isArray(cfg.order) ? cfg.order : Object.keys(cfg.books); }
+
+/** 刪除一份紀錄（設定拿掉；《資產快照明細》裡的歷史資料保留） */
+function api_deleteWealthBook(bookId) {
+  try {
+    const cfg = getWealthConfig_();
+    const order = wealthOrder_(cfg);
+    if (!order.includes(bookId)) return { ok: false, msg: '找不到這份紀錄' };
+    if (order.length <= 1) return { ok: false, msg: '至少要保留一份紀錄' };
+    cfg.order = order.filter(id => id !== bookId);
+    delete cfg.books[bookId];
+    setCfgValue_('WEALTH_CONFIG', JSON.stringify(cfg));
+    return { ok: true, order: cfg.order, books: cfg.books };
+  } catch (e) { return { ok: false, msg: e.message }; }
+}
+
+/** 儲存某一份紀錄的名稱與機構／帳戶設定 */
+function api_saveWealthConfig(bookId, book) {
+  try {
+    if (!validBookId_(bookId)) return { ok: false, msg: '紀錄代號錯誤' };
+    const cfg = getWealthConfig_();
+    const order = wealthOrder_(cfg);
+    const isNew = !order.includes(bookId);
+    if (isNew && order.length >= WEALTH_MAX_BOOKS_) return { ok: false, msg: `資產紀錄最多 ${WEALTH_MAX_BOOKS_} 份` };
+    const clean = sanitizeWealthBook_(book, WEALTH_DEFAULT_NAMES_[bookId] || '新的紀錄');
+    const nAcc = clean.institutions.reduce((s, it) => s + it.accounts.length, 0);
+    if (clean.institutions.length > 30 || nAcc > 100) return { ok: false, msg: '機構最多 30 個、帳戶最多 100 個' };
+    cfg.books[bookId] = clean;
+    cfg.order = isNew ? order.concat(bookId) : order;
+    setCfgValue_('WEALTH_CONFIG', JSON.stringify(cfg));
+    return { ok: true, order: cfg.order, books: cfg.books };
+  } catch (e) { return { ok: false, msg: e.message }; }
+}
+
+/** data: { values:{帳戶ID:原幣金額}, rate_usd, rate_jpy, rate_cny, note } */
+function api_saveWealthSnapshotV2(bookId, data) {
+  try {
+    data = data || {};
+    const book = validBookId_(bookId) ? getWealthConfig_().books[bookId] : null;
+    if (!book) return { ok: false, msg: '找不到這份紀錄' };
+    const pairs = [];
+    (book.institutions || []).forEach(inst => (inst.accounts || []).forEach(acc => pairs.push([inst, acc])));
+    if (!pairs.length) return { ok: false, msg: '請先在「管理」新增銀行或證券商與帳戶' };
+    const rates = { USD: data.rate_usd, JPY: data.rate_jpy, CNY: data.rate_cny };
+    const date = Utilities.formatDate(new Date(), getCfg_().TZ || 'Asia/Taipei', 'yyyy-MM-dd HH:mm');
+    const vals = data.values || {};
+    let total = 0;
+    const rows = pairs.map(([inst, acc]) => {
+      const amt = Number(vals[acc.id]) || 0, rate = wealthRate_(rates, acc.currency), twd = Math.round(amt * rate);
+      total += twd;
+      return [date, bookId, inst.id, inst.name, inst.kind === 'broker' ? '證券商' : '銀行', acc.id, acc.name, acc.currency,
+              acc.type === 'invest' ? '投資' : '存款', amt, rate, twd, data.note || ''];
+    });
+    const sh = ensureWealthV2Sheet_();
+    sh.getRange(sh.getLastRow() + 1, 1, rows.length, WEALTH_V2_HEADERS_.length).setValues(rows);
+    return { ok: true, msg: '快照已儲存', total };
+  } catch (e) { return { ok: false, msg: e.message }; }
+}
+
+/* --- 月報 --- */
+/** 立刻寄一份月報。ym 例：'2026/09'；沒給就寄上個月 */
+function api_sendMonthlyReport(ym) {
+  try {
+    let y, m;
+    const mt = String(ym || '').match(/^(\d{4})[\/-](\d{1,2})$/);
+    if (mt) { y = Number(mt[1]); m = Number(mt[2]); }
+    else {
+      const tz = getCfg_().TZ || 'Asia/Taipei', now = new Date();
+      y = Number(Utilities.formatDate(now, tz, 'yyyy')); m = Number(Utilities.formatDate(now, tz, 'M')) - 1;
+      if (m === 0) { y -= 1; m = 12; }
+    }
+    if (m < 1 || m > 12) return { ok: false, msg: '月份格式錯誤' };
+    const r = sendMonthlyReport_(y, m);
+    return { ok: true, msg: `已寄出 ${y} 年 ${m} 月月報到 ${r.to}` };
+  } catch (e) { return { ok: false, msg: e.message }; }
+}
+
+/* --- 自動更新（線上載入模式） --- */
+function api_getUpdateStatus() {
+  if (!LOADER_) return { ok: true, supported: false };
+  const tz = getCfg_().TZ || 'Asia/Taipei', L = LOADER_;
+  const pending = L.latest > L.version;
+  return { ok: true, supported: true, enabled: true, status: {
+    status: pending ? 'waiting' : 'latest',
+    msg: pending
+      ? `目前 v${L.version}，新版 v${L.latest} 將於 ${Utilities.formatDate(new Date(L.readyAt), tz, 'MM/dd HH:mm')} 後自動生效`
+      : `已是最新版本 v${L.version}`,
+    at: Utilities.formatDate(new Date(), tz, 'yyyy/MM/dd HH:mm') } };
+}
+/** 設定頁「立即套用最新版」：不等 1 天（殼程式讀 FIN_SKIP_DELAY） */
+function api_runAutoUpdate() {
+  if (!LOADER_) return { ok: false, status: 'unsupported', msg: '這個後端不是範本殼程式，不需要自動更新' };
+  const tz = getCfg_().TZ || 'Asia/Taipei', L = LOADER_;
+  const at = Utilities.formatDate(new Date(), tz, 'yyyy/MM/dd HH:mm');
+  if (!(L.latest > L.version)) return { ok: true, status: 'latest', msg: `已是最新版本 v${L.version}`, at };
+  getProps_().setProperty('FIN_SKIP_DELAY', String(L.latest));
+  return { ok: true, status: 'updated', msg: `已套用最新版 v${L.latest}，重新整理頁面後生效`, at };
+}
+
+/* --- 每季/每半年 Email 提醒 --- */
+function wealthReminder() {
+  const props = getProps_();
+  const type  = props.getProperty('WEALTH_REMINDER_TYPE') || 'quarterly';
+  const month = new Date().getMonth() + 1;
+  const active = type === 'halfyear' ? [1,7] : [1,4,7,10];
+  if (!active.includes(month)) return;
+
+  const year   = new Date().getFullYear();
+  const qLabel = month<=3?'Q1':month<=6?'Q2':month<=9?'Q3':'Q4';
+  const label  = type === 'halfyear' ? (month<=6?'上半年':'下半年') : qLabel;
+  const url    = getScriptApp_().getService().getUrl();
+  const msg    = `【資產記帳提醒】${year} ${label} 到了！\n💰 記得記錄這期的總資產\n\n開啟 App：${url}`;
+  try { const C=getCfg_(); if(C['ALERT_TO']) MailApp.sendEmail(C['ALERT_TO'],'【資產記帳提醒】'+year+' '+label, msg); } catch(e){}
+}
+
+function api_setupWealthTrigger(type) {
+  // type: 'quarterly' | 'halfyear' | 'none'
+  try {
+    getScriptApp_().getProjectTriggers()
+      .filter(t => t.getHandlerFunction() === 'wealthReminder')
+      .forEach(t => getScriptApp_().deleteTrigger(t));
+    if (type !== 'none') {
+      getScriptApp_().newTrigger('wealthReminder').timeBased().onMonthDay(1).atHour(9).create();
+      getProps_().setProperty('WEALTH_REMINDER_TYPE', type);
+    } else {
+      getProps_().deleteProperty('WEALTH_REMINDER_TYPE');
+    }
+    const label = type==='quarterly'?'每季（1/4/7/10月）':type==='halfyear'?'每半年（1/7月）':'已關閉';
+    return { ok: true, msg: '提醒設定：' + label };
+  } catch(e) { return { ok: false, msg: e.message }; }
+}
+
+/* ============================================================
+   股票代碼查名稱
+   ============================================================ */
+
+function api_lookupStockName(code) {
+  if (!code) return { ok: true, name: '' };
+  const C   = getCfg_();
+  const ss  = getSS_();
+  const key = String(code).trim();
+  const sheetNames = [C.SHEET_HOLD, C.SHEET_TRADES, C.SHEET_OPENING];
+  for (const shName of sheetNames) {
+    const sh = ss.getSheetByName(shName);
+    if (!sh || sh.getLastRow() < 2) continue;
+    const rows = readSheetAsObjects_(sh);
+    const found = rows.find(r => String(r['股票代碼'] || '').trim().replace(/^'+/, '') === key);
+    if (found && found['股票名稱']) return { ok: true, name: String(found['股票名稱']).trim() };
+  }
+  return { ok: true, name: '' };
+}
+
+/* ============================================================
+   手動新增交易
+   ============================================================ */
+
+function api_addManualTrade(trade) {
+  const C  = getCfg_();
+  const ss = getSS_();
+  const sh = ensureSheetWithHeader_(C.SHEET_TRADES || '交易紀錄', [
+    '成交日期','成交時間','股票代碼','股票名稱','成交類別',
+    '股數','成交價','成交金額','委託單號','手續費','交易稅','淨收付金額','備註','證券商'
+  ]);
+
+  const type   = String(trade.type   || '現買').trim();
+  const qty    = parseFloat(trade.qty)   || 0;
+  const price  = parseFloat(trade.price) || 0;
+  const amount = qty * price;
+
+  const feeOverride = (trade.fee !== '' && trade.fee != null) ? parseFloat(trade.fee) : null;
+  const taxOverride = (trade.tax !== '' && trade.tax != null) ? parseFloat(trade.tax) : null;
+
+  const feeCalc = Math.max(20, Math.round(amount * 0.001425 * (Number(C.FEE_DISCOUNT) || 0.28)));
+  const fee = feeOverride !== null ? feeOverride : feeCalc;
+
+  const taxRate = type === '沖賣' ? 0.0015 : (type.includes('賣') ? 0.003 : 0);
+  const taxCalc = Math.round(amount * taxRate);
+  const tax = taxOverride !== null ? taxOverride : taxCalc;
+
+  const net = type.includes('賣') ? (amount - fee - tax) : -(amount + fee);
+
+  const dateStr = String(trade.date || '').replace(/-/g, '/');
+
+  // 按欄位名稱寫入，避免受現有試算表欄位順序影響
+  const lastCol = sh.getLastColumn();
+  const headers = lastCol > 0
+    ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h || '').trim())
+    : [];
+  const rowData = new Array(Math.max(lastCol, 14)).fill('');
+  const setCol  = (name, val) => {
+    const i = headers.indexOf(name);
+    if (i >= 0) rowData[i] = val;
+  };
+  setCol('成交日期',   dateStr);
+  setCol('成交時間',   trade.time   || '');
+  setCol('股票代碼',   String(trade.code || '').trim());
+  setCol('股票名稱',   trade.name   || '');
+  setCol('成交類別',   type);
+  setCol('股數',       qty);
+  setCol('成交價',     price);
+  setCol('成交金額',   amount);
+  setCol('委託單號',   '');
+  setCol('手續費',     fee);
+  setCol('交易稅',     tax);
+  setCol('淨收付金額', net);
+  setCol('證券商',     trade.broker || '');
+  setCol('備註',       trade.note   || '手動新增');
+
+  // 用 setValues 取代 appendRow，並在寫入前把股票代碼欄設為文字格式
+  // 防止 Google Sheets 把 "0056" 自動轉為數字 56
+  const newRow     = sh.getLastRow() + 1;
+  const codeColIdx = headers.indexOf('股票代碼');
+  if (codeColIdx >= 0) {
+    sh.getRange(newRow, codeColIdx + 1).setNumberFormat('@');
+  }
+  sh.getRange(newRow, 1, 1, rowData.length).setValues([rowData]);
+
+  return { ok: true, msg: `${String(trade.code).trim()} ${type} ${qty}股 已新增至交易紀錄` };
+}
+
+/* ============================================================
+   共用工具
+   ============================================================ */
+
+/** 讀取 Sheet 轉為物件陣列 */
+function readSheetAsObjects_(sh) {
+  if (!sh) return [];
+  const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
+  if (lastRow < 2) return [];
+  const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h || '').trim());
+  const data    = sh.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  return data.map(row => {
+    const o = {};
+    headers.forEach((h, i) => {
+      let val = row[i];
+      if (val instanceof Date) val = Utilities.formatDate(val, 'Asia/Taipei', 'yyyy/MM/dd');
+      o[h] = val;
+    });
+    return o;
+  });
+}
+
+/** Gemini Key 狀態（對應前端呼叫） */
+function api_getGeminiKeyStatus() {
+  const k = getProps_().getProperty('GEMINI_API_KEY') || '';
+  return { ok: true, hasKey: !!k, masked: k ? k.slice(0, 8) + '...' : '' };
+}
+
+/** 儲存 Gemini Key（對應前端呼叫） */
+function api_saveGeminiKey(key) {
+  if (!key) return { ok: false, msg: 'Key 不能為空' };
+  getProps_().setProperty('GEMINI_API_KEY', key.trim());
+  return { ok: true };
+}
+
+/* ============================================================
+   待確認交易
+   ============================================================ */
+
+function ensureStagingSheet_() {
+  const C  = getCfg_();
+  const ss = getSS_();
+  const name = C.SHEET_STAGING || '待確認交易';
+  let sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.appendRow(['成交日期','成交時間','股票代碼','股票名稱','成交類別',
+                  '股數','成交價','成交金額','委託單號','手續費','交易稅','淨收付金額','證券商','備註','確認狀態']);
+  }
+  return sh;
+}
+
+function api_getPendingTrades() {
+  const sh   = ensureStagingSheet_();
+  const rows = readSheetAsObjects_(sh);
+  const pending = rows
+    .map((r, i) => ({ ...r, _rowIndex: i + 2 }))
+    .filter(r => !r['確認狀態'] || r['確認狀態'] === '待確認');
+  return { ok: true, rows: pending };
+}
+
+function api_confirmTrades(confirmedRows) {
+  const C  = getCfg_();
+  const shStaging = ensureStagingSheet_();
+  const shTrades  = ensureSheetWithHeader_(C.SHEET_TRADES || '交易紀錄', [
+    '成交日期','成交時間','股票代碼','股票名稱','成交類別',
+    '股數','成交價','成交金額','委託單號','手續費','交易稅','淨收付金額','備註','證券商'
+  ]);
+
+  // 一次讀取所有 staging 資料（含狀態欄），避免逐列讀取
+  const lastRow = shStaging.getLastRow();
+  if (lastRow < 2) return { ok: true, msg: '0 筆交易已確認寫入' };
+  const allStaging = shStaging.getRange(2, 1, lastRow - 1, 15).getValues();
+
+  // 整批收集要寫入的列，再一次 setValues 並預設代碼欄為文字格式
+  const toWrite   = [];
+  const confirmed = [];
+  for (const row of (confirmedRows || [])) {
+    const idx = row._rowIndex - 2;
+    const sr  = allStaging[idx];
+    if (!sr) continue;
+    const status = String(sr[14] || '');
+    if (status === '已刪除' || status === '已確認') continue;
+
+    const side   = String(row['成交類別'] || sr[4]);
+    const amount = Number(sr[7]) || 0;
+    const fee    = Number(sr[9]) || 0;
+    const tax    = (row['交易稅'] !== undefined && row['交易稅'] !== null)
+                   ? Number(row['交易稅']) : Number(sr[10]) || 0;
+    const net    = side.includes('賣') ? amount - fee - tax : -(amount + fee);
+
+    toWrite.push([
+      sr[0], sr[1],
+      String(sr[2]),   // 股票代碼：保持字串，避免 0056/00919 被截掉前導零
+      sr[3], side,
+      Number(sr[5]), Number(sr[6]), amount,
+      sr[8] || '',
+      fee, tax, net,
+      sr[13] || '', sr[12] || '',  // TRADES 欄位順序：備註(staging[13]), 証券商(staging[12])
+    ]);
+    confirmed.push(row._rowIndex);
+  }
+
+  if (toWrite.length) {
+    const startRow = shTrades.getLastRow() + 1;
+    const n = toWrite.length;
+    // 先把代碼欄（col 3）與委託單號欄（col 9）設為文字格式，防止前導零被截
+    shTrades.getRange(startRow, 3, n, 1).setNumberFormat('@');
+    shTrades.getRange(startRow, 9, n, 1).setNumberFormat('@');
+    shTrades.getRange(startRow, 1, n, toWrite[0].length).setValues(toWrite);
+    confirmed.forEach(idx => shStaging.getRange(idx, 15).setValue('已確認'));
+  }
+  return { ok: true, msg: `${toWrite.length} 筆交易已確認寫入` };
+}
+
+function api_deletePendingTrade(rowIndex) {
+  ensureStagingSheet_().getRange(rowIndex, 15).setValue('已刪除');
+  return { ok: true };
+}
+
+function api_batchDeletePendingTrades(rowIndices) {
+  if (!Array.isArray(rowIndices) || !rowIndices.length) return { ok: true, count: 0 };
+  const sh = ensureStagingSheet_();
+  rowIndices.forEach(idx => sh.getRange(idx, 15).setValue('已刪除'));
+  return { ok: true, count: rowIndices.length };
+}
+
+function api_updatePendingTrade(rowIndex, fields) {
+  const sh = ensureStagingSheet_();
+  if (!rowIndex || rowIndex < 2 || rowIndex > sh.getLastRow())
+    return { ok: false, msg: '無效的列索引' };
+  const status = String(sh.getRange(rowIndex, 15).getValue());
+  if (status === '已刪除' || status === '已確認')
+    return { ok: false, msg: `此交易已${status}，無法修改` };
+
+  const existing = sh.getRange(rowIndex, 1, 1, 14).getValues()[0];
+  const side   = String(fields['成交類別'] || existing[4]);
+  const qty    = Number(fields['股數'])    || Number(existing[5]) || 0;
+  const price  = Number(fields['成交價'])  || Number(existing[6]) || 0;
+  const amount = Math.round(qty * price * 100) / 100;
+  const fee    = fields['手續費'] !== undefined ? Number(fields['手續費']) : Number(existing[9]);
+  const tax    = fields['交易稅'] !== undefined ? Number(fields['交易稅']) : Number(existing[10]);
+  const net    = side.includes('賣') ? amount - fee - tax : -(amount + fee);
+
+  sh.getRange(rowIndex, 3).setNumberFormat('@'); // 股票代碼保持文字格式
+  sh.getRange(rowIndex, 1, 1, 14).setValues([[
+    fields['成交日期'] || existing[0],
+    existing[1],
+    String(fields['股票代碼'] !== undefined ? fields['股票代碼'] : existing[2]),
+    fields['股票名稱'] !== undefined ? fields['股票名稱'] : existing[3],
+    side,
+    qty, price, amount,
+    existing[8],
+    fee, tax, net,
+    fields['証券商'] !== undefined ? fields['証券商'] : existing[12],
+    fields['備註']   !== undefined ? fields['備註']   : existing[13],
+  ]]);
+  return { ok: true, msg: '已更新', data: { '成交金額': amount, '手續費': fee, '交易稅': tax, '淨收付金額': net } };
+}
+
+/* ============================================================
+   doPost — 統一 API 入口
+   ============================================================ */
+
+function doPost(e) {
+  const output = ContentService.createTextOutput();
+  output.setMimeType(ContentService.MimeType.JSON);
+  try {
+    const body   = JSON.parse(e.postData.contents);
+    const action = body.action;
+    const args   = body.args || [];
+
+    // 資產追蹤舊版 API（《資產快照》《資產快照2》）已停用：避免舊頁面把快照寫進舊工作表、新頁面看不到
+    const ALLOWED = new Set([
+      'api_getDashboard', 'api_getDataList', 'api_getSettingsSchema',
+      'api_saveSettings', 'api_getHoldingsForAnalysis', 'api_callGemini',
+      'api_saveAnalysis', 'api_getAnalysisHistory', 'api_getGeminiKeyStatus',
+      'api_saveGeminiKey',
+      'api_setupWealthTrigger', 'api_sendMonthlyReport', 'api_getUpdateStatus', 'api_runAutoUpdate',
+      'api_getWealth', 'api_saveWealthConfig', 'api_saveWealthSnapshotV2', 'api_deleteWealthBook',
+      'ingestFromGmail_Plaintext_SAFE', 'rebuildAll_B_SAFE',
+      'api_runDividendsUpdate', 'appendDCAFromHoldings_SAFE',
+      'rebuildRealizedPnL_FIFO_SAFE', 'rebuildDCADividends_SAFE',
+      'api_getPendingTrades', 'api_confirmTrades', 'api_deletePendingTrade', 'api_batchDeletePendingTrades',
+      'api_updatePendingTrade',
+      'api_addManualTrade', 'api_lookupStockName',
+      'api_login', 'api_auth_token', 'api_getSetupStatus', 'api_setupAccount', 'api_changePassword',
+    ]);
+    // 不需登入即可呼叫
+    const PUBLIC = new Set(['api_login', 'api_auth_token', 'api_getSetupStatus', 'api_setupAccount']);
+
+    if (!ALLOWED.has(action)) {
+      output.setContent(JSON.stringify({ ok: false, msg: '不允許的 action: ' + action }));
+      return output;
+    }
+    if (!PUBLIC.has(action) && !resolveAuth_(body.token)) {
+      output.setContent(JSON.stringify({ ok: false, authError: true, msg: '登入已失效，請重新登入' }));
+      return output;
+    }
+    const fn = this[action];
+    if (typeof fn !== 'function') {
+      output.setContent(JSON.stringify({ ok: false, msg: '找不到函數: ' + action }));
+      return output;
+    }
+    const result = fn.apply(this, args);
+    output.setContent(JSON.stringify(result ?? { ok: true }));
+  } catch(err) {
+    output.setContent(JSON.stringify({ ok: false, msg: err.message || String(err) }));
+  }
+  return output;
+}
+
+function api_runDividendsUpdate() {
+  getProps_().deleteProperty('DIV_CURSOR');
+  getScriptApp_().newTrigger('runDividendsFullCycle_SAFE').timeBased().at(new Date(Date.now() + 3000)).create();
+  return { ok: true };
+}
+
+
+return { __version: 10,
+  installWizard_Init: installWizard_Init,
+  getSS_: getSS_,
+  bindEnv: bindEnv,
+  getScriptApp_: getScriptApp_,
+  getProps_: getProps_,
+  getScriptLock_: getScriptLock_,
+  getCfg_: getCfg_,
+  installWizard_Apply: installWizard_Apply,
+  setupAllSuggestedTriggers_SAFE: setupAllSuggestedTriggers_SAFE,
+  removeAllSuggestedTriggers_SAFE: removeAllSuggestedTriggers_SAFE,
+  listAllTriggers_: listAllTriggers_,
+  addDailyMaintenanceTrigger_SAFE: addDailyMaintenanceTrigger_SAFE,
+  isValidStockCode_: isValidStockCode_,
+  learnSymNameFromSheet_: learnSymNameFromSheet_,
+  ensureSheetWithHeader_: ensureSheetWithHeader_,
+  toYMDslash_: toYMDslash_,
+  normTime_: normTime_,
+  round2_: round2_,
+  round4_: round4_,
+  num_: num_,
+  escapeHtml_: escapeHtml_,
+  getFeeDiscount_: getFeeDiscount_,
+  calcFee_: calcFee_,
+  calcTax_: calcTax_,
+  calcNet_: calcNet_,
+  normDate_: normDate_,
+  normOrderNo_: normOrderNo_,
+  isStockBonusSide_: isStockBonusSide_,
+  isDayLoopSide_: isDayLoopSide_,
+  getAlertCfg_: getAlertCfg_,
+  onError_: onError_,
+  runWithAlert_: runWithAlert_,
+  ingestFromGmail_Plaintext_SAFE: ingestFromGmail_Plaintext_SAFE,
+  rebuildAll_B_SAFE: rebuildAll_B_SAFE,
+  updateDividendsFromFinMind_SAFE: updateDividendsFromFinMind_SAFE,
+  rebuildRealizedPnL_FIFO_SAFE: rebuildRealizedPnL_FIFO_SAFE,
+  rebuildRealizedPnL_FIFO_FullRebuild_SAFE: rebuildRealizedPnL_FIFO_FullRebuild_SAFE,
+  appendDCAFromHoldings_SAFE: appendDCAFromHoldings_SAFE,
+  runDividendsFullCycle_SAFE: runDividendsFullCycle_SAFE,
+  rebuildDCADividends_SAFE: rebuildDCADividends_SAFE,
+  auditInventoryGaps_SAFE: auditInventoryGaps_SAFE,
+  dailyDataMaintenance_SAFE: dailyDataMaintenance_SAFE,
+  testErrorAlert_SendSample: testErrorAlert_SendSample,
+  makeKey_NoOrder_: makeKey_NoOrder_,
+  makeKey_Order_: makeKey_Order_,
+  consolidateByOrderNo_: consolidateByOrderNo_,
+  callCloudRunToUnlock_: callCloudRunToUnlock_,
+  parseCloudRunData_: parseCloudRunData_,
+  ingestFromGmail_Plaintext: ingestFromGmail_Plaintext,
+  parseBrokerMailHTMLTable_CN_: parseBrokerMailHTMLTable_CN_,
+  parseBrokerMailPlainTable_CN_: parseBrokerMailPlainTable_CN_,
+  extractCellsText_: extractCellsText_,
+  cleanHtmlText_: cleanHtmlText_,
+  indexOfLike_: indexOfLike_,
+  safePick_: safePick_,
+  keepSide_: keepSide_,
+  rebuildAll_B: rebuildAll_B,
+  readTableAsObjects_: readTableAsObjects_,
+  fetchStockNameOnce_: fetchStockNameOnce_,
+  buildNameCache_: buildNameCache_,
+  updateDividendsFromFinMind: updateDividendsFromFinMind,
+  resetDividendBatchCursor: resetDividendBatchCursor,
+  appendStockBonusToTrades_: appendStockBonusToTrades_,
+  fetchFinMind_Dividends_: fetchFinMind_Dividends_,
+  normalizeFinMindDividendRow_: normalizeFinMindDividendRow_,
+  avgBuyOnDate_: avgBuyOnDate_,
+  rebuildRealizedPnL_FIFO: rebuildRealizedPnL_FIFO,
+  buildDayTradePnLRows_: buildDayTradePnLRows_,
+  auditInventoryGaps_: auditInventoryGaps_,
+  buildBuyQueuesFromOpeningAndTrades_R4_: buildBuyQueuesFromOpeningAndTrades_R4_,
+  appendDCAFromHoldings: appendDCAFromHoldings,
+  runDividendsFullCycle_: runDividendsFullCycle_,
+  fixStockCodes_OneTime: fixStockCodes_OneTime,
+  tool_AuditBrokerInventory: tool_AuditBrokerInventory,
+  cleanDuplicateDividends_OneTime: cleanDuplicateDividends_OneTime,
+  daysBetween_R4_: daysBetween_R4_,
+  R4_calcFee_: R4_calcFee_,
+  R4_calcTax_: R4_calcTax_,
+  debug_TraceStock_V2: debug_TraceStock_V2,
+  cleanDuplicateDividends_Safe: cleanDuplicateDividends_Safe,
+  fixStockCodes_Global: fixStockCodes_Global,
+  fixSpecificCode_ONCE: fixSpecificCode_ONCE,
+  fixSpecificCode_00981A_ONCE: fixSpecificCode_00981A_ONCE,
+  ensureStockCodeRefSheet_: ensureStockCodeRefSheet_,
+  fillMissingStockCodes_: fillMissingStockCodes_,
+  learnNewCodesIntoRefSheet_: learnNewCodesIntoRefSheet_,
+  dailyDataMaintenance_: dailyDataMaintenance_,
+  setupStockCodeValidation_ONCE: setupStockCodeValidation_ONCE,
+  api_checkSystemStatus: api_checkSystemStatus,
+  api_registerFirstUser: api_registerFirstUser,
+  api_getSettingsSchema_UNUSED_: api_getSettingsSchema_UNUSED_,
+  api_saveSettings_UNUSED_: api_saveSettings_UNUSED_,
+  ingestFromGmail_ByDateRange: ingestFromGmail_ByDateRange,
+  monthlyReport_SAFE: monthlyReport_SAFE,
+  canScheduleMonthlyReport_: canScheduleMonthlyReport_,
+  ensureMonthlyReportTrigger_: ensureMonthlyReportTrigger_,
+  sendMonthlyReport_: sendMonthlyReport_,
+  reportYMD_: reportYMD_,
+  buildMonthlyReport_: buildMonthlyReport_,
+  saveMonthlySnapshot_: saveMonthlySnapshot_,
+  renderMonthlyReportHtml_: renderMonthlyReportHtml_,
+  setLoaderInfo: setLoaderInfo,
+  isLoaderMode_: isLoaderMode_,
+  newTaskTrigger_: newTaskTrigger_,
+  triggerTaskName_: triggerTaskName_,
+  runTriggerTask: runTriggerTask,
+  doGet: doGet,
+  makeToken_: makeToken_,
+  getAppUser_: getAppUser_,
+  api_getSetupStatus: api_getSetupStatus,
+  api_setupAccount: api_setupAccount,
+  api_login: api_login,
+  resolveAuth_: resolveAuth_,
+  api_auth_token: api_auth_token,
+  api_changePassword: api_changePassword,
+  api_getDashboard: api_getDashboard,
+  api_getDataList: api_getDataList,
+  api_getSettingsSchema: api_getSettingsSchema,
+  api_saveSettings: api_saveSettings,
+  api_getHoldingsForAnalysis: api_getHoldingsForAnalysis,
+  api_callGemini: api_callGemini,
+  api_saveAnalysis: api_saveAnalysis,
+  api_getAnalysisHistory: api_getAnalysisHistory,
+  ensureWealthSheet_: ensureWealthSheet_,
+  api_saveWealthSnapshot: api_saveWealthSnapshot,
+  api_getWealthHistory: api_getWealthHistory,
+  setCfgValue_: setCfgValue_,
+  readWealthBooksCfg_: readWealthBooksCfg_,
+  api_getWealthBooks: api_getWealthBooks,
+  api_saveWealthBooks: api_saveWealthBooks,
+  ensureWealthBSheet_: ensureWealthBSheet_,
+  api_saveWealthSnapshotB: api_saveWealthSnapshotB,
+  api_getWealthHistoryB: api_getWealthHistoryB,
+  validBookId_: validBookId_,
+  wealthRate_: wealthRate_,
+  wealthDateKey_: wealthDateKey_,
+  sanitizeWealthBook_: sanitizeWealthBook_,
+  readWealthConfig_: readWealthConfig_,
+  ensureWealthV2Sheet_: ensureWealthV2Sheet_,
+  migrateWealthToV2_: migrateWealthToV2_,
+  getWealthConfig_: getWealthConfig_,
+  readWealthV2History_: readWealthV2History_,
+  api_getWealth: api_getWealth,
+  wealthOrder_: wealthOrder_,
+  api_deleteWealthBook: api_deleteWealthBook,
+  api_saveWealthConfig: api_saveWealthConfig,
+  api_saveWealthSnapshotV2: api_saveWealthSnapshotV2,
+  api_sendMonthlyReport: api_sendMonthlyReport,
+  api_getUpdateStatus: api_getUpdateStatus,
+  api_runAutoUpdate: api_runAutoUpdate,
+  wealthReminder: wealthReminder,
+  api_setupWealthTrigger: api_setupWealthTrigger,
+  api_lookupStockName: api_lookupStockName,
+  api_addManualTrade: api_addManualTrade,
+  readSheetAsObjects_: readSheetAsObjects_,
+  api_getGeminiKeyStatus: api_getGeminiKeyStatus,
+  api_saveGeminiKey: api_saveGeminiKey,
+  ensureStagingSheet_: ensureStagingSheet_,
+  api_getPendingTrades: api_getPendingTrades,
+  api_confirmTrades: api_confirmTrades,
+  api_deletePendingTrade: api_deletePendingTrade,
+  api_batchDeletePendingTrades: api_batchDeletePendingTrades,
+  api_updatePendingTrade: api_updatePendingTrade,
+  doPost: doPost,
+  api_runDividendsUpdate: api_runDividendsUpdate
+};
