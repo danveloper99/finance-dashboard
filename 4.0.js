@@ -3516,9 +3516,12 @@ function autoUpdate_(force) {
       });
       const code = r.getResponseCode(), txt = r.getContentText();
       if (code >= 300) {
-        if (code === 403 && /Apps Script API|has not (been )?enabled|SERVICE_DISABLED|PERMISSION_DENIED/i.test(txt))
+        let detail = txt;
+        try { detail = JSON.parse(txt).error.message || txt; } catch (e) {}
+        // 只有「使用者沒開 Apps Script API」才提示去 usersettings；其他錯誤顯示 Google 原文方便排查
+        if (/has not enabled the Apps Script API|script\.google\.com\/home\/usersettings/i.test(detail))
           throw new Error('NEED_API');
-        throw new Error('Apps Script API 錯誤（' + code + '）：' + txt.slice(0, 200));
+        throw new Error('Apps Script API 錯誤（' + code + '）：' + String(detail).slice(0, 300));
       }
       return txt ? JSON.parse(txt) : {};
     };
@@ -3564,7 +3567,7 @@ function autoUpdate_(force) {
     return save({ status: 'updated', msg: `已自動更新到程式庫 ${latest}（更新 ${updated} 個部署）`, current: latest, latest });
   } catch (e) {
     if (e.message === 'NEED_API')
-      return save({ status: 'error', need: 'api', msg: '需要開啟 Google Apps Script API：到 script.google.com/home/usersettings 打開開關後再試' });
+      return save({ status: 'error', need: 'api', msg: '需要開啟 Google Apps Script API：到 script.google.com/home/usersettings 打開開關（請確認是建立這份試算表的同一個 Google 帳號；剛開啟的話等 5 分鐘再試）' });
     return save({ status: 'error', msg: e.message });
   }
 }
