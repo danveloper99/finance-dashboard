@@ -42,7 +42,7 @@ function makeToken_(pwd) {
  * 後端版本號：每次發布新的程式庫版本時 +1，並同步修改 index.html 的 LATEST_BACKEND_VERSION。
  * 前端會用它判斷朋友的後端是否過舊、需要更新程式庫版本。
  */
-var APP_VERSION = 7;
+var APP_VERSION = 8;
 
 /**
  * 帳號：每份後端（每個人用自己 Google 帳號部署的 GAS）只有一組帳號
@@ -72,7 +72,7 @@ function api_setupAccount(userInput, pwdInput) {
     const props = getProps_();
     if (props.getProperty('APP_PASSWORD')) return { ok: false, msg: '這個後端已經設定過帳號，請直接登入' };
     props.setProperties({ APP_USER: user, APP_PASSWORD: pwd });
-    return { ok: true, token: makeToken_(pwd), user, version: APP_VERSION, autoUpdate: autoUpdateEnabled_() };
+    return { ok: true, token: makeToken_(pwd), user, version: APP_VERSION, autoUpdate: isLoaderMode_() };
   } finally {
     lock.releaseLock();
   }
@@ -89,7 +89,7 @@ function api_login(idInput, pwdInput) {
 
   const storedUser = getAppUser_();
   if (storedUser && id.toUpperCase() === storedUser.toUpperCase() && pwd === storedPwd)
-    return { ok: true, token: makeToken_(storedPwd), user: storedUser, version: APP_VERSION, autoUpdate: autoUpdateEnabled_() };
+    return { ok: true, token: makeToken_(storedPwd), user: storedUser, version: APP_VERSION, autoUpdate: isLoaderMode_() };
   return { ok: false, msg: '帳號或密碼錯誤' };
 }
 
@@ -101,7 +101,7 @@ function resolveAuth_(token) {
 
 /** 自動登入 Token 驗證 */
 function api_auth_token(tokenInput) {
-  return resolveAuth_(tokenInput) ? { ok: true, user: getAppUser_(), version: APP_VERSION, autoUpdate: autoUpdateEnabled_() } : { ok: false };
+  return resolveAuth_(tokenInput) ? { ok: true, user: getAppUser_(), version: APP_VERSION, autoUpdate: isLoaderMode_() } : { ok: false };
 }
 
 /** 修改密碼（需登入），回傳新 Token */
@@ -261,12 +261,6 @@ function api_getSettingsSchema() {
       { key: 'MONTHLY_REPORT_ENABLED', label: '每月月報（1 號早上寄上個月摘要）', type: 'select', options: ['TRUE', 'FALSE'] },
     ]},
   ];
-
-  if (canAutoUpdate_()) {
-    schema.splice(1, 0, { group: '自動更新', icon: 'ph-arrows-clockwise',
-      desc: 'App 發布新版本 1 天後，系統會在每天早上 6 點自動幫你更新（網址不變、資料不受影響）。第一次使用需要到 script.google.com/home/usersettings 開啟「Google Apps Script API」。',
-      items: [{ key: 'AUTO_UPDATE', label: '自動更新', type: 'select', options: ['TRUE', 'FALSE'] }] });
-  }
 
   const dcaDesc = '設定一組定期定額標的。填入 PDF 信件中出現的關鍵字（用於識別此標的）、股票代碼與投資期間，系統會自動彙整累計股數、平均成本與殖利率。';
   for (let i = 1; i <= 10; i++) {
@@ -750,15 +744,26 @@ function api_sendMonthlyReport(ym) {
   } catch (e) { return { ok: false, msg: e.message }; }
 }
 
-/* --- 自動更新 --- */
+/* --- 自動更新（線上載入模式） --- */
 function api_getUpdateStatus() {
-  return { ok: true, supported: canAutoUpdate_(), enabled: autoUpdateEnabled_(), status: readAutoUpdateStatus_() };
+  if (!LOADER_) return { ok: true, supported: false };
+  const tz = getCfg_().TZ || 'Asia/Taipei', L = LOADER_;
+  const pending = L.latest > L.version;
+  return { ok: true, supported: true, enabled: true, status: {
+    status: pending ? 'waiting' : 'latest',
+    msg: pending
+      ? `目前 v${L.version}，新版 v${L.latest} 將於 ${Utilities.formatDate(new Date(L.readyAt), tz, 'MM/dd HH:mm')} 後自動生效`
+      : `已是最新版本 v${L.version}`,
+    at: Utilities.formatDate(new Date(), tz, 'yyyy/MM/dd HH:mm') } };
 }
-/** 設定頁「立即檢查並更新」：不等 1 天 */
+/** 設定頁「立即套用最新版」：不等 1 天（殼程式讀 FIN_SKIP_DELAY） */
 function api_runAutoUpdate() {
-  const r = autoUpdate_(true);
-  try { ensureAutoUpdateTrigger_(); } catch (e) {}
-  return r;
+  if (!LOADER_) return { ok: false, status: 'unsupported', msg: '這個後端不是範本殼程式，不需要自動更新' };
+  const tz = getCfg_().TZ || 'Asia/Taipei', L = LOADER_;
+  const at = Utilities.formatDate(new Date(), tz, 'yyyy/MM/dd HH:mm');
+  if (!(L.latest > L.version)) return { ok: true, status: 'latest', msg: `已是最新版本 v${L.version}`, at };
+  getProps_().setProperty('FIN_SKIP_DELAY', String(L.latest));
+  return { ok: true, status: 'updated', msg: `已套用最新版 v${L.latest}，重新整理頁面後生效`, at };
 }
 
 /* --- 每季/每半年 Email 提醒 --- */

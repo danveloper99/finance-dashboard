@@ -219,7 +219,6 @@ function setupAllSuggestedTriggers_SAFE() {
   getScriptApp_().newTrigger('appendDCAFromHoldings_SAFE').timeBased().everyDays(1).atHour(12).nearMinute(0).inTimezone(tz).create();
   getScriptApp_().newTrigger('runDividendsFullCycle_SAFE').timeBased().everyDays(1).atHour(11).nearMinute(0).inTimezone(tz).create();
   ensureMonthlyReportTrigger_(); // 每月 1 號 8 點寄月報（依《設定》MONTHLY_REPORT_ENABLED）
-  ensureAutoUpdateTrigger_();    // 範本使用者：每天 6 點自動更新（依《設定》AUTO_UPDATE）
 
   Logger.log('✅ 已建立新排程。');
 }
@@ -235,7 +234,8 @@ function removeAllSuggestedTriggers_SAFE() {
     'runDividendsFullCycle_SAFE',
     'updateDividendsFromFinMind_SAFE',
     'monthlyReport_SAFE',
-    'autoUpdate_SAFE'
+    'autoUpdate_SAFE', // 舊版（Apps Script API）自動更新，已停用；保留名稱以便清掉
+    'finTrigger'
   ]);
   getScriptApp_().getProjectTriggers().forEach(t => {
     if (names.has(t.getHandlerFunction())) getScriptApp_().deleteTrigger(t);
@@ -2686,7 +2686,6 @@ function dailyDataMaintenance_() {
   Logger.log(`📋 每日資料維護完成：對照表自動學到新代碼 ${learned} 筆、補上缺代碼 ${filled} 筆、修正代碼格式 ${fixed} 筆。`);
   // 順便確保月報排程存在（舊使用者不用重跑 setupAllSuggestedTriggers_SAFE）
   try { ensureMonthlyReportTrigger_(); } catch (e) { Logger.log('月報排程檢查失敗：' + e.message); }
-  try { ensureAutoUpdateTrigger_(); } catch (e) { Logger.log('自動更新排程檢查失敗：' + e.message); }
 }
 
 /**
@@ -3442,132 +3441,39 @@ function renderMonthlyReportHtml_(d) {
 }
 
 /***** =======================
- * 自動更新（只對「範本殼程式」有效）
- * 每天檢查 GitHub Pages 上的 release.json；新版發布超過 1 天後，
- * 用使用者自己的授權呼叫 Apps Script API：換上最新殼程式與程式庫版本 → 建立新版本 → 更新網頁部署（網址不變）。
- * 需要使用者開啟一次 https://script.google.com/home/usersettings 的「Google Apps Script API」。
+ * 線上載入模式（範本殼程式 v4 起）
+ * 殼程式從 GitHub Pages 下載 releases/v{N}.js，用 new Function 執行後呼叫 setLoaderInfo。
+ * 這個模式下 ScriptApp / PropertiesService 都是使用者自己專案的，不需要 bindEnv。
  * ======================== */
 
-var AUTO_UPDATE_DELAY_MS_ = 24 * 3600 * 1000; // 新版發布後等 1 天，讓作者先用、有問題來得及修
-
-/** 殼程式版本 3 起才有 autoUpdate_SAFE */
-function canAutoUpdate_() {
-  return !!SCRIPT_APP_ && Number(SHELL_VERSION_) >= 3;
-}
-function autoUpdateEnabled_() {
-  return canAutoUpdate_() && String(getCfg_().AUTO_UPDATE || 'TRUE').toUpperCase() !== 'FALSE';
-}
-
-/** 排程入口：每天早上 6 點 */
-function autoUpdate_SAFE() {
-  return runWithAlert_(() => autoUpdate_(false), 'autoUpdate');
-}
-
-/** 依設定確保自動更新排程存在 */
-function ensureAutoUpdateTrigger_() {
-  if (!canAutoUpdate_()) return;
-  const app = getScriptApp_();
-  const existing = app.getProjectTriggers().filter(t => t.getHandlerFunction() === 'autoUpdate_SAFE');
-  const enabled = autoUpdateEnabled_();
-  if (enabled && !existing.length) {
-    app.newTrigger('autoUpdate_SAFE').timeBased().everyDays(1).atHour(6).inTimezone(getCfg_().TZ || 'Asia/Taipei').create();
-    Logger.log('🔄 已建立自動更新排程（每天 6 點）');
-  } else if (!enabled && existing.length) {
-    existing.forEach(t => app.deleteTrigger(t));
-    Logger.log('🔄 已移除自動更新排程');
-  }
-}
-
-function readAutoUpdateStatus_() {
-  try { return JSON.parse(getProps_().getProperty('AUTO_UPDATE_STATUS') || 'null'); } catch (e) { return null; }
-}
+var LOADER_ = null; // { shellVersion, version, latest, readyAt }
+function setLoaderInfo(info) { LOADER_ = info || null; }
+function isLoaderMode_() { return !!LOADER_; }
 
 /**
- * force = true（設定頁「立即檢查並更新」）：忽略 1 天等待與開關
- * 回傳 { ok, status, msg, current, latest }，同時存進指令碼屬性 AUTO_UPDATE_STATUS
+ * 建立排程的統一入口（之後新增的排程請用這個）：
+ * 線上載入模式下，殼程式只有固定幾個函式名稱，新的排程一律掛在殼程式的 finTrigger，
+ * 再用指令碼屬性記住「這個觸發器要跑哪個函式」。
  */
-function autoUpdate_(force) {
-  const tz = getCfg_().TZ || 'Asia/Taipei';
-  const save = o => {
-    const rec = Object.assign({ at: Utilities.formatDate(new Date(), tz, 'yyyy/MM/dd HH:mm') }, o);
-    if (canAutoUpdate_()) getProps_().setProperty('AUTO_UPDATE_STATUS', JSON.stringify(rec));
-    Logger.log('自動更新：' + rec.msg);
-    return Object.assign({ ok: o.status !== 'error' }, rec);
-  };
-  if (!canAutoUpdate_()) return { ok: false, status: 'unsupported', msg: '這個後端不是範本殼程式（或殼程式太舊），不支援自動更新' };
-  if (!force && !autoUpdateEnabled_()) return save({ status: 'off', msg: '自動更新已關閉' });
-
-  const getText = url => {
-    const r = UrlFetchApp.fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), { muteHttpExceptions: true });
-    if (r.getResponseCode() !== 200) throw new Error('下載失敗（' + r.getResponseCode() + '）：' + url);
-    return r.getContentText('utf-8');
-  };
-
-  try {
-    const rel = JSON.parse(getText(APP_URL_ + 'release.json'));
-    const latest = Number(rel.libVersion) || 0;
-    const app = getScriptApp_();
-    const scriptId = app.getScriptId();
-    const token = app.getOAuthToken();
-    const api = (method, path, body) => {
-      const r = UrlFetchApp.fetch('https://script.googleapis.com/v1/projects/' + scriptId + path, {
-        method, contentType: 'application/json', headers: { Authorization: 'Bearer ' + token },
-        payload: body ? JSON.stringify(body) : undefined, muteHttpExceptions: true,
-      });
-      const code = r.getResponseCode(), txt = r.getContentText();
-      if (code >= 300) {
-        let detail = txt;
-        try { detail = JSON.parse(txt).error.message || txt; } catch (e) {}
-        // 只有「使用者沒開 Apps Script API」才提示去 usersettings；其他錯誤顯示 Google 原文方便排查
-        if (/has not enabled the Apps Script API|script\.google\.com\/home\/usersettings/i.test(detail))
-          throw new Error('NEED_API');
-        throw new Error('Apps Script API 錯誤（' + code + '）：' + String(detail).slice(0, 300));
-      }
-      return txt ? JSON.parse(txt) : {};
-    };
-
-    // 目前用的程式庫版本
-    const files = api('get', '/content').files || [];
-    const manifestFile = files.find(f => f.name === 'appsscript');
-    if (!manifestFile) throw new Error('找不到 appsscript.json');
-    const libs = ((JSON.parse(manifestFile.source).dependencies || {}).libraries || []);
-    const current = Number((libs.find(l => l.userSymbol === 'FinLib') || {}).version) || 0;
-    if (current >= latest) return save({ status: 'latest', msg: `已是最新版本（程式庫 ${current}）`, current, latest });
-
-    const readyAt = (Date.parse(rel.releasedAt) || 0) + AUTO_UPDATE_DELAY_MS_;
-    if (!force && Date.now() < readyAt)
-      return save({ status: 'waiting', msg: `有新版本（程式庫 ${latest}），將於 ${Utilities.formatDate(new Date(readyAt), tz, 'MM/dd HH:mm')} 後自動更新`, current, latest });
-
-    // 下載最新殼程式，確認和 release.json 一致（避免發布到一半）
-    const newCode = getText(APP_URL_ + 'template/Code.js');
-    const newManifest = JSON.parse(getText(APP_URL_ + 'template/appsscript.json'));
-    const newLib = ((newManifest.dependencies || {}).libraries || []).find(l => l.userSymbol === 'FinLib');
-    if (!newLib || Number(newLib.version) !== latest) throw new Error('發布檔案尚未同步，稍後再試');
-    if (!/FinLib\.bindEnv/.test(newCode)) throw new Error('下載的殼程式內容不正確，已取消更新');
-
-    // 只換掉 Code 與 appsscript，保留使用者自己加的其他檔案
-    const keep = files.filter(f => f.name !== 'appsscript' && f.name !== 'Code');
-    api('put', '/content', { files: [
-      { name: 'appsscript', type: 'JSON', source: JSON.stringify(newManifest, null, 2) },
-      { name: 'Code', type: 'SERVER_JS', source: newCode },
-    ].concat(keep) });
-    const ver = api('post', '/versions', { description: `自動更新：程式庫 ${latest}` });
-
-    // 把網頁應用程式部署指向新版本（網址不變）
-    const deps = api('get', '/deployments').deployments || [];
-    let updated = 0;
-    deps.filter(d => d.deploymentConfig && d.deploymentConfig.versionNumber &&
-                     (d.entryPoints || []).some(e => e.entryPointType === 'WEB_APP'))
-      .forEach(d => {
-        api('put', '/deployments/' + d.deploymentId, { deploymentConfig: {
-          scriptId, versionNumber: ver.versionNumber, manifestFileName: 'appsscript',
-          description: `自動更新：程式庫 ${latest}` } });
-        updated++;
-      });
-    return save({ status: 'updated', msg: `已自動更新到程式庫 ${latest}（更新 ${updated} 個部署）`, current: latest, latest });
-  } catch (e) {
-    if (e.message === 'NEED_API')
-      return save({ status: 'error', need: 'api', msg: '需要開啟 Google Apps Script API：到 script.google.com/home/usersettings 打開開關（請確認是建立這份試算表的同一個 Google 帳號；剛開啟的話等 5 分鐘再試）' });
-    return save({ status: 'error', msg: e.message });
-  }
+function newTaskTrigger_(taskName) {
+  const app = getScriptApp_();
+  if (!LOADER_) return app.newTrigger(taskName);
+  const b = app.newTrigger('finTrigger');
+  const wrap = builder => new Proxy(builder, { get: (t, k) => {
+    if (k === 'create') return () => { const tr = t.create(); getProps_().setProperty('TASK_' + tr.getUniqueId(), taskName); return tr; };
+    const v = t[k];
+    return typeof v === 'function' ? (...a) => { const r = v.apply(t, a); return r && typeof r === 'object' ? wrap(r) : r; } : v;
+  } });
+  return wrap(b);
+}
+/** 排程對應的函式名稱（finTrigger 的要查表） */
+function triggerTaskName_(t) {
+  const h = t.getHandlerFunction();
+  return h === 'finTrigger' ? (getProps_().getProperty('TASK_' + t.getUniqueId()) || h) : h;
+}
+/** 殼程式 finTrigger 的落點 */
+function runTriggerTask(e) {
+  const name = e && e.triggerUid ? getProps_().getProperty('TASK_' + e.triggerUid) : '';
+  if (!name || typeof this[name] !== 'function') throw new Error('找不到排程對應的函式：' + (name || '(未記錄)'));
+  return this[name](e);
 }

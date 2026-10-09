@@ -3,3 +3,5 @@
 .git/**
 .claude/**
 template/**
+releases/**
+tools/**

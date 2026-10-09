@@ -247,7 +247,6 @@
             <li>回到試算表《設定》分頁，填好需要的欄位（時區、券商、FinMind Token 等），再執行 <code>installWizard_Apply</code> 建立各工作表</li>
             <li>右上角「部署 → 新增部署作業」→ 類型選「網頁應用程式」→ 執行身分：<b>我</b>、存取權：<b>任何人</b> → 部署</li>
             <li>複製產生的「網頁應用程式網址」（結尾是 /exec）</li>
-            <li>到 <b>script.google.com/home/usersettings</b> 把「Google Apps Script API」打開（讓 App 之後可以自動更新）</li>
             <li>回到 Apps Script 執行 <code>setupAllSuggestedTriggers_SAFE</code>，建立每日排程與自動更新</li>
           </ol>
           <div style="font-weight:700;color:#588157;margin-bottom:4px">二、在本頁完成設定</div>
@@ -265,8 +264,8 @@
             <li>加密 PDF 對帳單需要自己的 Cloud Run 解鎖服務；沒有的話只用 HTML 成交回報信即可</li>
           </ul>
           <div style="font-weight:700;color:#588157;margin-bottom:4px">四、更新到新版本</div>
-          <div style="margin:0 0 12px">預設會<b>自動更新</b>：新版本發布 1 天後，每天早上 6 點自動換上新版（網址不變、資料不受影響）。不想自動更新可以到「設定 → 自動更新」關掉。<br>
-          2026/10 以前建立的副本需要手動更新一次（之後就會自動）：重新從範本建立副本最簡單；或照下面步驟：
+          <div style="margin:0 0 12px"><b>會自動更新</b>，不需要做任何事：新版本發布 1 天後自動生效（網址不變、資料不受影響）。想馬上用新版，可以到「設定 → 自動更新」按「立即套用最新版」。<br>
+          2026/10/10 以前建立的副本需要換一次新版殼程式（之後就會自動）：重新從範本建立副本最簡單；或照下面步驟手動更新程式庫：
           <ol style="list-style:decimal;padding-left:20px;margin:4px 0 0;line-height:1.8">
             <li>開啟你的試算表 →「擴充功能 → Apps Script」</li>
             <li>左側「程式庫」點 <b>FinLib</b> → 版本選最新 → 儲存</li>
@@ -960,7 +959,7 @@
           第一次使用請到 <a href="https://script.google.com/home/usersettings" target="_blank" style="color:#bc6c25;font-weight:700">script.google.com/home/usersettings</a> 打開「Google Apps Script API」，再按一次下方按鈕。
         </div>
         <button @click="runAutoUpdateNow" :disabled="updateRunning" class="btn btn-outline" style="margin-top:12px;font-size:13px;padding:8px 16px">
-          <i :class="updateRunning?'ph ph-spinner spin':'ph ph-arrows-clockwise'"></i> {{ updateRunning ? '檢查中…' : '立即檢查並更新' }}</button>
+          <i :class="updateRunning?'ph ph-spinner spin':'ph ph-arrows-clockwise'"></i> {{ updateRunning ? '處理中…' : '立即套用最新版' }}</button>
       </div>
       <!-- GAS URL 設定 -->
       <div class="settings-group">
@@ -1218,7 +1217,7 @@ const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
 // ── fetch 包裝：呼叫 GAS doPost ──────────────────────────────
 const AUTH_TOKEN_KEY = 'auth_token';
 // 最新後端（程式庫）版本：要和 WebAPI.js 的 APP_VERSION 一起改
-const LATEST_BACKEND_VERSION = 7;
+const LATEST_BACKEND_VERSION = 8;
 let onAuthExpired_ = null; // Vue 掛載後設定：Token 失效時切回登入畫面
 async function callGAS(action, args = []) {
   const url = getGasUrl();
@@ -1445,7 +1444,7 @@ createApp({
       try {
         const r = await callGAS('api_runAutoUpdate');
         updateInfo.value = { ...updateInfo.value, status: r };
-        if (r.status === 'updated') alert('✅ ' + r.msg + '\n重新整理頁面後就會使用新版本。');
+        if (r.status === 'updated') alert('✅ ' + r.msg);
       } catch (e) { alert('❌ ' + e.message); }
       finally { updateRunning.value = false; }
     };
