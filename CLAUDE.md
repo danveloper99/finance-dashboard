@@ -88,32 +88,29 @@ clasp deploy --deploymentId AKfycbzrFTtWxBH1aisKKkXWihYFittWQwUGldnjJTo3YE-jXonP
 - **原則**：vibe coding，先求功能正確，不過度工程化
 - **GAS 特性**：注意 6 分鐘執行時限；使用 `LockService` 避免並行寫入衝突
 
-## 分享給其他用戶（程式庫架構）
+## 分享給其他用戶（線上載入架構）
 - **機密原則**：每人用自己的 Google 帳號複製「範本試算表」並自己部署後端，作者看不到任何人的資料。不要提議「主控試算表 + 使用者對應表」或要求共用試算表給作者的方案。
-- 範本試算表的 Apps Script 只有 `template/` 裡的殼程式，所有功能來自**程式庫 FinLib**（獨立的 Apps Script 專案，程式碼與本專案相同）。
+- 範本試算表的 Apps Script 只有 `template/Code.js`（殼程式，shellVersion 4）：執行時從 GitHub Pages 下載 `releases/vN.js`（`4.0.js` + `WebAPI.js` 打包），用 `new Function` 執行。**殼程式之後不再修改**。
+- 殼程式依 `release.json` 選版本：`current` 發布滿 1 天才採用，之前用 `previous`；設定頁「立即套用最新版」會寫入 `FIN_SKIP_DELAY` 跳過等待。程式碼快取在 CacheService（6 小時），下載失敗會退回 `FIN_LAST_GOOD_VERSION`。
+- 線上載入模式下 ScriptApp / Properties / Lock 都是使用者自己的；程式裡用 `LOADER_`（`isLoaderMode_()`）判斷。
+- **殼程式只有固定的排程函式名稱**（見 template/Code.js）。之後新增排程一律用 `newTaskTrigger_('函式名')`，會掛在殼程式的 `finTrigger`，不需要改殼程式。
+- `template/appsscript.json` 的 oauthScopes **不要隨意增加**：新增權限會讓朋友的排程在重新授權前全部失敗。
 - 每份後端只有一組帳號：Script Properties 的 `APP_USER` / `APP_PASSWORD`，由前端「首次設定」呼叫 `api_setupAccount` 建立。
-- 程式庫裡建立的觸發器不會生效：觸發器一律透過 `getScriptApp_()`（殼程式會 `bindEnv` 傳入自己的 `ScriptApp`）。**新增排程用的函式時，`template/Code.js` 也要加同名轉接函式。**
-- 前端必須相容舊版後端（朋友不一定會更新）。
-- **範本試算表不可用「複製主控試算表」產生**（會帶走個人資料，也可能帶走 Script Properties）。範本一律用全新空白試算表 + `clasp -P .clasp.template.json push`。
-- **程式庫的 Script Properties / Lock 是所有使用者共用的同一份**：程式碼一律用 `getProps_()` / `getScriptLock_()`，不可直接呼叫 `PropertiesService.getScriptProperties()` 或 `LockService.getScriptLock()`。殼程式透過 `bindEnv({ props, lockService })` 傳入自己的服務。
+- 前端必須相容舊版後端（朋友的版本最多落後 1 天，舊的程式庫版殼程式可能更舊）。
+- **範本試算表不可用「複製主控試算表」產生**（會帶走個人資料）。範本一律用全新空白試算表 + `clasp -P .clasp.template.json push --force`。
+- 舊版「程式庫殼程式」（FinLib，shellVersion 1～3）仍相容：程式庫的 Script Properties / Lock 是所有使用者共用的，所以程式碼一律用 `getProps_()` / `getScriptLock_()`，不可直接呼叫 `PropertiesService.getScriptProperties()` 或 `LockService.getScriptLock()`。
 
-| clasp 設定檔 | 對象 |
+| 檔案 / clasp 設定檔 | 對象 |
 |------|------|
-| `.clasp.json` | 你自己的正式專案（綁定主控試算表） |
-| `.clasp.lib.json` | 程式庫 FinLib（獨立專案） |
+| `.clasp.json` | 你自己的正式專案（綁定主控試算表，直接部署完整程式） |
 | `.clasp.template.json` | 範本試算表的殼程式（`rootDir: template`） |
-| `.clasp.test.json` | 測試專案 |
+| `.clasp.lib.json` | 舊版程式庫 FinLib（給還沒換殼程式的舊使用者） |
+| `releases/vN.js`、`release.json` | 線上載入用的程式包與版本資訊（GitHub Pages） |
+| `tools/build-release.js` | 打包工具 |
 
-### 發布新版本給朋友
+### 發布新版本
 1. `WebAPI.js` 的 `APP_VERSION` +1，`index.html` 的 `LATEST_BACKEND_VERSION` 改成一樣的數字
-2. `clasp -P .clasp.lib.json push`，再 `clasp -P .clasp.lib.json version "說明"` 建立程式庫新版本（記下版本號 N）
-3. `template/appsscript.json` 的 FinLib `version` 改成 N，`clasp -P .clasp.template.json push --force`
-4. 更新 `release.json`：`libVersion` = N、`releasedAt` = 現在時間（ISO 8601，含 +08:00）
-5. 正式專案照常 `clasp push` + `clasp deploy --deploymentId ...`
-6. commit 並 push（GitHub Pages）。**release.json、template/ 一定要和第 3 步同一次 push**
-
-### 自動更新（殼程式 shellVersion ≥ 3）
-- 朋友的殼程式每天 6 點讀 `release.json`；新版發布滿 1 天後，用朋友自己的授權呼叫 Apps Script API，把 `template/Code.js`、`template/appsscript.json`（從 GitHub Pages 下載）寫進自己的專案、建立新版本、更新網頁部署。
-- 朋友需開啟一次 https://script.google.com/home/usersettings 的「Google Apps Script API」。
-- **template/appsscript.json 的 oauthScopes 不要隨意增加**：新增權限會讓朋友的排程在重新授權前全部失敗。
-- 新增排程用的函式時，`template/Code.js` 要加轉接函式，`shellVersion` +1，並在程式庫用 `SHELL_VERSION_` 判斷舊殼程式。
+2. 跑測試後 `node tools/build-release.js "這次更新的說明"`（產生 `releases/vN.js`、更新 `release.json`）
+3. 正式專案 `clasp push` + `clasp deploy --deploymentId ...`
+4. （選用）舊程式庫使用者：`clasp -P .clasp.lib.json push --force` + `clasp -P .clasp.lib.json version "說明"`
+5. commit（含 `releases/`、`release.json`）並 push → GitHub Pages；朋友在 1 天後自動更新
