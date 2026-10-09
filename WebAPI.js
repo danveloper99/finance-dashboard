@@ -23,7 +23,7 @@ function doGet(e) {
  * Token 無法反推密碼，比 base64 安全
  */
 function makeToken_(pwd) {
-  const props = PropertiesService.getScriptProperties();
+  const props = getProps_();
   let salt = props.getProperty('TOKEN_SALT');
   if (!salt) {
     salt = Utilities.base64Encode(
@@ -42,7 +42,7 @@ function makeToken_(pwd) {
  * 後端版本號：每次發布新的程式庫版本時 +1，並同步修改 index.html 的 LATEST_BACKEND_VERSION。
  * 前端會用它判斷朋友的後端是否過舊、需要更新程式庫版本。
  */
-var APP_VERSION = 2;
+var APP_VERSION = 3;
 
 /**
  * 帳號：每份後端（每個人用自己 Google 帳號部署的 GAS）只有一組帳號
@@ -50,13 +50,13 @@ var APP_VERSION = 2;
  * - 舊版沒有 APP_USER 時，帳號沿用《設定》的 ID_NUMBER
  */
 function getAppUser_() {
-  const u = PropertiesService.getScriptProperties().getProperty('APP_USER');
+  const u = getProps_().getProperty('APP_USER');
   return String(u || getCfg_()['ID_NUMBER'] || '').trim();
 }
 
 /** 這個後端是否已設定帳號（前端用來判斷要顯示「登入」還是「首次設定」） */
 function api_getSetupStatus() {
-  return { ok: true, configured: !!PropertiesService.getScriptProperties().getProperty('APP_PASSWORD') };
+  return { ok: true, configured: !!getProps_().getProperty('APP_PASSWORD') };
 }
 
 /** 首次設定帳號密碼：只有尚未設定過時可以呼叫 */
@@ -66,10 +66,10 @@ function api_setupAccount(userInput, pwdInput) {
   if (!/^[A-Za-z0-9_.@-]{3,40}$/.test(user)) return { ok: false, msg: '帳號限 3~40 個英數字（可含 _ . @ -）' };
   if (pwd.length < 6) return { ok: false, msg: '密碼至少 6 個字元' };
 
-  const lock = LockService.getScriptLock();
+  const lock = getScriptLock_();
   if (!lock.tryLock(10000)) return { ok: false, msg: '系統忙碌中，請稍後再試' };
   try {
-    const props = PropertiesService.getScriptProperties();
+    const props = getProps_();
     if (props.getProperty('APP_PASSWORD')) return { ok: false, msg: '這個後端已經設定過帳號，請直接登入' };
     props.setProperties({ APP_USER: user, APP_PASSWORD: pwd });
     return { ok: true, token: makeToken_(pwd), user, version: APP_VERSION };
@@ -84,7 +84,7 @@ function api_login(idInput, pwdInput) {
   const pwd = String(pwdInput || '');
   if (!id || !pwd) return { ok: false, msg: '請輸入帳號與密碼' };
 
-  const storedPwd = PropertiesService.getScriptProperties().getProperty('APP_PASSWORD');
+  const storedPwd = getProps_().getProperty('APP_PASSWORD');
   if (!storedPwd) return { ok: false, needSetup: true, msg: '這個後端還沒設定帳號，請先到「首次設定」' };
 
   const storedUser = getAppUser_();
@@ -95,7 +95,7 @@ function api_login(idInput, pwdInput) {
 
 /** 驗證 Token；改密碼後舊 Token 自動失效 */
 function resolveAuth_(token) {
-  const storedPwd = PropertiesService.getScriptProperties().getProperty('APP_PASSWORD');
+  const storedPwd = getProps_().getProperty('APP_PASSWORD');
   return !!(token && storedPwd && token === makeToken_(storedPwd));
 }
 
@@ -106,7 +106,7 @@ function api_auth_token(tokenInput) {
 
 /** 修改密碼（需登入），回傳新 Token */
 function api_changePassword(oldPwd, newPwd) {
-  const props     = PropertiesService.getScriptProperties();
+  const props     = getProps_();
   const storedPwd = props.getProperty('APP_PASSWORD');
   if (storedPwd && String(oldPwd) !== String(storedPwd))
     return { ok: false, msg: '舊密碼不正確' };
@@ -394,7 +394,7 @@ function api_getHoldingsForAnalysis() {
  * 支援 Gemini multimodal：同時傳入文字 + 圖片
  */
 function api_callGemini(prompt, images) {
-  const key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY') || '';
+  const key = getProps_().getProperty('GEMINI_API_KEY') || '';
   if (!key) return { ok: false, msg: '尚未設定 Gemini API Key，請至「市場分析」頁儲存。' };
 
   try {
@@ -605,7 +605,7 @@ function api_getWealthHistory() {
 
 /* --- 每季/每半年 Email 提醒 --- */
 function wealthReminder() {
-  const props = PropertiesService.getScriptProperties();
+  const props = getProps_();
   const type  = props.getProperty('WEALTH_REMINDER_TYPE') || 'quarterly';
   const month = new Date().getMonth() + 1;
   const active = type === 'halfyear' ? [1,7] : [1,4,7,10];
@@ -627,9 +627,9 @@ function api_setupWealthTrigger(type) {
       .forEach(t => getScriptApp_().deleteTrigger(t));
     if (type !== 'none') {
       getScriptApp_().newTrigger('wealthReminder').timeBased().onMonthDay(1).atHour(9).create();
-      PropertiesService.getScriptProperties().setProperty('WEALTH_REMINDER_TYPE', type);
+      getProps_().setProperty('WEALTH_REMINDER_TYPE', type);
     } else {
-      PropertiesService.getScriptProperties().deleteProperty('WEALTH_REMINDER_TYPE');
+      getProps_().deleteProperty('WEALTH_REMINDER_TYPE');
     }
     const label = type==='quarterly'?'每季（1/4/7/10月）':type==='halfyear'?'每半年（1/7月）':'已關閉';
     return { ok: true, msg: '提醒設定：' + label };
@@ -748,14 +748,14 @@ function readSheetAsObjects_(sh) {
 
 /** Gemini Key 狀態（對應前端呼叫） */
 function api_getGeminiKeyStatus() {
-  const k = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY') || '';
+  const k = getProps_().getProperty('GEMINI_API_KEY') || '';
   return { ok: true, hasKey: !!k, masked: k ? k.slice(0, 8) + '...' : '' };
 }
 
 /** 儲存 Gemini Key（對應前端呼叫） */
 function api_saveGeminiKey(key) {
   if (!key) return { ok: false, msg: 'Key 不能為空' };
-  PropertiesService.getScriptProperties().setProperty('GEMINI_API_KEY', key.trim());
+  getProps_().setProperty('GEMINI_API_KEY', key.trim());
   return { ok: true };
 }
 
@@ -935,7 +935,7 @@ function doPost(e) {
 }
 
 function api_runDividendsUpdate() {
-  PropertiesService.getScriptProperties().deleteProperty('DIV_CURSOR');
+  getProps_().deleteProperty('DIV_CURSOR');
   getScriptApp_().newTrigger('runDividendsFullCycle_SAFE').timeBased().at(new Date(Date.now() + 3000)).create();
   return { ok: true };
 }

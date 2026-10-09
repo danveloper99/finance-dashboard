@@ -11,7 +11,13 @@
  */
 
 function lib_() {
-  FinLib.bindEnv({ scriptApp: ScriptApp }); // 讓觸發器建立在你自己的專案裡
+  // 把「你自己這個專案」的服務交給程式庫：
+  // 觸發器建在你的專案；密碼、Gemini Key 等設定存在你自己的指令碼屬性（不會和其他人共用）
+  FinLib.bindEnv({
+    scriptApp:   ScriptApp,
+    props:       PropertiesService.getScriptProperties(),
+    lockService: LockService,
+  });
   return FinLib;
 }
 

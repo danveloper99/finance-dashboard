@@ -117,16 +117,34 @@ function getSS_() {
 }
 
 /**
- * 程式庫模式：朋友試算表裡的「殼程式」會先呼叫 FinLib.bindEnv({ scriptApp: ScriptApp })。
- * 在程式庫裡建立的觸發器不會生效，所以建立／刪除觸發器、取得網址都要用殼程式自己的 ScriptApp。
- * 直接部署（你自己的專案）時沒有呼叫 bindEnv，就用本專案的 ScriptApp。
+ * 程式庫模式：朋友試算表裡的「殼程式」會先呼叫
+ *   FinLib.bindEnv({ scriptApp: ScriptApp, props: getProps_(), lockService: LockService })
+ * 原因：
+ * - 在程式庫裡建立的觸發器不會生效 → 觸發器要用殼程式自己的 ScriptApp
+ * - 程式庫的 Script Properties / Lock 是「程式庫自己一份、所有使用者共用」→ 密碼、Gemini Key
+ *   一定要存在殼程式自己的 Properties，否則所有人會共用同一組帳號
+ * 直接部署（你自己的專案）時不會呼叫 bindEnv，就用本專案自己的服務。
  */
 var SCRIPT_APP_ = null;
+var PROPS_ = null;
+var LOCK_SVC_ = null;
 function bindEnv(env) {
-  SCRIPT_APP_ = (env && env.scriptApp) || null;
+  env = env || {};
+  if (!env.props) throw new Error('殼程式版本過舊（未傳入 props），請依說明更新試算表裡的 Apps Script 殼程式');
+  SCRIPT_APP_ = env.scriptApp || null;
+  PROPS_      = env.props;
+  LOCK_SVC_   = env.lockService || null;
 }
 function getScriptApp_() {
   return SCRIPT_APP_ || ScriptApp;
+}
+/** 一律用這個取代 getProps_() */
+function getProps_() {
+  return PROPS_ || PropertiesService.getScriptProperties();
+}
+/** 一律用這個取代 getScriptLock_() */
+function getScriptLock_() {
+  return (LOCK_SVC_ || LockService).getScriptLock();
 }
 
 /** 讀取〈設定〉分頁為物件 */
@@ -647,7 +665,7 @@ function parseCloudRunData_(rawData, tz) {
 }
 
 function ingestFromGmail_Plaintext() {
-  const lock = LockService.getScriptLock();
+  const lock = getScriptLock_();
   if (!lock.tryLock(10000))
     throw new Error('ingestFromGmail_Plaintext: 另一個執行緒正在執行，請稍後再試');
   try {
@@ -1235,7 +1253,7 @@ function readTableAsObjects_(sh) {
 function fetchStockNameOnce_(sym, token) {
   if (!sym) return '';
   try {
-    const props = PropertiesService.getScriptProperties();
+    const props = getProps_();
     const KEY = 'NAME_CACHE__' + String(sym).trim();
     const cached = props.getProperty(KEY);
     if (cached) return cached;
@@ -1337,11 +1355,11 @@ function updateDividendsFromFinMind() {
   }).sort();
 
   const perRun = Math.max(1, Number(C.DIV_SYMBOLS_PER_RUN || 10));
-  const props = PropertiesService.getScriptProperties();
+  const props = getProps_();
   const CUR_KEY = 'DIV_CURSOR'; const TS_KEY  = 'DIV_CURSOR_TS';
   const staleDays = Math.max(1, Number(C.DIV_CURSOR_RESET_IF_STALE_DAYS || 3));
   const lastTs = Number(props.getProperty(TS_KEY) || 0);
-  const inCycle = PropertiesService.getScriptProperties().getProperty('DIV_CYCLE_ACTIVE') === '1';
+  const inCycle = getProps_().getProperty('DIV_CYCLE_ACTIVE') === '1';
   if (!inCycle && lastTs && (Date.now() - lastTs) > staleDays * 86400000) props.deleteProperty(CUR_KEY);
 
   let cur = Number(props.getProperty(CUR_KEY) || 0);
@@ -1451,7 +1469,7 @@ function updateDividendsFromFinMind() {
 }
 
 function resetDividendBatchCursor() {
-  PropertiesService.getScriptProperties().deleteProperty('DIV_CURSOR');
+  getProps_().deleteProperty('DIV_CURSOR');
   Logger.log('已重置股利分批游標。');
 }
 
@@ -1974,7 +1992,7 @@ function appendDCAFromHoldings() {
   Logger.log(`DCA：追加 ${toAppend.length} 筆 (含殖利率計算)`);
 }
 function runDividendsFullCycle_() {
-  const props = PropertiesService.getScriptProperties();
+  const props = getProps_();
   const CUR_KEY = 'DIV_CURSOR';
   if (props.getProperty(CUR_KEY) === null || props.getProperty(CUR_KEY) === '0') props.deleteProperty(CUR_KEY);
   props.setProperty('DIV_CYCLE_ACTIVE', '1');
