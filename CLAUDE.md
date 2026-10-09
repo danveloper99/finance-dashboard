@@ -106,6 +106,14 @@ clasp deploy --deploymentId AKfycbzrFTtWxBH1aisKKkXWihYFittWQwUGldnjJTo3YE-jXonP
 
 ### 發布新版本給朋友
 1. `WebAPI.js` 的 `APP_VERSION` +1，`index.html` 的 `LATEST_BACKEND_VERSION` 改成一樣的數字
-2. `clasp -P .clasp.lib.json push`，再 `clasp -P .clasp.lib.json version "說明"` 建立程式庫新版本
-3. 正式專案照常 `clasp push` + `clasp deploy --deploymentId ...`
-4. 推前端（GitHub Pages）；朋友登入後會看到黃色更新提醒
+2. `clasp -P .clasp.lib.json push`，再 `clasp -P .clasp.lib.json version "說明"` 建立程式庫新版本（記下版本號 N）
+3. `template/appsscript.json` 的 FinLib `version` 改成 N，`clasp -P .clasp.template.json push --force`
+4. 更新 `release.json`：`libVersion` = N、`releasedAt` = 現在時間（ISO 8601，含 +08:00）
+5. 正式專案照常 `clasp push` + `clasp deploy --deploymentId ...`
+6. commit 並 push（GitHub Pages）。**release.json、template/ 一定要和第 3 步同一次 push**
+
+### 自動更新（殼程式 shellVersion ≥ 3）
+- 朋友的殼程式每天 6 點讀 `release.json`；新版發布滿 1 天後，用朋友自己的授權呼叫 Apps Script API，把 `template/Code.js`、`template/appsscript.json`（從 GitHub Pages 下載）寫進自己的專案、建立新版本、更新網頁部署。
+- 朋友需開啟一次 https://script.google.com/home/usersettings 的「Google Apps Script API」。
+- **template/appsscript.json 的 oauthScopes 不要隨意增加**：新增權限會讓朋友的排程在重新授權前全部失敗。
+- 新增排程用的函式時，`template/Code.js` 要加轉接函式，`shellVersion` +1，並在程式庫用 `SHELL_VERSION_` 判斷舊殼程式。

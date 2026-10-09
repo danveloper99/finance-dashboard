@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>你不理財，才不理你</title>
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -139,7 +141,7 @@
 <div id="setup-page" style="display:none">
   <div style="max-width:440px;width:100%">
     <div style="text-align:center;margin-bottom:32px">
-      <div style="font-size:32px;margin-bottom:12px">🌿</div>
+      <div style="width:64px;height:64px;margin:0 auto 12px;border-radius:16px;background:#3a5a40;display:flex;align-items:center;justify-content:center"><i class="ph-fill ph-piggy-bank" style="font-size:38px;color:white"></i></div>
       <div style="font-size:22px;font-weight:700;color:#3a5a40;margin-bottom:6px">你不理財，才不理你</div>
       <div style="font-size:13px;color:#888">首次使用請填入 GAS Web App 網址</div>
     </div>
@@ -197,7 +199,7 @@
   <div v-if="authState!=='ok'" style="position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px 16px;overflow-y:auto">
     <div style="max-width:420px;width:100%;margin:auto">
       <div style="text-align:center;margin-bottom:24px">
-        <div style="font-size:32px;margin-bottom:10px">🌿</div>
+        <div style="width:64px;height:64px;margin:0 auto 12px;border-radius:16px;background:#3a5a40;display:flex;align-items:center;justify-content:center"><i class="ph-fill ph-piggy-bank" style="font-size:38px;color:white"></i></div>
         <div style="font-size:22px;font-weight:700;color:#3a5a40">你不理財，才不理你</div>
       </div>
       <div v-if="authState==='checking'" style="text-align:center;padding:40px 0"><i class="ph ph-spinner spin" style="font-size:28px;color:#3a5a40"></i></div>
@@ -245,6 +247,8 @@
             <li>回到試算表《設定》分頁，填好需要的欄位（時區、券商、FinMind Token 等），再執行 <code>installWizard_Apply</code> 建立各工作表</li>
             <li>右上角「部署 → 新增部署作業」→ 類型選「網頁應用程式」→ 執行身分：<b>我</b>、存取權：<b>任何人</b> → 部署</li>
             <li>複製產生的「網頁應用程式網址」（結尾是 /exec）</li>
+            <li>到 <b>script.google.com/home/usersettings</b> 把「Google Apps Script API」打開（讓 App 之後可以自動更新）</li>
+            <li>回到 Apps Script 執行 <code>setupAllSuggestedTriggers_SAFE</code>，建立每日排程與自動更新</li>
           </ol>
           <div style="font-weight:700;color:#588157;margin-bottom:4px">二、在本頁完成設定</div>
           <ol style="list-style:decimal;padding-left:20px;margin:0 0 12px">
@@ -261,7 +265,8 @@
             <li>加密 PDF 對帳單需要自己的 Cloud Run 解鎖服務；沒有的話只用 HTML 成交回報信即可</li>
           </ul>
           <div style="font-weight:700;color:#588157;margin-bottom:4px">四、更新到新版本</div>
-          <div style="margin:0 0 12px">App 有新功能時，登入後會出現黃色提醒，照著做即可（約 1 分鐘）：
+          <div style="margin:0 0 12px">預設會<b>自動更新</b>：新版本發布 1 天後，每天早上 6 點自動換上新版（網址不變、資料不受影響）。不想自動更新可以到「設定 → 自動更新」關掉。<br>
+          2026/10 以前建立的副本需要手動更新一次（之後就會自動）：重新從範本建立副本最簡單；或照下面步驟：
           <ol style="list-style:decimal;padding-left:20px;margin:4px 0 0;line-height:1.8">
             <li>開啟你的試算表 →「擴充功能 → Apps Script」</li>
             <li>左側「程式庫」點 <b>FinLib</b> → 版本選最新 → 儲存</li>
@@ -308,7 +313,9 @@
   <main class="page-wrap">
     <div v-if="backendOutdated && !updateBannerClosed" style="margin-bottom:16px;padding:12px 16px;border-radius:14px;background:#fff8e6;border:1px solid #f0d9a0;color:#7a5a12;font-size:13px;display:flex;gap:10px;align-items:flex-start">
       <i class="ph ph-arrow-circle-up" style="font-size:20px;flex-shrink:0;margin-top:1px"></i>
-      <div style="flex:1">有新版本可以更新（你的後端 v{{ backendVersion }} → 最新 v{{ LATEST_BACKEND_VERSION }}），更新步驟在
+      <div v-if="backendAutoUpdate" style="flex:1">有新版本（v{{ backendVersion }} → v{{ LATEST_BACKEND_VERSION }}），系統會在 1～2 天內自動更新，也可以到
+        <a href="#" @click.prevent="selectTab('settings')" style="font-weight:700;color:#bc6c25">設定 → 自動更新</a> 立即更新。</div>
+      <div v-else style="flex:1">有新版本可以更新（你的後端 v{{ backendVersion }} → 最新 v{{ LATEST_BACKEND_VERSION }}），更新步驟在
         <a href="#" @click.prevent="selectTab('settings')" style="font-weight:700;color:#bc6c25">設定 → 帳號</a>。</div>
       <button @click="updateBannerClosed=true" style="background:none;border:none;cursor:pointer;color:#b08a3a;font-size:16px;line-height:1">✕</button>
     </div>
@@ -925,7 +932,7 @@
           <div style="font-size:14px;color:#344e41">{{ authUser }} <span style="font-size:11px;color:#888;margin-left:6px">後端 v{{ backendVersion }}</span></div>
           <button @click="logout" class="btn btn-outline" style="font-size:13px;padding:8px 16px">登出</button>
         </div>
-        <div v-if="backendOutdated" style="margin-top:12px;padding:10px 14px;border-radius:10px;background:#fff8e6;color:#7a5a12;font-size:12px">
+        <div v-if="backendOutdated && !backendAutoUpdate" style="margin-top:12px;padding:10px 14px;border-radius:10px;background:#fff8e6;color:#7a5a12;font-size:12px">
           <b>有新版本 v{{ LATEST_BACKEND_VERSION }} 可以更新：</b>
           <ol style="list-style:decimal;padding-left:20px;margin:6px 0 0;line-height:1.8">
             <li>開啟你的試算表 →「擴充功能 → Apps Script」</li>
@@ -940,6 +947,20 @@
           <input v-model="pwdForm.new2" type="password" class="input-custom" placeholder="再輸入一次新密碼" autocomplete="new-password">
           <button @click="changeMyPassword" class="btn btn-primary" style="font-size:13px">修改密碼</button>
         </div>
+      </div>
+      <!-- 自動更新（範本使用者） -->
+      <div v-if="updateInfo.supported" class="settings-group">
+        <h3 class="section-title" style="margin-bottom:10px;display:flex;align-items:center;gap:8px"><span style="width:4px;height:22px;background:#588157;border-radius:2px;display:inline-block"></span>自動更新</h3>
+        <div style="font-size:13px;color:#344e41;line-height:1.8">
+          狀態：<b>{{ updateInfo.enabled ? '已開啟' : '已關閉' }}</b>
+          <span v-if="updateInfo.status">・{{ updateInfo.status.msg }}<span style="color:#aaa">（{{ updateInfo.status.at }}）</span></span>
+          <span v-else style="color:#aaa">・尚未檢查過</span>
+        </div>
+        <div v-if="updateInfo.status && updateInfo.status.need==='api'" style="margin-top:8px;font-size:12px;color:#7a5a12;background:#fff8e6;padding:8px 12px;border-radius:10px">
+          第一次使用請到 <a href="https://script.google.com/home/usersettings" target="_blank" style="color:#bc6c25;font-weight:700">script.google.com/home/usersettings</a> 打開「Google Apps Script API」，再按一次下方按鈕。
+        </div>
+        <button @click="runAutoUpdateNow" :disabled="updateRunning" class="btn btn-outline" style="margin-top:12px;font-size:13px;padding:8px 16px">
+          <i :class="updateRunning?'ph ph-spinner spin':'ph ph-arrows-clockwise'"></i> {{ updateRunning ? '檢查中…' : '立即檢查並更新' }}</button>
       </div>
       <!-- GAS URL 設定 -->
       <div class="settings-group">
@@ -1197,7 +1218,7 @@ const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
 // ── fetch 包裝：呼叫 GAS doPost ──────────────────────────────
 const AUTH_TOKEN_KEY = 'auth_token';
 // 最新後端（程式庫）版本：要和 WebAPI.js 的 APP_VERSION 一起改
-const LATEST_BACKEND_VERSION = 6;
+const LATEST_BACKEND_VERSION = 7;
 let onAuthExpired_ = null; // Vue 掛載後設定：Token 失效時切回登入畫面
 async function callGAS(action, args = []) {
   const url = getGasUrl();
@@ -1365,8 +1386,12 @@ createApp({
           if (res.ok) { dashboard.value=res; setTimeout(()=>renderCharts(res.charts),100); }
         } else if (tab==='settings') {
           settingsLoading.value=true;
-          const res = await callGAS('api_getSettingsSchema');
+          const [res, uRes] = await Promise.all([
+            callGAS('api_getSettingsSchema'),
+            backendVersion.value >= 7 ? callGAS('api_getUpdateStatus') : Promise.resolve(null),
+          ]);
           if (res.ok) { settingsSchema.value=res.schema; settingsData.value=res.values; }
+          if (uRes && uRes.ok) updateInfo.value = uRes;
           settingsLoading.value=false;
         } else if (tab==='analysis') {
           analysisLoading.value=true;
@@ -1411,6 +1436,19 @@ createApp({
     const authState = ref('checking'); // checking | login | setup | ok
     const authUser  = ref('');
     const backendVersion = ref(0);
+    const backendAutoUpdate = ref(false);
+    const updateInfo = ref({ supported:false, enabled:false, status:null });
+    const updateRunning = ref(false);
+    const runAutoUpdateNow = async () => {
+      if (updateRunning.value) return;
+      updateRunning.value = true;
+      try {
+        const r = await callGAS('api_runAutoUpdate');
+        updateInfo.value = { ...updateInfo.value, status: r };
+        if (r.status === 'updated') alert('✅ ' + r.msg + '\n重新整理頁面後就會使用新版本。');
+      } catch (e) { alert('❌ ' + e.message); }
+      finally { updateRunning.value = false; }
+    };
     const backendOutdated = computed(() => authState.value === 'ok' && backendVersion.value < LATEST_BACKEND_VERSION);
     const updateBannerClosed = ref(false);
     const authForm  = ref({ user:'', pwd:'', pwd2:'', gasUrl:'' });
@@ -1429,6 +1467,7 @@ createApp({
       if (res.token) localStorage.setItem(AUTH_TOKEN_KEY, res.token);
       authUser.value = res.user || '';
       backendVersion.value = Number(res.version) || 1; // 舊版後端沒有回傳版本號
+      backendAutoUpdate.value = !!res.autoUpdate;
       authForm.value = { user:'', pwd:'', pwd2:'', gasUrl:'' };
       authMsg.value = ''; authState.value = 'ok';
       loadData(currentTab.value);
@@ -2709,7 +2748,7 @@ createApp({
       dashboard,listData,holdingsConfig,settingsData,settingsSchema,settingsLoading,
       showDetailModal,currentDetailStock,currentDetailList,detailType,
       tabs,bottomTabs,actionFunctions,selectTab,loadData,
-      authState,authUser,backendVersion,backendOutdated,updateBannerClosed,LATEST_BACKEND_VERSION,authForm,authMsg,authBusy,shortGasUrl,doLogin,doSetup,useGasUrlOnly,logout,pwdForm,changeMyPassword,
+      authState,authUser,backendVersion,backendAutoUpdate,updateInfo,updateRunning,runAutoUpdateNow,backendOutdated,updateBannerClosed,LATEST_BACKEND_VERSION,authForm,authMsg,authBusy,shortGasUrl,doLogin,doSetup,useGasUrlOnly,logout,pwdForm,changeMyPassword,
       realizedFilter,realizedHeaders,uniqueYears,uniqueMonths,filteredRealizedList,filteredRealizedTotal,sortBy,sortKey,sortOrder,realizedColAlign,
       realizedChartFilterOpen,realizedChartSymbolSet,realizedChartYearSet,realizedAllSymbols,realizedAllChartYears,realizedMonthlyChartData,
       rcToggleYear,rcToggleSym,rcYearActive,rcSymActive,realizedChartHasData,realizedChartTotal,realizedChartMonths,

@@ -42,7 +42,7 @@ function makeToken_(pwd) {
  * 後端版本號：每次發布新的程式庫版本時 +1，並同步修改 index.html 的 LATEST_BACKEND_VERSION。
  * 前端會用它判斷朋友的後端是否過舊、需要更新程式庫版本。
  */
-var APP_VERSION = 6;
+var APP_VERSION = 7;
 
 /**
  * 帳號：每份後端（每個人用自己 Google 帳號部署的 GAS）只有一組帳號
@@ -72,7 +72,7 @@ function api_setupAccount(userInput, pwdInput) {
     const props = getProps_();
     if (props.getProperty('APP_PASSWORD')) return { ok: false, msg: '這個後端已經設定過帳號，請直接登入' };
     props.setProperties({ APP_USER: user, APP_PASSWORD: pwd });
-    return { ok: true, token: makeToken_(pwd), user, version: APP_VERSION };
+    return { ok: true, token: makeToken_(pwd), user, version: APP_VERSION, autoUpdate: autoUpdateEnabled_() };
   } finally {
     lock.releaseLock();
   }
@@ -89,7 +89,7 @@ function api_login(idInput, pwdInput) {
 
   const storedUser = getAppUser_();
   if (storedUser && id.toUpperCase() === storedUser.toUpperCase() && pwd === storedPwd)
-    return { ok: true, token: makeToken_(storedPwd), user: storedUser, version: APP_VERSION };
+    return { ok: true, token: makeToken_(storedPwd), user: storedUser, version: APP_VERSION, autoUpdate: autoUpdateEnabled_() };
   return { ok: false, msg: '帳號或密碼錯誤' };
 }
 
@@ -101,7 +101,7 @@ function resolveAuth_(token) {
 
 /** 自動登入 Token 驗證 */
 function api_auth_token(tokenInput) {
-  return resolveAuth_(tokenInput) ? { ok: true, user: getAppUser_(), version: APP_VERSION } : { ok: false };
+  return resolveAuth_(tokenInput) ? { ok: true, user: getAppUser_(), version: APP_VERSION, autoUpdate: autoUpdateEnabled_() } : { ok: false };
 }
 
 /** 修改密碼（需登入），回傳新 Token */
@@ -262,6 +262,12 @@ function api_getSettingsSchema() {
     ]},
   ];
 
+  if (canAutoUpdate_()) {
+    schema.splice(1, 0, { group: '自動更新', icon: 'ph-arrows-clockwise',
+      desc: 'App 發布新版本 1 天後，系統會在每天早上 6 點自動幫你更新（網址不變、資料不受影響）。第一次使用需要到 script.google.com/home/usersettings 開啟「Google Apps Script API」。',
+      items: [{ key: 'AUTO_UPDATE', label: '自動更新', type: 'select', options: ['TRUE', 'FALSE'] }] });
+  }
+
   const dcaDesc = '設定一組定期定額標的。填入 PDF 信件中出現的關鍵字（用於識別此標的）、股票代碼與投資期間，系統會自動彙整累計股數、平均成本與殖利率。';
   for (let i = 1; i <= 10; i++) {
     schema.push({ group: `定期定額 #${i}`, icon: 'ph-calendar-check', desc: dcaDesc, items: [
@@ -288,7 +294,7 @@ function api_saveSettings(newValues) {
   data.forEach(([k], i) => { if (k) keyMap.set(String(k).trim(), i); });
 
   let changed = false;
-  const NEW_KEYS = new Set(['MONTHLY_REPORT_ENABLED']); // schema 新增、舊試算表還沒有的 key
+  const NEW_KEYS = new Set(['MONTHLY_REPORT_ENABLED', 'AUTO_UPDATE']); // schema 新增、舊試算表還沒有的 key
   const toAppend = [];
   Object.entries(newValues).forEach(([key, val]) => {
     if (keyMap.has(key)) { data[keyMap.get(key)][1] = val; changed = true; }
@@ -744,6 +750,17 @@ function api_sendMonthlyReport(ym) {
   } catch (e) { return { ok: false, msg: e.message }; }
 }
 
+/* --- 自動更新 --- */
+function api_getUpdateStatus() {
+  return { ok: true, supported: canAutoUpdate_(), enabled: autoUpdateEnabled_(), status: readAutoUpdateStatus_() };
+}
+/** 設定頁「立即檢查並更新」：不等 1 天 */
+function api_runAutoUpdate() {
+  const r = autoUpdate_(true);
+  try { ensureAutoUpdateTrigger_(); } catch (e) {}
+  return r;
+}
+
 /* --- 每季/每半年 Email 提醒 --- */
 function wealthReminder() {
   const props = getProps_();
@@ -1042,7 +1059,7 @@ function doPost(e) {
       'api_saveSettings', 'api_getHoldingsForAnalysis', 'api_callGemini',
       'api_saveAnalysis', 'api_getAnalysisHistory', 'api_getGeminiKeyStatus',
       'api_saveGeminiKey', 'api_saveWealthSnapshot', 'api_getWealthHistory',
-      'api_setupWealthTrigger', 'api_getWealthBooks', 'api_saveWealthBooks', 'api_saveWealthSnapshotB', 'api_getWealthHistoryB', 'api_sendMonthlyReport',
+      'api_setupWealthTrigger', 'api_getWealthBooks', 'api_saveWealthBooks', 'api_saveWealthSnapshotB', 'api_getWealthHistoryB', 'api_sendMonthlyReport', 'api_getUpdateStatus', 'api_runAutoUpdate',
       'ingestFromGmail_Plaintext_SAFE', 'rebuildAll_B_SAFE',
       'api_runDividendsUpdate', 'appendDCAFromHoldings_SAFE',
       'rebuildRealizedPnL_FIFO_SAFE', 'rebuildDCADividends_SAFE',

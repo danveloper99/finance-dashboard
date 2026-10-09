@@ -128,7 +128,7 @@ function getSS_() {
 var SCRIPT_APP_ = null;
 var PROPS_ = null;
 var LOCK_SVC_ = null;
-var SHELL_VERSION_ = 0; // 殼程式版本：2 起才有 monthlyReport_SAFE
+var SHELL_VERSION_ = 0; // 殼程式版本：2 起有 monthlyReport_SAFE、3 起有 autoUpdate_SAFE
 function bindEnv(env) {
   env = env || {};
   if (!env.props) throw new Error('殼程式版本過舊（未傳入 props），請依說明更新試算表裡的 Apps Script 殼程式');
@@ -219,6 +219,7 @@ function setupAllSuggestedTriggers_SAFE() {
   getScriptApp_().newTrigger('appendDCAFromHoldings_SAFE').timeBased().everyDays(1).atHour(12).nearMinute(0).inTimezone(tz).create();
   getScriptApp_().newTrigger('runDividendsFullCycle_SAFE').timeBased().everyDays(1).atHour(11).nearMinute(0).inTimezone(tz).create();
   ensureMonthlyReportTrigger_(); // 每月 1 號 8 點寄月報（依《設定》MONTHLY_REPORT_ENABLED）
+  ensureAutoUpdateTrigger_();    // 範本使用者：每天 6 點自動更新（依《設定》AUTO_UPDATE）
 
   Logger.log('✅ 已建立新排程。');
 }
@@ -233,7 +234,8 @@ function removeAllSuggestedTriggers_SAFE() {
     'appendDCAFromHoldings_SAFE',
     'runDividendsFullCycle_SAFE',
     'updateDividendsFromFinMind_SAFE',
-    'monthlyReport_SAFE'
+    'monthlyReport_SAFE',
+    'autoUpdate_SAFE'
   ]);
   getScriptApp_().getProjectTriggers().forEach(t => {
     if (names.has(t.getHandlerFunction())) getScriptApp_().deleteTrigger(t);
@@ -2684,6 +2686,7 @@ function dailyDataMaintenance_() {
   Logger.log(`📋 每日資料維護完成：對照表自動學到新代碼 ${learned} 筆、補上缺代碼 ${filled} 筆、修正代碼格式 ${fixed} 筆。`);
   // 順便確保月報排程存在（舊使用者不用重跑 setupAllSuggestedTriggers_SAFE）
   try { ensureMonthlyReportTrigger_(); } catch (e) { Logger.log('月報排程檢查失敗：' + e.message); }
+  try { ensureAutoUpdateTrigger_(); } catch (e) { Logger.log('自動更新排程檢查失敗：' + e.message); }
 }
 
 /**
@@ -3227,9 +3230,41 @@ function buildMonthlyReport_(year, month) {
   const prevYm = month === 1 ? `${year - 1}/12` : `${year}/${('0' + (month - 1)).slice(-2)}`;
   const prevSnap = rows(MONTHLY_SHEET_).find(r => String(r['月份']).trim() === prevYm) || null;
 
-  // 六、定期定額
-  const dcaMonth = rows(C.SHEET_DCA || '定期定額').filter(r => inMonth(r['買入日期']));
-  const dca = { count: dcaMonth.length, amount: dcaMonth.reduce((s, r) => s + num(r['總成本 (=買入成本+手續費)']), 0) };
+  // 六、定期定額（欄位名稱新舊版都相容）
+  const pick = (r, keys) => { for (const k of keys) if (r[k] !== undefined && r[k] !== '') return r[k]; return ''; };
+  const dcaTotal = r => num(pick(r, ['總成本', '總成本 (=買入成本+手續費)'])) || num(r['成交價']) * num(r['股數']);
+  const dcaAll = rows(C.SHEET_DCA || '定期定額').filter(r => String(r['股票代碼'] || '').trim());
+  const groupDca = list => {
+    const m = new Map();
+    list.forEach(r => {
+      const k = label(r);
+      const o = m.get(k) || { name: k, sym: String(r['股票代碼']).trim(), count: 0, qty: 0, gross: 0, cost: 0, div: 0 };
+      o.count += 1; o.qty += num(r['股數']); o.gross += num(r['成交價']) * num(r['股數']);
+      o.cost += dcaTotal(r); o.div += num(r['累計已領股息']);
+      m.set(k, o);
+    });
+    return [...m.values()].sort((a, b) => b.cost - a.cost);
+  };
+  // 本月扣款：每檔的股數、成交均價、金額
+  const dcaMonthItems = groupDca(dcaAll.filter(r => inMonth(r['買入日期'])))
+    .map(o => ({ ...o, avgPrice: o.qty > 0 ? o.gross / o.qty : 0 }));
+  // 目前持有：均價（含手續費）、現價、未實現、報酬率、累計已領股息（與 App 定期定額頁同算法）
+  const priceBySym = new Map();
+  rows(C.SHEET_HOLD).forEach(r => { const px = num(r['現價']); if (px > 0) priceBySym.set(String(r['股票代碼']).trim(), px); });
+  const dcaHoldItems = groupDca(dcaAll).map(o => {
+    const px = priceBySym.get(o.sym) || 0;
+    const value = px > 0 ? o.qty * px : null;
+    return { ...o, avgCost: o.qty > 0 ? o.cost / o.qty : 0, price: px || null, value,
+             unrealized: value == null ? null : value - o.cost,
+             pct: value == null || o.cost <= 0 ? null : (value - o.cost) / o.cost * 100 };
+  });
+  const dca = {
+    count: dcaMonthItems.reduce((s, o) => s + o.count, 0), amount: dcaMonthItems.reduce((s, o) => s + o.cost, 0),
+    monthItems: dcaMonthItems, holdItems: dcaHoldItems,
+    holdCost: dcaHoldItems.reduce((s, o) => s + o.cost, 0),
+    holdUnrealized: dcaHoldItems.reduce((s, o) => s + (o.unrealized || 0), 0),
+    holdDiv: dcaHoldItems.reduce((s, o) => s + o.div, 0),
+  };
 
   // 七、待辦提醒
   const pending = rows(C.SHEET_STAGING || '待確認交易').filter(r => !r['確認狀態'] || r['確認狀態'] === '待確認').length;
@@ -3330,16 +3365,17 @@ function renderMonthlyReportHtml_(d) {
     if (best.pnl > 0) hl.push(`🏆 賺最多：<b>${esc(best.name)}</b> <span style="color:${POS}">${signed(best.pnl)}</span>`);
     if (worst.pnl < 0) hl.push(`📉 賠最多：<b>${esc(worst.name)}</b> <span style="color:${NEG}">${signed(worst.pnl)}</span>`);
     realizedHtml = (hl.length ? `<div style="font-size:13px;line-height:1.9;margin-bottom:6px;color:${INK}">${hl.join('<br>')}</div>` : '') +
-      table(rl.slice(0, 10).map(o => listRow(o.name, signed(o.pnl), color(o.pnl), `${int(o.qty)} 股・報酬 ${pctTxt(o.pct)}`)).join('')) +
-      (rl.length > 10 ? empty(`另有 ${rl.length - 10} 檔未列出`) : '');
+      table(rl.map(o => listRow(o.name, signed(o.pnl), color(o.pnl), `${int(o.qty)} 股・報酬 ${pctTxt(o.pct)}`)).join(''));
   }
 
   // 四、股利
+  const divNextTotal = d.divNext.reduce((s, x) => s + x.amount, 0);
   const divHtml =
-    `<div style="font-size:13px;font-weight:700;color:${MUTED};margin:2px 0 2px">本月入帳</div>` +
-    (d.divMonth.length ? table(d.divMonth.map(x => listRow(x.name, signed(x.amount), POS, x.date)).join('')) : empty('這個月沒有股利入帳')) +
-    `<div style="font-size:13px;font-weight:700;color:${MUTED};margin:12px 0 2px">下個月預計發放</div>` +
-    (d.divNext.length ? table(d.divNext.map(x => listRow(x.name, '約 ' + int(x.amount), INK, x.date)).join('')) : empty('目前沒有已公告的發放'));
+    table(kv('本月入帳總額', signed(d.dividends), color(d.dividends))) +
+    (d.divMonth.length ? table(d.divMonth.map(x => listRow(x.name, signed(x.amount), POS, x.date)).join('')) : '') +
+    `<div style="height:10px"></div>` +
+    table(kv('下個月預計發放總額', d.divNext.length ? '約 ' + int(divNextTotal) : '—', INK, d.divNext.length ? '' : '目前沒有已公告的發放')) +
+    (d.divNext.length ? table(d.divNext.map(x => listRow(x.name, '約 ' + int(x.amount), INK, x.date)).join('')) : '');
 
   // 五、持股概況
   const holdHtml = d.top5.length ? table(d.top5.map(h =>
@@ -3347,7 +3383,22 @@ function renderMonthlyReportHtml_(d) {
     : empty('目前沒有持股');
 
   // 六、定期定額
-  const dcaHtml = d.dca.count ? table(kv('本月扣款', `${d.dca.count} 筆　${money(d.dca.amount)}`)) : empty('這個月沒有定期定額扣款');
+  const dc = d.dca;
+  const sub = txt => `<div style="font-size:13px;font-weight:700;color:${MUTED};margin:12px 0 2px">${txt}</div>`;
+  const dcaMonthHtml = dc.count
+    ? table(kv('本月扣款', `${dc.count} 筆　${money(dc.amount)}`)) +
+      table(dc.monthItems.map(o => listRow(o.name, money(o.cost), INK, `${int(o.qty)} 股・均價 ${o.avgPrice.toFixed(2)}`)).join(''))
+    : empty('這個月沒有定期定額扣款');
+  const dcaHoldHtml = dc.holdItems.length
+    ? table(
+        kv('投入成本', money(dc.holdCost)) +
+        kv('未實現損益', signed(dc.holdUnrealized), color(dc.holdUnrealized), pctTxt(dc.holdCost > 0 ? dc.holdUnrealized / dc.holdCost * 100 : null)) +
+        kv('累計已領股息', signed(dc.holdDiv), color(dc.holdDiv))) +
+      table(dc.holdItems.map(o => listRow(o.name,
+        o.unrealized == null ? '—' : signed(o.unrealized), color(o.unrealized || 0),
+        `${int(o.qty)} 股・均價 ${o.avgCost.toFixed(2)}${o.price ? '・現價 ' + o.price : ''}・報酬 <span style="color:${color(o.pct || 0)}">${pctTxt(o.pct)}</span>・股息 ${int(o.div)}`)).join(''))
+    : empty('目前沒有定期定額持股');
+  const dcaHtml = dcaMonthHtml + sub('目前持有（從開始到現在）') + dcaHoldHtml;
 
   // 七、待辦提醒
   const r = d.reminders, todo = [];
@@ -3363,7 +3414,7 @@ function renderMonthlyReportHtml_(d) {
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;font-family:'Noto Serif TC','PingFang TC','Microsoft JhengHei',sans-serif">
         <tr><td style="padding:0 16px 14px">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#3a5a40;border-radius:14px">
-            <tr><td style="padding:20px 20px 4px;font-size:13px;color:rgba(255,255,255,.75);letter-spacing:.1em">🌿 你不理財，才不理你</td></tr>
+            <tr><td style="padding:20px 20px 4px;font-size:13px;color:rgba(255,255,255,.75);letter-spacing:.1em"><img src="${APP_URL_}icon-128.png" width="22" height="22" alt="" style="vertical-align:middle;border-radius:5px;margin-right:6px;border:0">你不理財，才不理你</td></tr>
             <tr><td style="padding:0 20px 4px;font-size:22px;font-weight:700;color:#ffffff">${d.year} 年 ${d.month} 月月報</td></tr>
             <tr><td style="padding:6px 20px 20px">
               <span style="font-size:13px;color:rgba(255,255,255,.75)">本月收入合計</span>
@@ -3388,4 +3439,132 @@ function renderMonthlyReportHtml_(d) {
       </table>
     </td></tr>
   </table></body></html>`;
+}
+
+/***** =======================
+ * 自動更新（只對「範本殼程式」有效）
+ * 每天檢查 GitHub Pages 上的 release.json；新版發布超過 1 天後，
+ * 用使用者自己的授權呼叫 Apps Script API：換上最新殼程式與程式庫版本 → 建立新版本 → 更新網頁部署（網址不變）。
+ * 需要使用者開啟一次 https://script.google.com/home/usersettings 的「Google Apps Script API」。
+ * ======================== */
+
+var AUTO_UPDATE_DELAY_MS_ = 24 * 3600 * 1000; // 新版發布後等 1 天，讓作者先用、有問題來得及修
+
+/** 殼程式版本 3 起才有 autoUpdate_SAFE */
+function canAutoUpdate_() {
+  return !!SCRIPT_APP_ && Number(SHELL_VERSION_) >= 3;
+}
+function autoUpdateEnabled_() {
+  return canAutoUpdate_() && String(getCfg_().AUTO_UPDATE || 'TRUE').toUpperCase() !== 'FALSE';
+}
+
+/** 排程入口：每天早上 6 點 */
+function autoUpdate_SAFE() {
+  return runWithAlert_(() => autoUpdate_(false), 'autoUpdate');
+}
+
+/** 依設定確保自動更新排程存在 */
+function ensureAutoUpdateTrigger_() {
+  if (!canAutoUpdate_()) return;
+  const app = getScriptApp_();
+  const existing = app.getProjectTriggers().filter(t => t.getHandlerFunction() === 'autoUpdate_SAFE');
+  const enabled = autoUpdateEnabled_();
+  if (enabled && !existing.length) {
+    app.newTrigger('autoUpdate_SAFE').timeBased().everyDays(1).atHour(6).inTimezone(getCfg_().TZ || 'Asia/Taipei').create();
+    Logger.log('🔄 已建立自動更新排程（每天 6 點）');
+  } else if (!enabled && existing.length) {
+    existing.forEach(t => app.deleteTrigger(t));
+    Logger.log('🔄 已移除自動更新排程');
+  }
+}
+
+function readAutoUpdateStatus_() {
+  try { return JSON.parse(getProps_().getProperty('AUTO_UPDATE_STATUS') || 'null'); } catch (e) { return null; }
+}
+
+/**
+ * force = true（設定頁「立即檢查並更新」）：忽略 1 天等待與開關
+ * 回傳 { ok, status, msg, current, latest }，同時存進指令碼屬性 AUTO_UPDATE_STATUS
+ */
+function autoUpdate_(force) {
+  const tz = getCfg_().TZ || 'Asia/Taipei';
+  const save = o => {
+    const rec = Object.assign({ at: Utilities.formatDate(new Date(), tz, 'yyyy/MM/dd HH:mm') }, o);
+    if (canAutoUpdate_()) getProps_().setProperty('AUTO_UPDATE_STATUS', JSON.stringify(rec));
+    Logger.log('自動更新：' + rec.msg);
+    return Object.assign({ ok: o.status !== 'error' }, rec);
+  };
+  if (!canAutoUpdate_()) return { ok: false, status: 'unsupported', msg: '這個後端不是範本殼程式（或殼程式太舊），不支援自動更新' };
+  if (!force && !autoUpdateEnabled_()) return save({ status: 'off', msg: '自動更新已關閉' });
+
+  const getText = url => {
+    const r = UrlFetchApp.fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), { muteHttpExceptions: true });
+    if (r.getResponseCode() !== 200) throw new Error('下載失敗（' + r.getResponseCode() + '）：' + url);
+    return r.getContentText('utf-8');
+  };
+
+  try {
+    const rel = JSON.parse(getText(APP_URL_ + 'release.json'));
+    const latest = Number(rel.libVersion) || 0;
+    const app = getScriptApp_();
+    const scriptId = app.getScriptId();
+    const token = app.getOAuthToken();
+    const api = (method, path, body) => {
+      const r = UrlFetchApp.fetch('https://script.googleapis.com/v1/projects/' + scriptId + path, {
+        method, contentType: 'application/json', headers: { Authorization: 'Bearer ' + token },
+        payload: body ? JSON.stringify(body) : undefined, muteHttpExceptions: true,
+      });
+      const code = r.getResponseCode(), txt = r.getContentText();
+      if (code >= 300) {
+        if (code === 403 && /Apps Script API|has not (been )?enabled|SERVICE_DISABLED|PERMISSION_DENIED/i.test(txt))
+          throw new Error('NEED_API');
+        throw new Error('Apps Script API 錯誤（' + code + '）：' + txt.slice(0, 200));
+      }
+      return txt ? JSON.parse(txt) : {};
+    };
+
+    // 目前用的程式庫版本
+    const files = api('get', '/content').files || [];
+    const manifestFile = files.find(f => f.name === 'appsscript');
+    if (!manifestFile) throw new Error('找不到 appsscript.json');
+    const libs = ((JSON.parse(manifestFile.source).dependencies || {}).libraries || []);
+    const current = Number((libs.find(l => l.userSymbol === 'FinLib') || {}).version) || 0;
+    if (current >= latest) return save({ status: 'latest', msg: `已是最新版本（程式庫 ${current}）`, current, latest });
+
+    const readyAt = (Date.parse(rel.releasedAt) || 0) + AUTO_UPDATE_DELAY_MS_;
+    if (!force && Date.now() < readyAt)
+      return save({ status: 'waiting', msg: `有新版本（程式庫 ${latest}），將於 ${Utilities.formatDate(new Date(readyAt), tz, 'MM/dd HH:mm')} 後自動更新`, current, latest });
+
+    // 下載最新殼程式，確認和 release.json 一致（避免發布到一半）
+    const newCode = getText(APP_URL_ + 'template/Code.js');
+    const newManifest = JSON.parse(getText(APP_URL_ + 'template/appsscript.json'));
+    const newLib = ((newManifest.dependencies || {}).libraries || []).find(l => l.userSymbol === 'FinLib');
+    if (!newLib || Number(newLib.version) !== latest) throw new Error('發布檔案尚未同步，稍後再試');
+    if (!/FinLib\.bindEnv/.test(newCode)) throw new Error('下載的殼程式內容不正確，已取消更新');
+
+    // 只換掉 Code 與 appsscript，保留使用者自己加的其他檔案
+    const keep = files.filter(f => f.name !== 'appsscript' && f.name !== 'Code');
+    api('put', '/content', { files: [
+      { name: 'appsscript', type: 'JSON', source: JSON.stringify(newManifest, null, 2) },
+      { name: 'Code', type: 'SERVER_JS', source: newCode },
+    ].concat(keep) });
+    const ver = api('post', '/versions', { description: `自動更新：程式庫 ${latest}` });
+
+    // 把網頁應用程式部署指向新版本（網址不變）
+    const deps = api('get', '/deployments').deployments || [];
+    let updated = 0;
+    deps.filter(d => d.deploymentConfig && d.deploymentConfig.versionNumber &&
+                     (d.entryPoints || []).some(e => e.entryPointType === 'WEB_APP'))
+      .forEach(d => {
+        api('put', '/deployments/' + d.deploymentId, { deploymentConfig: {
+          scriptId, versionNumber: ver.versionNumber, manifestFileName: 'appsscript',
+          description: `自動更新：程式庫 ${latest}` } });
+        updated++;
+      });
+    return save({ status: 'updated', msg: `已自動更新到程式庫 ${latest}（更新 ${updated} 個部署）`, current: latest, latest });
+  } catch (e) {
+    if (e.message === 'NEED_API')
+      return save({ status: 'error', need: 'api', msg: '需要開啟 Google Apps Script API：到 script.google.com/home/usersettings 打開開關後再試' });
+    return save({ status: 'error', msg: e.message });
+  }
 }

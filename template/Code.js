@@ -4,9 +4,10 @@
  * 所有功能都在程式庫 FinLib 裡，這裡只負責把「網頁請求」和「排程」轉給程式庫。
  * 資料、密碼、Gemini Key 都存在你自己的試算表與 Apps Script，App 作者看不到。
  *
- * 更新到新版本：
- *   1. 左側「程式庫」→ 點 FinLib → 版本選最新 → 儲存
- *   2. 右上「部署 → 管理部署作業」→ 鉛筆圖示 → 版本選「新版本」→ 部署（網址不會變）
+ * 更新：預設會自動更新（新版發布 1 天後、每天早上 6 點檢查），需先到
+ *   https://script.google.com/home/usersettings 開啟「Google Apps Script API」。
+ *   想手動更新：左側「程式庫」→ FinLib → 版本選最新 → 儲存，再「部署 → 管理部署作業」→ 鉛筆 → 新版本 → 部署。
+ *   ⚠ 這個檔案會被自動更新整個覆蓋，請不要在這裡加自己的程式（要加請另開一個檔案）。
  * ============================================================
  */
 
@@ -17,7 +18,7 @@ function lib_() {
     scriptApp:   ScriptApp,
     props:       PropertiesService.getScriptProperties(),
     lockService: LockService,
-    shellVersion: 2, // 2：支援月報（monthlyReport_SAFE）
+    shellVersion: 3, // 2：月報（monthlyReport_SAFE）；3：自動更新（autoUpdate_SAFE）
   });
   return FinLib;
 }
@@ -44,3 +45,4 @@ function appendDCAFromHoldings_SAFE()     { return lib_().appendDCAFromHoldings_
 function runDividendsFullCycle_SAFE()     { return lib_().runDividendsFullCycle_SAFE(); }
 function wealthReminder()                 { return lib_().wealthReminder(); }
 function monthlyReport_SAFE()             { return lib_().monthlyReport_SAFE(); }
+function autoUpdate_SAFE()                { return lib_().autoUpdate_SAFE(); }
