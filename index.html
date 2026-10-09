@@ -955,7 +955,7 @@
       <div class="settings-group">
         <h3 class="section-title" style="margin-bottom:14px;display:flex;align-items:center;gap:8px"><span style="width:4px;height:22px;background:#dda15e;border-radius:2px;display:inline-block"></span>手動執行</h3>
         <div class="action-grid">
-          <button v-for="fn in actionFunctions" :key="fn.key" @click="runFunction(fn.key)" :disabled="!!functionRunning" style="background:#588157;color:white;padding:12px 8px;border-radius:12px;font-weight:600;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:6px;transition:all .2s;border:none;cursor:pointer" onmouseover="this.style.background='#3a5a40'" onmouseout="this.style.background='#588157'"><i :class="['ph-bold',fn.icon]" style="font-size:20px"></i><span>{{ fn.label }}</span><i v-if="functionRunning===fn.key" class="ph ph-spinner spin" style="font-size:12px"></i></button>
+          <button v-for="fn in actionFunctions.filter(f=>!f.minVersion||backendVersion>=f.minVersion)" :key="fn.key" @click="runFunction(fn.key)" :disabled="!!functionRunning" style="background:#588157;color:white;padding:12px 8px;border-radius:12px;font-weight:600;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:6px;transition:all .2s;border:none;cursor:pointer" onmouseover="this.style.background='#3a5a40'" onmouseout="this.style.background='#588157'"><i :class="['ph-bold',fn.icon]" style="font-size:20px"></i><span>{{ fn.label }}</span><i v-if="functionRunning===fn.key" class="ph ph-spinner spin" style="font-size:12px"></i></button>
         </div>
         <div v-if="functionMsg" :style="functionError?'background:#fef2f2;color:#dc2626':'background:#f0fdf4;color:#16a34a'" style="margin-top:12px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;text-align:center">{{ functionMsg }}</div>
       </div>
@@ -1197,7 +1197,7 @@ const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
 // ── fetch 包裝：呼叫 GAS doPost ──────────────────────────────
 const AUTH_TOKEN_KEY = 'auth_token';
 // 最新後端（程式庫）版本：要和 WebAPI.js 的 APP_VERSION 一起改
-const LATEST_BACKEND_VERSION = 5;
+const LATEST_BACKEND_VERSION = 6;
 let onAuthExpired_ = null; // Vue 掛載後設定：Token 失效時切回登入畫面
 async function callGAS(action, args = []) {
   const url = getGasUrl();
@@ -1346,6 +1346,7 @@ createApp({
       { key:'appendDCAFromHoldings_SAFE',     label:'更新定期', icon:'ph-calendar-check' },
       { key:'rebuildDCADividends_SAFE',       label:'重算股息', icon:'ph-arrow-clockwise' },
       { key:'rebuildRealizedPnL_FIFO_SAFE',   label:'計算損益', icon:'ph-coins' },
+      { key:'api_sendMonthlyReport',          label:'寄送月報', icon:'ph-envelope-simple', minVersion:6 },
     ];
     const functionRunning = ref(false);
     const functionMsg = ref('');
@@ -1980,14 +1981,14 @@ createApp({
       alert(res.msg);
     };
 
-    const fnNames={'ingestFromGmail_Plaintext_SAFE':'擷取信件','rebuildAll_B_SAFE':'更新庫存紀錄','api_runDividendsUpdate':'更新股利','appendDCAFromHoldings_SAFE':'更新定期定額','rebuildDCADividends_SAFE':'重算DCA股息','rebuildRealizedPnL_FIFO_SAFE':'計算已實現損益'};
+    const fnNames={'ingestFromGmail_Plaintext_SAFE':'擷取信件','rebuildAll_B_SAFE':'更新庫存紀錄','api_runDividendsUpdate':'更新股利','appendDCAFromHoldings_SAFE':'更新定期定額','rebuildDCADividends_SAFE':'重算DCA股息','rebuildRealizedPnL_FIFO_SAFE':'計算已實現損益','api_sendMonthlyReport':'寄送上個月月報'};
     const runFunction = async funcName => {
       if(functionRunning.value) return;
       functionRunning.value=funcName; functionMsg.value=`正在執行：${fnNames[funcName]}...`; functionError.value=false;
       try{
         const res = await callGAS(funcName);
         if (res && res.ok === false) throw new Error(res.msg || '執行失敗');
-        functionMsg.value=`✅ ${fnNames[funcName]} 執行完成`; functionError.value=false;
+        functionMsg.value=(res && res.msg && funcName==='api_sendMonthlyReport') ? `✅ ${res.msg}` : `✅ ${fnNames[funcName]} 執行完成`; functionError.value=false;
         setTimeout(()=>loadData('dashboard'),1000);
       }catch(e){functionMsg.value=`❌ 執行失敗：${e.message||'未知錯誤'}`;functionError.value=true;}
       finally{functionRunning.value=false;setTimeout(()=>{functionMsg.value='';functionError.value=false;},4000);}

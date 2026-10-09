@@ -42,7 +42,7 @@ function makeToken_(pwd) {
  * 後端版本號：每次發布新的程式庫版本時 +1，並同步修改 index.html 的 LATEST_BACKEND_VERSION。
  * 前端會用它判斷朋友的後端是否過舊、需要更新程式庫版本。
  */
-var APP_VERSION = 5;
+var APP_VERSION = 6;
 
 /**
  * 帳號：每份後端（每個人用自己 Google 帳號部署的 GAS）只有一組帳號
@@ -258,6 +258,7 @@ function api_getSettingsSchema() {
       items: [
       { key: 'ALERT_TO',      label: '通知 Email',    type: 'text',   placeholder: 'your@gmail.com' },
       { key: 'ALERT_ENABLED', label: '啟用錯誤通知', type: 'select', options: ['TRUE', 'FALSE'] },
+      { key: 'MONTHLY_REPORT_ENABLED', label: '每月月報（1 號早上寄上個月摘要）', type: 'select', options: ['TRUE', 'FALSE'] },
     ]},
   ];
 
@@ -287,9 +288,13 @@ function api_saveSettings(newValues) {
   data.forEach(([k], i) => { if (k) keyMap.set(String(k).trim(), i); });
 
   let changed = false;
+  const NEW_KEYS = new Set(['MONTHLY_REPORT_ENABLED']); // schema 新增、舊試算表還沒有的 key
+  const toAppend = [];
   Object.entries(newValues).forEach(([key, val]) => {
     if (keyMap.has(key)) { data[keyMap.get(key)][1] = val; changed = true; }
+    else if (NEW_KEYS.has(key)) toAppend.push([key, val]);
   });
+  if (toAppend.length) sh.getRange(sh.getLastRow() + 1, 1, toAppend.length, 2).setValues(toAppend);
 
   if (changed) {
     // 先將 DCA 日期欄位設為純文字格式，避免 Google Sheets 自動轉換日期
@@ -721,6 +726,24 @@ function api_getWealthHistoryB() {
   } catch (e) { return { ok: false, msg: e.message, data: [], last: null }; }
 }
 
+/* --- 月報 --- */
+/** 立刻寄一份月報。ym 例：'2026/09'；沒給就寄上個月 */
+function api_sendMonthlyReport(ym) {
+  try {
+    let y, m;
+    const mt = String(ym || '').match(/^(\d{4})[\/-](\d{1,2})$/);
+    if (mt) { y = Number(mt[1]); m = Number(mt[2]); }
+    else {
+      const tz = getCfg_().TZ || 'Asia/Taipei', now = new Date();
+      y = Number(Utilities.formatDate(now, tz, 'yyyy')); m = Number(Utilities.formatDate(now, tz, 'M')) - 1;
+      if (m === 0) { y -= 1; m = 12; }
+    }
+    if (m < 1 || m > 12) return { ok: false, msg: '月份格式錯誤' };
+    const r = sendMonthlyReport_(y, m);
+    return { ok: true, msg: `已寄出 ${y} 年 ${m} 月月報到 ${r.to}` };
+  } catch (e) { return { ok: false, msg: e.message }; }
+}
+
 /* --- 每季/每半年 Email 提醒 --- */
 function wealthReminder() {
   const props = getProps_();
@@ -1019,7 +1042,7 @@ function doPost(e) {
       'api_saveSettings', 'api_getHoldingsForAnalysis', 'api_callGemini',
       'api_saveAnalysis', 'api_getAnalysisHistory', 'api_getGeminiKeyStatus',
       'api_saveGeminiKey', 'api_saveWealthSnapshot', 'api_getWealthHistory',
-      'api_setupWealthTrigger', 'api_getWealthBooks', 'api_saveWealthBooks', 'api_saveWealthSnapshotB', 'api_getWealthHistoryB',
+      'api_setupWealthTrigger', 'api_getWealthBooks', 'api_saveWealthBooks', 'api_saveWealthSnapshotB', 'api_getWealthHistoryB', 'api_sendMonthlyReport',
       'ingestFromGmail_Plaintext_SAFE', 'rebuildAll_B_SAFE',
       'api_runDividendsUpdate', 'appendDCAFromHoldings_SAFE',
       'rebuildRealizedPnL_FIFO_SAFE', 'rebuildDCADividends_SAFE',

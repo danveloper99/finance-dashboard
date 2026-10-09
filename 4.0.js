@@ -128,12 +128,14 @@ function getSS_() {
 var SCRIPT_APP_ = null;
 var PROPS_ = null;
 var LOCK_SVC_ = null;
+var SHELL_VERSION_ = 0; // 殼程式版本：2 起才有 monthlyReport_SAFE
 function bindEnv(env) {
   env = env || {};
   if (!env.props) throw new Error('殼程式版本過舊（未傳入 props），請依說明更新試算表裡的 Apps Script 殼程式');
-  SCRIPT_APP_ = env.scriptApp || null;
-  PROPS_      = env.props;
-  LOCK_SVC_   = env.lockService || null;
+  SCRIPT_APP_   = env.scriptApp || null;
+  PROPS_        = env.props;
+  LOCK_SVC_     = env.lockService || null;
+  SHELL_VERSION_ = Number(env.shellVersion) || 1;
 }
 function getScriptApp_() {
   return SCRIPT_APP_ || ScriptApp;
@@ -216,6 +218,7 @@ function setupAllSuggestedTriggers_SAFE() {
   getScriptApp_().newTrigger('rebuildRealizedPnL_FIFO_SAFE').timeBased().everyDays(1).atHour(19).nearMinute(0).inTimezone(tz).create();
   getScriptApp_().newTrigger('appendDCAFromHoldings_SAFE').timeBased().everyDays(1).atHour(12).nearMinute(0).inTimezone(tz).create();
   getScriptApp_().newTrigger('runDividendsFullCycle_SAFE').timeBased().everyDays(1).atHour(11).nearMinute(0).inTimezone(tz).create();
+  ensureMonthlyReportTrigger_(); // 每月 1 號 8 點寄月報（依《設定》MONTHLY_REPORT_ENABLED）
 
   Logger.log('✅ 已建立新排程。');
 }
@@ -229,7 +232,8 @@ function removeAllSuggestedTriggers_SAFE() {
     'rebuildRealizedPnL_FIFO_SAFE',
     'appendDCAFromHoldings_SAFE',
     'runDividendsFullCycle_SAFE',
-    'updateDividendsFromFinMind_SAFE'
+    'updateDividendsFromFinMind_SAFE',
+    'monthlyReport_SAFE'
   ]);
   getScriptApp_().getProjectTriggers().forEach(t => {
     if (names.has(t.getHandlerFunction())) getScriptApp_().deleteTrigger(t);
@@ -2678,6 +2682,8 @@ function dailyDataMaintenance_() {
   const filled  = fillMissingStockCodes_();
   const fixed   = fixStockCodes_Global();
   Logger.log(`📋 每日資料維護完成：對照表自動學到新代碼 ${learned} 筆、補上缺代碼 ${filled} 筆、修正代碼格式 ${fixed} 筆。`);
+  // 順便確保月報排程存在（舊使用者不用重跑 setupAllSuggestedTriggers_SAFE）
+  try { ensureMonthlyReportTrigger_(); } catch (e) { Logger.log('月報排程檢查失敗：' + e.message); }
 }
 
 /**
@@ -3077,3 +3083,309 @@ function ingestFromGmail_ByDateRange() {
   Logger.log(msg);
   SpreadsheetApp.getUi().alert(msg);
 }
+
+/***** =======================
+ * 月報：每月 1 號寄上個月的摘要 Email
+ * ======================== */
+
+var MONTHLY_SHEET_   = '月報紀錄';
+var MONTHLY_HEADERS_ = ['月份','產生時間','持股市值','持股成本','未實現損益','已實現損益','領到股利','收入合計'];
+var APP_URL_         = 'https://danveloper99.github.io/finance-dashboard/';
+
+/** 排程入口：每月 1 號寄「上個月」月報（《設定》MONTHLY_REPORT_ENABLED = FALSE 時不寄） */
+function monthlyReport_SAFE() {
+  return runWithAlert_(() => {
+    const C = getCfg_();
+    if (String(C.MONTHLY_REPORT_ENABLED || 'TRUE').toUpperCase() === 'FALSE') {
+      Logger.log('月報已停用（MONTHLY_REPORT_ENABLED = FALSE）');
+      return;
+    }
+    const tz = C.TZ || 'Asia/Taipei';
+    const now = new Date();
+    const y = Number(Utilities.formatDate(now, tz, 'yyyy'));
+    const m = Number(Utilities.formatDate(now, tz, 'M'));
+    return sendMonthlyReport_(m === 1 ? y - 1 : y, m === 1 ? 12 : m - 1);
+  }, 'monthlyReport');
+}
+
+/** 殼程式版本：舊版殼程式沒有 monthlyReport_SAFE，不能幫它建立月報排程 */
+function canScheduleMonthlyReport_() {
+  return !SCRIPT_APP_ || Number(SHELL_VERSION_) >= 2;
+}
+
+/** 依《設定》確保月報排程存在（每天的資料維護會順便呼叫） */
+function ensureMonthlyReportTrigger_() {
+  if (!canScheduleMonthlyReport_()) return;
+  const C = getCfg_();
+  const enabled = String(C.MONTHLY_REPORT_ENABLED || 'TRUE').toUpperCase() !== 'FALSE';
+  const app = getScriptApp_();
+  const existing = app.getProjectTriggers().filter(t => t.getHandlerFunction() === 'monthlyReport_SAFE');
+  if (enabled && !existing.length) {
+    app.newTrigger('monthlyReport_SAFE').timeBased().onMonthDay(1).atHour(8).inTimezone(C.TZ || 'Asia/Taipei').create();
+    Logger.log('📅 已建立月報排程（每月 1 號 8 點）');
+  } else if (!enabled && existing.length) {
+    existing.forEach(t => app.deleteTrigger(t));
+    Logger.log('📅 已移除月報排程');
+  }
+}
+
+/** 產生並寄出某年某月的月報，回傳 { to, subject } */
+function sendMonthlyReport_(year, month) {
+  const C  = getCfg_();
+  const to = String(C.ALERT_TO || '').trim();
+  if (!to) throw new Error('《設定》的「通知 Email」（ALERT_TO）沒有填，無法寄月報');
+  const data = buildMonthlyReport_(year, month);
+  const subject = `【你不理財】${year} 年 ${month} 月月報`;
+  MailApp.sendEmail({ to, subject, htmlBody: renderMonthlyReportHtml_(data) });
+  saveMonthlySnapshot_(data);
+  Logger.log(`📨 已寄出 ${subject} → ${to}`);
+  return { to, subject };
+}
+
+/** 各種日期格式 → 'yyyy/MM/dd'（Date 物件也可以） */
+function reportYMD_(v, tz) {
+  if (v instanceof Date) return Utilities.formatDate(v, tz || 'Asia/Taipei', 'yyyy/MM/dd');
+  return toYMDslash_(v);
+}
+
+/** 收集月報需要的所有數字 */
+function buildMonthlyReport_(year, month) {
+  const C  = getCfg_();
+  const ss = getSS_();
+  const tz = C.TZ || 'Asia/Taipei';
+  const mm     = ('0' + month).slice(-2);
+  const ym     = `${year}/${mm}`;
+  const nextYm = month === 12 ? `${year + 1}/01` : `${year}/${('0' + (month + 1)).slice(-2)}`;
+  const inMonth = v => reportYMD_(v, tz).slice(0, 7) === ym;
+  const rows = name => { const sh = name && ss.getSheetByName(name); return sh ? readTableAsObjects_(sh) : []; };
+  const num = v => { const n = Number(v); return isFinite(n) ? n : 0; };
+  const label = r => `${String(r['股票代碼'] || '').trim()} ${String(r['股票名稱'] || '').trim()}`.trim();
+
+  // 一、已實現損益（含當沖：持有天數 = 0）
+  const realRows = rows(C.SHEET_REALIZED);
+  const realMonth = realRows.filter(r => inMonth(r['賣出日期']));
+  const realized = realMonth.reduce((s, r) => s + num(r['淨獲利']), 0);
+  const dayTradePnl = realMonth.filter(r => r['持有天數'] === 0 || r['持有天數'] === '0').reduce((s, r) => s + num(r['淨獲利']), 0);
+  const bySym = new Map();
+  realMonth.forEach(r => {
+    const k = label(r);
+    const o = bySym.get(k) || { name: k, qty: 0, pnl: 0, cost: 0 };
+    o.qty += num(r['股數']); o.pnl += num(r['淨獲利']); o.cost += num(r['買進成本']);
+    bySym.set(k, o);
+  });
+  const realizedList = [...bySym.values()]
+    .map(o => ({ ...o, pct: o.cost > 0 ? o.pnl / o.cost * 100 : null }))
+    .sort((a, b) => b.pnl - a.pnl);
+
+  // 年初至今收入（已實現 + 領到股利，算到這個月底）
+  const ytd = v => { const d = reportYMD_(v, tz); return d.slice(0, 4) === String(year) && d.slice(0, 7) <= ym; };
+  const ytdRealized = realRows.filter(r => ytd(r['賣出日期'])).reduce((s, r) => s + num(r['淨獲利']), 0);
+
+  // 四、股利：依「現金股利發放日」算實際入帳
+  const divRows = rows(C.SHEET_DIV);
+  const divAmt = r => num(r['實際領取金額 (扣除每筆手續費10元)']);
+  const divMonth = divRows.filter(r => inMonth(r['現金股利發放日']) && divAmt(r) > 0)
+    .map(r => ({ name: label(r), amount: divAmt(r), date: reportYMD_(r['現金股利發放日'], tz) }));
+  const dividends = divMonth.reduce((s, d) => s + d.amount, 0);
+  const divNext = divRows.filter(r => reportYMD_(r['現金股利發放日'], tz).slice(0, 7) === nextYm && divAmt(r) > 0)
+    .map(r => ({ name: label(r), amount: divAmt(r), date: reportYMD_(r['現金股利發放日'], tz) }));
+  const ytdDividends = divRows.filter(r => ytd(r['現金股利發放日'])).reduce((s, r) => s + divAmt(r), 0);
+
+  // 二、交易摘要
+  const tradeRows = rows(C.SHEET_TRADES).filter(r => inMonth(r['成交日期']));
+  const isDay = r => isDayLoopSide_(r['成交類別']);
+  const side  = r => String(r['成交類別'] || '');
+  const tAmt  = r => num(r['成交金額']) || num(r['成交價']) * num(r['股數']);
+  const buys  = tradeRows.filter(r => !isDay(r) && side(r).includes('買'));
+  const sells = tradeRows.filter(r => !isDay(r) && side(r).includes('賣'));
+  const dayKeys = new Set(tradeRows.filter(isDay).map(r => `${r['股票代碼']}|${reportYMD_(r['成交日期'], tz)}`));
+  const trades = {
+    buyCount: buys.length,   buyAmount: buys.reduce((s, r) => s + tAmt(r), 0),
+    sellCount: sells.length, sellAmount: sells.reduce((s, r) => s + tAmt(r), 0),
+    dayTradeCount: dayKeys.size,
+    feeTax: tradeRows.reduce((s, r) => s + num(r['手續費']) + num(r['交易稅']), 0),
+  };
+
+  // 五、持股（寄送當下的價格；1 號早上寄 ≈ 上個月最後一個交易日收盤價）
+  const holdMap = new Map();
+  rows(C.SHEET_HOLD).forEach(r => {
+    const k = label(r); if (!String(r['股票代碼'] || '').trim()) return;
+    const qty = num(r['持有股數']), cost = num(r['買入成本 (單純買入價*股數)']);
+    const px = num(r['現價']);
+    const o = holdMap.get(k) || { name: k, qty: 0, cost: 0, value: 0 };
+    o.qty += qty; o.cost += cost; o.value += px > 0 ? qty * px : cost;
+    holdMap.set(k, o);
+  });
+  const holdings = [...holdMap.values()].filter(h => h.qty > 0.1).sort((a, b) => b.value - a.value);
+  const marketValue = holdings.reduce((s, h) => s + h.value, 0);
+  const holdCost    = holdings.reduce((s, h) => s + h.cost, 0);
+  const top5 = holdings.slice(0, 5).map(h => ({
+    ...h, share: marketValue > 0 ? h.value / marketValue * 100 : 0, pct: h.cost > 0 ? (h.value - h.cost) / h.cost * 100 : null,
+  }));
+
+  // 上個月的月報紀錄（比較市值用）
+  const prevYm = month === 1 ? `${year - 1}/12` : `${year}/${('0' + (month - 1)).slice(-2)}`;
+  const prevSnap = rows(MONTHLY_SHEET_).find(r => String(r['月份']).trim() === prevYm) || null;
+
+  // 六、定期定額
+  const dcaMonth = rows(C.SHEET_DCA || '定期定額').filter(r => inMonth(r['買入日期']));
+  const dca = { count: dcaMonth.length, amount: dcaMonth.reduce((s, r) => s + num(r['總成本 (=買入成本+手續費)']), 0) };
+
+  // 七、待辦提醒
+  const pending = rows(C.SHEET_STAGING || '待確認交易').filter(r => !r['確認狀態'] || r['確認狀態'] === '待確認').length;
+  const errors  = rows(C.ALERT_LOG_SHEET || '錯誤通知紀錄').filter(r => inMonth(r['時間'])).length;
+  const wealthDates = rows('資產快照').map(r => reportYMD_(r['記錄日期'], tz)).filter(Boolean).sort();
+  const lastWealth = wealthDates[wealthDates.length - 1] || '';
+  const wealthDays = lastWealth ? Math.floor((Date.now() - new Date(lastWealth.replace(/\//g, '-')).getTime()) / 86400000) : null;
+
+  return {
+    year, month, ym,
+    generatedAt: Utilities.formatDate(new Date(), tz, 'yyyy/MM/dd HH:mm'),
+    realized, dayTradePnl, dividends, income: realized + dividends,
+    ytdIncome: ytdRealized + ytdDividends,
+    marketValue, holdCost, unrealized: marketValue - holdCost,
+    unrealizedPct: holdCost > 0 ? (marketValue - holdCost) / holdCost * 100 : null,
+    prevMarketValue: prevSnap ? num(prevSnap['持股市值']) : null,
+    trades, realizedList, divMonth, divNext, top5, dca,
+    reminders: { pending, errors, wealthDays },
+  };
+}
+
+/** 存一筆月報紀錄（同月份覆蓋），下個月用來比較 */
+function saveMonthlySnapshot_(d) {
+  const ss = getSS_();
+  let sh = ss.getSheetByName(MONTHLY_SHEET_);
+  if (!sh) {
+    sh = ss.insertSheet(MONTHLY_SHEET_);
+    sh.getRange(1, 1, 1, MONTHLY_HEADERS_.length).setValues([MONTHLY_HEADERS_])
+      .setFontWeight('bold').setBackground('#344e41').setFontColor('white');
+    sh.setFrozenRows(1);
+    sh.getRange('A:A').setNumberFormat('@');
+  }
+  const row = [d.ym, d.generatedAt, Math.round(d.marketValue), Math.round(d.holdCost), Math.round(d.unrealized),
+               Math.round(d.realized), Math.round(d.dividends), Math.round(d.income)];
+  const last = sh.getLastRow();
+  const months = last > 1 ? sh.getRange(2, 1, last - 1, 1).getValues().map(r => String(r[0]).trim()) : [];
+  const idx = months.indexOf(d.ym);
+  sh.getRange(idx >= 0 ? idx + 2 : last + 1, 1, 1, row.length).setValues([row]);
+}
+
+/** 月報 HTML（Email 用：table 排版 + inline style） */
+function renderMonthlyReportHtml_(d) {
+  const POS = '#bc6c25', NEG = '#588157', INK = '#344e41', MUTED = '#8a8a80', LINE = '#ece9e2';
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const int = n => String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const money = n => (n < 0 ? '−' : '') + int(n);
+  const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '') + int(n);
+  const pctTxt = p => p == null ? '—' : (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(1) + '%';
+  const color = n => n > 0 ? POS : n < 0 ? NEG : INK;
+  const card = (title, inner) => `
+    <tr><td style="padding:0 16px 14px">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:14px;border:1px solid ${LINE}">
+        <tr><td style="padding:16px 18px 6px;font-size:15px;font-weight:700;color:#3a5a40">${title}</td></tr>
+        <tr><td style="padding:4px 18px 16px">${inner}</td></tr>
+      </table>
+    </td></tr>`;
+  const kv = (k, v, vColor, sub) => `
+    <tr>
+      <td style="padding:6px 0;font-size:14px;color:${MUTED}">${k}</td>
+      <td style="padding:6px 0;font-size:16px;font-weight:700;text-align:right;color:${vColor || INK}">${v}${sub ? `<div style="font-size:12px;font-weight:400;color:${MUTED}">${sub}</div>` : ''}</td>
+    </tr>`;
+  const table = (rowsHtml) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rowsHtml}</table>`;
+  const listRow = (left, right, rColor, sub) => `
+    <tr>
+      <td style="padding:7px 0;border-top:1px solid ${LINE};font-size:14px;color:${INK}">${esc(left)}${sub ? `<div style="font-size:12px;color:${MUTED}">${sub}</div>` : ''}</td>
+      <td style="padding:7px 0;border-top:1px solid ${LINE};font-size:14px;font-weight:700;text-align:right;color:${rColor || INK};white-space:nowrap">${right}</td>
+    </tr>`;
+  const empty = txt => `<div style="font-size:13px;color:${MUTED};padding:4px 0">${txt}</div>`;
+
+  // 一、總覽
+  const mvDiff = d.prevMarketValue == null ? null : d.marketValue - d.prevMarketValue;
+  const mvSub = mvDiff == null ? '較上月 —（下個月起開始比較）'
+    : `較上月 <span style="color:${color(mvDiff)}">${signed(mvDiff)}（${pctTxt(d.prevMarketValue ? mvDiff / d.prevMarketValue * 100 : null)}）</span>`;
+  const overview = table(
+    kv('已實現損益', signed(d.realized), color(d.realized), d.dayTradePnl ? `含當沖 ${signed(d.dayTradePnl)}` : '') +
+    kv('領到股利', signed(d.dividends), color(d.dividends)) +
+    kv('本月收入合計', signed(d.income), color(d.income)) +
+    kv('今年累計收入', signed(d.ytdIncome), color(d.ytdIncome), '已實現＋股利') +
+    `<tr><td colspan="2" style="padding:6px 0"><div style="border-top:1px dashed ${LINE}"></div></td></tr>` +
+    kv('持股市值', money(d.marketValue), INK, mvSub) +
+    kv('持股成本', money(d.holdCost)) +
+    kv('未實現損益', signed(d.unrealized), color(d.unrealized), pctTxt(d.unrealizedPct)));
+
+  // 二、交易摘要
+  const t = d.trades;
+  const tradesHtml = (t.buyCount + t.sellCount + t.dayTradeCount) === 0 ? empty('這個月沒有交易') : table(
+    kv('買進', `${t.buyCount} 筆　${money(t.buyAmount)}`) +
+    kv('賣出', `${t.sellCount} 筆　${money(t.sellAmount)}`) +
+    kv('當沖', `${t.dayTradeCount} 組`) +
+    kv('手續費＋交易稅', money(t.feeTax)));
+
+  // 三、已實現損益明細
+  const rl = d.realizedList;
+  let realizedHtml = empty('這個月沒有賣出');
+  if (rl.length) {
+    const best = rl[0], worst = rl[rl.length - 1];
+    const hl = [];
+    if (best.pnl > 0) hl.push(`🏆 賺最多：<b>${esc(best.name)}</b> <span style="color:${POS}">${signed(best.pnl)}</span>`);
+    if (worst.pnl < 0) hl.push(`📉 賠最多：<b>${esc(worst.name)}</b> <span style="color:${NEG}">${signed(worst.pnl)}</span>`);
+    realizedHtml = (hl.length ? `<div style="font-size:13px;line-height:1.9;margin-bottom:6px;color:${INK}">${hl.join('<br>')}</div>` : '') +
+      table(rl.slice(0, 10).map(o => listRow(o.name, signed(o.pnl), color(o.pnl), `${int(o.qty)} 股・報酬 ${pctTxt(o.pct)}`)).join('')) +
+      (rl.length > 10 ? empty(`另有 ${rl.length - 10} 檔未列出`) : '');
+  }
+
+  // 四、股利
+  const divHtml =
+    `<div style="font-size:13px;font-weight:700;color:${MUTED};margin:2px 0 2px">本月入帳</div>` +
+    (d.divMonth.length ? table(d.divMonth.map(x => listRow(x.name, signed(x.amount), POS, x.date)).join('')) : empty('這個月沒有股利入帳')) +
+    `<div style="font-size:13px;font-weight:700;color:${MUTED};margin:12px 0 2px">下個月預計發放</div>` +
+    (d.divNext.length ? table(d.divNext.map(x => listRow(x.name, '約 ' + int(x.amount), INK, x.date)).join('')) : empty('目前沒有已公告的發放'));
+
+  // 五、持股概況
+  const holdHtml = d.top5.length ? table(d.top5.map(h =>
+    listRow(h.name, money(h.value), INK, `佔 ${h.share.toFixed(1)}%・未實現 <span style="color:${color(h.pct || 0)}">${pctTxt(h.pct)}</span>`)).join(''))
+    : empty('目前沒有持股');
+
+  // 六、定期定額
+  const dcaHtml = d.dca.count ? table(kv('本月扣款', `${d.dca.count} 筆　${money(d.dca.amount)}`)) : empty('這個月沒有定期定額扣款');
+
+  // 七、待辦提醒
+  const r = d.reminders, todo = [];
+  if (r.pending > 0)  todo.push(`⚠️ 有 <b>${r.pending}</b> 筆待確認交易還沒確認`);
+  if (r.errors > 0)   todo.push(`⚠️ 本月自動化錯誤 <b>${r.errors}</b> 次（詳見《錯誤通知紀錄》）`);
+  if (r.wealthDays != null && r.wealthDays > 90) todo.push(`⚠️ 資產快照已經 <b>${Math.floor(r.wealthDays / 30)}</b> 個月沒記錄了`);
+  if (r.wealthDays == null) todo.push('⚠️ 還沒有任何資產快照紀錄');
+  const todoHtml = todo.length ? `<div style="font-size:14px;line-height:2;color:${INK}">${todo.join('<br>')}</div>` : empty('✅ 沒有待辦事項');
+
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#dad7cd">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#dad7cd">
+    <tr><td align="center" style="padding:20px 8px">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;font-family:'Noto Serif TC','PingFang TC','Microsoft JhengHei',sans-serif">
+        <tr><td style="padding:0 16px 14px">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#3a5a40;border-radius:14px">
+            <tr><td style="padding:20px 20px 4px;font-size:13px;color:rgba(255,255,255,.75);letter-spacing:.1em">🌿 你不理財，才不理你</td></tr>
+            <tr><td style="padding:0 20px 4px;font-size:22px;font-weight:700;color:#ffffff">${d.year} 年 ${d.month} 月月報</td></tr>
+            <tr><td style="padding:6px 20px 20px">
+              <span style="font-size:13px;color:rgba(255,255,255,.75)">本月收入合計</span>
+              <span style="font-size:24px;font-weight:700;color:#ffffff;margin-left:8px">${signed(d.income)}</span>
+            </td></tr>
+          </table>
+        </td></tr>
+        ${card('一、本月總覽', overview)}
+        ${card('二、本月交易', tradesHtml)}
+        ${card('三、已實現損益明細', realizedHtml)}
+        ${card('四、股利', divHtml)}
+        ${card('五、持股概況（前 5 大）', holdHtml)}
+        ${card('六、定期定額', dcaHtml)}
+        ${card('七、待辦提醒', todoHtml)}
+        <tr><td align="center" style="padding:6px 16px 10px">
+          <a href="${APP_URL_}" style="display:inline-block;background:#3a5a40;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:12px 28px;border-radius:12px">打開 App</a>
+        </td></tr>
+        <tr><td align="center" style="padding:4px 16px 20px;font-size:11px;color:${MUTED};line-height:1.7">
+          市值以 ${d.generatedAt} 的價格計算・正數為橘色、負數為綠色<br>
+          不想收到月報：到 App「設定 → 通知設定」把「每月月報」改成 FALSE
+        </td></tr>
+      </table>
+    </td></tr>
+  </table></body></html>`;
+}

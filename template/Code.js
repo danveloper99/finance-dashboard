@@ -17,6 +17,7 @@ function lib_() {
     scriptApp:   ScriptApp,
     props:       PropertiesService.getScriptProperties(),
     lockService: LockService,
+    shellVersion: 2, // 2：支援月報（monthlyReport_SAFE）
   });
   return FinLib;
 }
@@ -42,3 +43,4 @@ function rebuildRealizedPnL_FIFO_SAFE()   { return lib_().rebuildRealizedPnL_FIF
 function appendDCAFromHoldings_SAFE()     { return lib_().appendDCAFromHoldings_SAFE(); }
 function runDividendsFullCycle_SAFE()     { return lib_().runDividendsFullCycle_SAFE(); }
 function wealthReminder()                 { return lib_().wealthReminder(); }
+function monthlyReport_SAFE()             { return lib_().monthlyReport_SAFE(); }
