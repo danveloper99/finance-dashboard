@@ -1652,13 +1652,17 @@ function rebuildRealizedPnL_FIFO(fullRebuild) {
   //   會導致某支股票只要比較晚才有賣出紀錄被寫入，其他股票只要賣出日期比它舊，
   //   就會被「快進」邏輯永遠當成已處理過而跳過、永遠不會產生已實現損益列。
   //   改成「每支股票代碼各自記錄自己的最後處理日期」，股票之間互不影響。
+  // ★ 當沖列的持有天數固定是 0（一般賣出最少 1 天），不列入一般賣出的游標，
+  //   改用「股票|日期」記錄哪些當沖已經寫過，避免重複寫入。
   const lastDateBySym = new Map();
+  const doneDayTradeKeys = new Set();
   if (out.getLastRow() > 1) {
-    const existingRows = out.getRange(2, 1, out.getLastRow() - 1, 7).getValues(); // 股票代碼(1) ~ 賣出日期(7)
+    const existingRows = out.getRange(2, 1, out.getLastRow() - 1, 17).getValues(); // 股票代碼(1) ~ 持有天數(17)
     existingRows.forEach(r => {
       const sym = String(r[0] || '').trim();
       const d   = toYMDslash_(String(r[6] || ''));
       if (!sym || !d) return;
+      if (r[16] === 0 || r[16] === '0') { doneDayTradeKeys.add(sym + '|' + d); return; }
       const prev = lastDateBySym.get(sym);
       if (!prev || d > prev) lastDateBySym.set(sym, d);
     });
@@ -1738,12 +1742,60 @@ function rebuildRealizedPnL_FIFO(fullRebuild) {
     });
   }
 
+  const dayRows = buildDayTradePnLRows_(allTx, doneDayTradeKeys);
+  rows.push(...dayRows);
+
   if (rows.length) {
     const startRow = out.getLastRow() + 1;
     out.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
     out.getRange(startRow, 16, rows.length, 1).setNumberFormat('0.0'); // 含息報酬率(%)
   }
-  Logger.log(`已實現損益：新增 ${rows.length} 筆（增量，每股票各自游標；快進處理 ${ffCount} 筆舊賣出、新處理 ${newCount} 筆）`);
+  Logger.log(`已實現損益：新增 ${rows.length} 筆（其中當沖 ${dayRows.length} 筆；增量，每股票各自游標；快進處理 ${ffCount} 筆舊賣出、新處理 ${newCount} 筆）`);
+}
+
+/**
+ * 當沖損益：同一天、同一檔股票的「沖買」與「沖賣」互相配對（先買後賣、先賣後買都算）。
+ * 每組（股票＋日期）產生一列已實現損益；持有天數固定為 0，用來和一般賣出區分。
+ * 損益 = 沖賣金額 − 沖買金額 − 雙邊手續費 − 交易稅（當沖 0.15%）。
+ * skipKeys：已經寫過的「股票|日期」，增量模式下不重複寫入。
+ */
+function buildDayTradePnLRows_(allTx, skipKeys) {
+  const groups = new Map();
+  allTx.filter(x => isDayLoopSide_(x.side)).forEach(x => {
+    const key = x.sym + '|' + x.date;
+    if (!groups.has(key)) groups.set(key, { sym: x.sym, name: x.name, date: x.date, buys: [], sells: [] });
+    groups.get(key)[x.side.includes('買') ? 'buys' : 'sells'].push(x);
+  });
+
+  const sum = (arr, f) => arr.reduce((t, x) => t + f(x), 0);
+  const amt = x => x.amount || round2_(x.price * x.qty);
+  const rows = [];
+  [...groups.keys()].sort().forEach(key => {
+    if (skipKeys && skipKeys.has(key)) return;
+    const g = groups.get(key);
+    const buyQty = sum(g.buys, x => x.qty), sellQty = sum(g.sells, x => x.qty);
+    const qty = Math.min(buyQty, sellQty);
+    if (qty <= 0) {
+      Logger.log(`⚠ [Warning] 當沖：${g.date} ${g.sym} 只有${buyQty ? '沖買' : '沖賣'}、沒有另一邊可配對，略過`);
+      return;
+    }
+    if (buyQty !== sellQty)
+      Logger.log(`⚠ [Warning] 當沖：${g.date} ${g.sym} 沖買 ${buyQty} 股、沖賣 ${sellQty} 股不一致，只計算 ${qty} 股`);
+
+    const buyAmt  = sum(g.buys,  amt), sellAmt = sum(g.sells, amt);
+    const buyFee  = sum(g.buys,  x => x.fee || R4_calcFee_(amt(x)));
+    const sellFee = sum(g.sells, x => x.fee || R4_calcFee_(amt(x)));
+    const sellTax = sum(g.sells, x => x.tax || R4_calcTax_(x.side, amt(x)));
+    const rb = qty / buyQty, rs = qty / sellQty; // 兩邊股數不一致時按比例
+    const buyCost   = round2_(buyAmt * rb),  sellGross = round2_(sellAmt * rs);
+    const bFee      = round2_(buyFee * rb),  sFee = round2_(sellFee * rs), sTax = round2_(sellTax * rs);
+    const pnl = round2_(sellGross - buyCost - bFee - sFee - sTax);
+    const pct = buyCost > 0 ? round2_(pnl / buyCost * 100) : '';
+    rows.push([g.sym, g.name, g.date, qty, round2_(buyAmt / buyQty), buyCost,
+               g.date, round2_(sellAmt / sellQty), sellGross, bFee, sFee, sTax, pnl,
+               0, pnl, pct, 0, pnl]);
+  });
+  return rows;
 }
 
 /** ===== 診斷用：庫存缺口檢查 =====
