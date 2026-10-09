@@ -94,7 +94,8 @@ clasp deploy --deploymentId AKfycbzrFTtWxBH1aisKKkXWihYFittWQwUGldnjJTo3YE-jXonP
 - 每份後端只有一組帳號：Script Properties 的 `APP_USER` / `APP_PASSWORD`，由前端「首次設定」呼叫 `api_setupAccount` 建立。
 - 程式庫裡建立的觸發器不會生效：觸發器一律透過 `getScriptApp_()`（殼程式會 `bindEnv` 傳入自己的 `ScriptApp`）。**新增排程用的函式時，`template/Code.js` 也要加同名轉接函式。**
 - 前端必須相容舊版後端（朋友不一定會更新）。
-- **範本試算表不可用「複製主控試算表」產生**：建立副本時 Script Properties（APP_PASSWORD、GEMINI_API_KEY、TOKEN_SALT）會一起被複製。範本一律用全新空白試算表 + `clasp -P .clasp.template.json push`。
+- **範本試算表不可用「複製主控試算表」產生**（會帶走個人資料，也可能帶走 Script Properties）。範本一律用全新空白試算表 + `clasp -P .clasp.template.json push`。
+- **程式庫的 Script Properties / Lock 是所有使用者共用的同一份**：程式碼一律用 `getProps_()` / `getScriptLock_()`，不可直接呼叫 `PropertiesService.getScriptProperties()` 或 `LockService.getScriptLock()`。殼程式透過 `bindEnv({ props, lockService })` 傳入自己的服務。
 
 | clasp 設定檔 | 對象 |
 |------|------|
