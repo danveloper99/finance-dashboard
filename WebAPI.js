@@ -42,7 +42,7 @@ function makeToken_(pwd) {
  * 後端版本號：每次發布新的程式庫版本時 +1，並同步修改 index.html 的 LATEST_BACKEND_VERSION。
  * 前端會用它判斷朋友的後端是否過舊、需要更新程式庫版本。
  */
-var APP_VERSION = 10;
+var APP_VERSION = 11;
 
 /**
  * 帳號：每份後端（每個人用自己 Google 帳號部署的 GAS）只有一組帳號
@@ -1021,9 +1021,16 @@ function api_runAutoUpdate() {
   if (!LOADER_) return { ok: false, status: 'unsupported', msg: '這個後端不是範本殼程式，不需要自動更新' };
   const tz = getCfg_().TZ || 'Asia/Taipei', L = LOADER_;
   const at = Utilities.formatDate(new Date(), tz, 'yyyy/MM/dd HH:mm');
-  if (!(L.latest > L.version)) return { ok: true, status: 'latest', msg: `已是最新版本 v${L.version}`, at };
-  getProps_().setProperty('FIN_SKIP_DELAY', String(L.latest));
-  return { ok: true, status: 'updated', msg: `已套用最新版 v${L.latest}，重新整理頁面後生效`, at };
+  // 清掉殼程式的版本資訊快取（10 分鐘），直接到 GitHub 查最新版本
+  let latest = Number(L.latest) || 0;
+  try {
+    CacheService.getScriptCache().remove('fin_release');
+    const r = UrlFetchApp.fetch(APP_URL_ + 'release.json?t=' + Date.now(), { muteHttpExceptions: true });
+    if (r.getResponseCode() === 200) latest = Number(JSON.parse(r.getContentText('utf-8')).current.version) || latest;
+  } catch (e) {}
+  if (!(latest > L.version)) return { ok: true, status: 'latest', msg: `已是最新版本 v${L.version}`, at };
+  getProps_().setProperty('FIN_SKIP_DELAY', String(latest));
+  return { ok: true, status: 'updated', msg: `已套用最新版 v${latest}，重新整理頁面後生效`, at };
 }
 
 /* --- 每季/每半年 Email 提醒 --- */

@@ -3282,7 +3282,45 @@ function buildMonthlyReport_(year, month) {
     prevMarketValue: prevSnap ? num(prevSnap['持股市值']) : null,
     trades, realizedList, divMonth, divNext, top5, dca,
     reminders: { pending, errors, wealthDays },
+    charts: buildMonthlyCharts_(year, month, realRows, divRows, tz),
   };
+}
+
+/**
+ * 月報圖表資料：近 12 個月（含本月）
+ * - profit：每月已實現損益（賣出日期）＋ 領到股利（現金股利發放日）
+ * - assets：資產追蹤各份紀錄合計；每份紀錄取「該月底以前最後一筆快照」，沒有新快照的月份沿用前一筆
+ */
+function buildMonthlyCharts_(year, month, realRows, divRows, tz) {
+  const num = v => { const n = Number(v); return isFinite(n) ? n : 0; };
+  const months = [];
+  for (let k = 11; k >= 0; k--) {
+    const d = new Date(year, month - 1 - k, 1);
+    const y = d.getFullYear(), m = d.getMonth() + 1;
+    months.push({ ym: `${y}/${('0' + m).slice(-2)}`, label: String(m), m });
+  }
+  const idx = new Map(months.map((x, i) => [x.ym, i]));
+  const profit = months.map(x => ({ label: x.label, realized: 0, dividend: 0, v: 0 }));
+  realRows.forEach(r => { const i = idx.get(reportYMD_(r['賣出日期'], tz).slice(0, 7)); if (i != null) profit[i].realized += num(r['淨獲利']); });
+  divRows.forEach(r => { const i = idx.get(reportYMD_(r['現金股利發放日'], tz).slice(0, 7)); if (i != null) profit[i].dividend += num(r['實際領取金額 (扣除每筆手續費10元)']); });
+  profit.forEach(p => { p.v = p.realized + p.dividend; });
+
+  let assets = months.map(x => ({ label: x.label, v: null }));
+  try {
+    const cfg = readWealthConfig_();
+    const hist = readWealthV2History_();
+    const books = cfg && Array.isArray(cfg.order) ? cfg.order : Object.keys(hist);
+    assets = months.map(x => {
+      const end = x.ym.replace('/', '-') + '-99'; // 該月底（字串比較用）
+      let total = 0, has = false;
+      books.forEach(b => {
+        const list = (hist[b] || []).filter(s => s.date <= end);
+        if (list.length) { total += list[list.length - 1].totalTWD; has = true; }
+      });
+      return { label: x.label, v: has ? total : null };
+    });
+  } catch (e) { Logger.log('月報資產圖：' + e.message); }
+  return { profit, assets, from: months[0].ym, to: months[months.length - 1].ym };
 }
 
 /** 存一筆月報紀錄（同月份覆蓋），下個月用來比較 */
@@ -3332,6 +3370,36 @@ function renderMonthlyReportHtml_(d) {
       <td style="padding:7px 0;border-top:1px solid ${LINE};font-size:14px;font-weight:700;text-align:right;color:${rColor || INK};white-space:nowrap">${right}</td>
     </tr>`;
   const empty = txt => `<div style="font-size:13px;color:${MUTED};padding:4px 0">${txt}</div>`;
+  const short = v => { const a = Math.abs(v), sign = v < 0 ? '−' : '';
+    return a >= 1e4 ? sign + (a / 1e4).toFixed(a >= 1e6 ? 0 : 1).replace(/\.0$/, '') + '萬' : sign + int(a); };
+  /**
+   * 直條圖：items [{label, v}]；正值往上、負值往下，v 為 null 的月份留空
+   * opts.showLabel(i, idx)：哪些長條要標數字（手機寬度有限，只標重要的）
+   * opts.base：長條從這個值開始畫（資產圖用，讓變化看得出來）
+   */
+  const vbars = (items, posColor, negColor, opts) => {
+    opts = opts || {};
+    const base = opts.base || 0, showLabel = opts.showLabel || (() => true);
+    const H = 110, vals = items.map(i => i.v == null ? 0 : i.v - base);
+    const maxP = Math.max(0, ...vals), maxN = Math.max(0, ...vals.map(v => -v));
+    if (!maxP && !maxN) return empty('還沒有資料');
+    const scale = H / (maxP + maxN), hp = Math.round(maxP * scale), hn = Math.round(maxN * scale);
+    const w = (100 / items.length).toFixed(2) + '%';
+    const lab = (v, pos) => `<div style="font-size:9px;line-height:11px;color:${pos ? posColor : negColor};white-space:nowrap">${short(v)}</div>`;
+    const top = items.map((i, k) => {
+      const v = vals[k], h = v > 0 ? Math.max(2, Math.round(v * scale)) : 0;
+      const label = i.v != null && showLabel(i, k) ? lab(i.v, true) : '';
+      return `<td width="${w}" valign="bottom" align="center" style="height:${hp + 12}px;padding:0 1px">${v > 0 ? label + `<div style="height:${h}px;background:${posColor};border-radius:3px 3px 0 0"></div>` : ''}</td>`;
+    }).join('');
+    const bottom = hn ? `<tr>${items.map((i, k) => {
+      const v = vals[k], h = v < 0 ? Math.max(2, Math.round(-v * scale)) : 0;
+      const label = i.v != null && showLabel(i, k) ? lab(i.v, false) : '';
+      return `<td valign="top" align="center" style="height:${hn + 12}px;padding:0 1px">${v < 0 ? `<div style="height:${h}px;background:${negColor};border-radius:0 0 3px 3px"></div>` + label : ''}</td>`;
+    }).join('')}</tr>` : '';
+    const labels = items.map(i => `<td align="center" style="padding-top:4px;font-size:10px;color:${MUTED};white-space:nowrap">${esc(i.label)}</td>`).join('');
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed">
+      <tr>${top}</tr><tr><td colspan="${items.length}" style="border-top:1px solid ${LINE};font-size:0;line-height:0;height:1px">&nbsp;</td></tr>${bottom}<tr>${labels}</tr></table>`;
+  };
 
   // 一、總覽
   const mvDiff = d.prevMarketValue == null ? null : d.marketValue - d.prevMarketValue;
@@ -3347,7 +3415,26 @@ function renderMonthlyReportHtml_(d) {
     kv('持股成本', money(d.holdCost)) +
     kv('未實現損益', signed(d.unrealized), color(d.unrealized), pctTxt(d.unrealizedPct)));
 
-  // 二、交易摘要
+  // 二、三、圖表
+  const ch = d.charts || { profit: [], assets: [] };
+  const profitSum = ch.profit.reduce((s, p) => s + p.v, 0);
+  const range = ch.from ? `<div style="font-size:11px;color:${MUTED};margin:-2px 0 8px">${ch.from} ～ ${ch.to}（下方數字為月份）</div>` : '';
+  // 獲利圖：只標「金額夠大」的月份與本月，避免手機上數字擠在一起
+  const pMax = Math.max(1, ...ch.profit.map(p => Math.abs(p.v)));
+  const profitHtml = range + vbars(ch.profit, POS, NEG, { showLabel: (p, k) => k === ch.profit.length - 1 || Math.abs(p.v) >= pMax * 0.25 }) +
+    `<div style="font-size:12px;color:${MUTED};margin-top:8px">12 個月合計 <b style="color:${color(profitSum)}">${signed(profitSum)}</b>（已實現＋股利）</div>`;
+  // 資產圖：只標「數字有變」的月份；長條從最低值往下一段開始畫，變化才看得出來
+  const aVals = ch.assets.filter(a => a.v != null);
+  const assetDiff = aVals.length >= 2 ? aVals[aVals.length - 1].v - aVals[0].v : null;
+  const aMin = aVals.length ? Math.min(...aVals.map(a => a.v)) : 0, aMax = aVals.length ? Math.max(...aVals.map(a => a.v)) : 0;
+  const aBase = aMin > 0 && aMax > aMin ? Math.max(0, aMin - (aMax - aMin)) : 0;
+  const assetsHtml = range + vbars(ch.assets, '#588157', NEG, { base: aBase,
+      showLabel: (a, k) => k === 0 || k === ch.assets.length - 1 || (ch.assets[k - 1] && ch.assets[k - 1].v !== a.v) }) +
+    `<div style="font-size:12px;color:${MUTED};margin-top:8px;line-height:1.7">` +
+    (assetDiff == null ? '資產追蹤的快照累積兩個月以上，就能看到變化' : `這段期間 <b style="color:${color(assetDiff)}">${signed(assetDiff)}</b>`) +
+    `<br>依「資產追蹤」各份紀錄合計；沒有新快照的月份沿用前一筆` + (aBase ? '；長條高度呈現變化幅度（不是從 0 開始）' : '') + `</div>`;
+
+  // 四、交易摘要
   const t = d.trades;
   const tradesHtml = (t.buyCount + t.sellCount + t.dayTradeCount) === 0 ? empty('這個月沒有交易') : table(
     kv('買進', `${t.buyCount} 筆　${money(t.buyAmount)}`) +
@@ -3428,6 +3515,8 @@ function renderMonthlyReportHtml_(d) {
         ${card('五、持股概況（前 5 大）', holdHtml)}
         ${card('六、定期定額', dcaHtml)}
         ${card('七、待辦提醒', todoHtml)}
+        ${card('八、近 12 個月獲利', profitHtml)}
+        ${card('九、近 12 個月總資產', assetsHtml)}
         <tr><td align="center" style="padding:6px 16px 10px">
           <a href="${APP_URL_}" style="display:inline-block;background:#3a5a40;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:12px 28px;border-radius:12px">打開 App</a>
         </td></tr>

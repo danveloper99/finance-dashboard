@@ -1,8 +1,8 @@
 {
   "current": {
-    "version": 10,
-    "releasedAt": "2026-10-09T23:38:53+08:00",
-    "notes": "資產紀錄改為預設一份，可新增／刪除多份",
+    "version": 11,
+    "releasedAt": "2026-10-09T23:52:24+08:00",
+    "notes": "月報加近 12 個月獲利與總資產圖；立即套用最新版按鈕修正",
     "immediate": true
   },
   "previous": null,
