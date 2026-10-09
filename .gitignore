@@ -1,5 +1,6 @@
 # Clasp (contains Script ID — do not expose)
 .clasp.json
+.clasp.test.json
 
 # Dependencies
 node_modules/
@@ -10,3 +11,5 @@ node_modules/
 # Environment / secrets
 .env
 *.env.local
+.clasp.lib.json
+.clasp.template.json

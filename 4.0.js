@@ -17,7 +17,7 @@
 
 /** 產生〈設定〉分頁（保留使用者自訂說明 + 新增 DCA 中文名稱欄位） */
 function installWizard_Init() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const sh = ss.getSheetByName('設定') || ss.insertSheet('設定');
   sh.clear();
 
@@ -105,9 +105,33 @@ function installWizard_Init() {
   Logger.log('✅ 已重建〈設定〉分頁。');
 }
 
+/**
+ * 多租戶路由：本次執行要操作的試算表
+ * doPost 驗證 Token 後若是租戶，會把 CURRENT_SS_ 設成租戶自己的試算表；
+ * 擁有者與排程觸發器則維持 null → 使用綁定的主控試算表。
+ * GAS 每次執行都是獨立環境，全域變數不會跨請求殘留。
+ */
+var CURRENT_SS_ = null;
+function getSS_() {
+  return CURRENT_SS_ || SpreadsheetApp.getActiveSpreadsheet();
+}
+
+/**
+ * 程式庫模式：朋友試算表裡的「殼程式」會先呼叫 FinLib.bindEnv({ scriptApp: ScriptApp })。
+ * 在程式庫裡建立的觸發器不會生效，所以建立／刪除觸發器、取得網址都要用殼程式自己的 ScriptApp。
+ * 直接部署（你自己的專案）時沒有呼叫 bindEnv，就用本專案的 ScriptApp。
+ */
+var SCRIPT_APP_ = null;
+function bindEnv(env) {
+  SCRIPT_APP_ = (env && env.scriptApp) || null;
+}
+function getScriptApp_() {
+  return SCRIPT_APP_ || ScriptApp;
+}
+
 /** 讀取〈設定〉分頁為物件 */
 function getCfg_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const sh = ss.getSheetByName('設定');
   if (!sh) throw new Error('找不到〈設定〉，請先執行 installWizard_Init()');
 
@@ -123,7 +147,7 @@ function getCfg_() {
 /** 安裝精靈：依〈設定〉建立必要分頁 */
 function installWizard_Apply() {
   const C = getCfg_();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
 
   ensureSheetWithHeader_(C.SHEET_TRADES, [
     '成交日期','成交時間','股票代碼','股票名稱','成交類別',
@@ -166,14 +190,14 @@ function setupAllSuggestedTriggers_SAFE() {
   removeAllSuggestedTriggers_SAFE();
   const tz = C.TZ || 'Asia/Taipei';
 
-  ScriptApp.newTrigger('ingestFromGmail_Plaintext_SAFE').timeBased().everyDays(1).atHour(18).nearMinute(0).inTimezone(tz).create();
-  ScriptApp.newTrigger('rebuildAll_B_SAFE').timeBased().everyDays(1).atHour(18).nearMinute(30).inTimezone(tz).create();
+  getScriptApp_().newTrigger('ingestFromGmail_Plaintext_SAFE').timeBased().everyDays(1).atHour(18).nearMinute(0).inTimezone(tz).create();
+  getScriptApp_().newTrigger('rebuildAll_B_SAFE').timeBased().everyDays(1).atHour(18).nearMinute(30).inTimezone(tz).create();
   // 股票代碼補值＋修復：排在「交易紀錄→庫存紀錄」重建之後、已實現損益重算之前，
   // 這樣當天新確認的交易在計算損益前，代碼就已經是乾淨的。
-  ScriptApp.newTrigger('dailyDataMaintenance_SAFE').timeBased().everyDays(1).atHour(18).nearMinute(45).inTimezone(tz).create();
-  ScriptApp.newTrigger('rebuildRealizedPnL_FIFO_SAFE').timeBased().everyDays(1).atHour(19).nearMinute(0).inTimezone(tz).create();
-  ScriptApp.newTrigger('appendDCAFromHoldings_SAFE').timeBased().everyDays(1).atHour(12).nearMinute(0).inTimezone(tz).create();
-  ScriptApp.newTrigger('runDividendsFullCycle_SAFE').timeBased().everyDays(1).atHour(11).nearMinute(0).inTimezone(tz).create();
+  getScriptApp_().newTrigger('dailyDataMaintenance_SAFE').timeBased().everyDays(1).atHour(18).nearMinute(45).inTimezone(tz).create();
+  getScriptApp_().newTrigger('rebuildRealizedPnL_FIFO_SAFE').timeBased().everyDays(1).atHour(19).nearMinute(0).inTimezone(tz).create();
+  getScriptApp_().newTrigger('appendDCAFromHoldings_SAFE').timeBased().everyDays(1).atHour(12).nearMinute(0).inTimezone(tz).create();
+  getScriptApp_().newTrigger('runDividendsFullCycle_SAFE').timeBased().everyDays(1).atHour(11).nearMinute(0).inTimezone(tz).create();
 
   Logger.log('✅ 已建立新排程。');
 }
@@ -189,8 +213,8 @@ function removeAllSuggestedTriggers_SAFE() {
     'runDividendsFullCycle_SAFE',
     'updateDividendsFromFinMind_SAFE'
   ]);
-  ScriptApp.getProjectTriggers().forEach(t => {
-    if (names.has(t.getHandlerFunction())) ScriptApp.deleteTrigger(t);
+  getScriptApp_().getProjectTriggers().forEach(t => {
+    if (names.has(t.getHandlerFunction())) getScriptApp_().deleteTrigger(t);
   });
   Logger.log('🧹 已移除建議排程。');
 }
@@ -204,7 +228,7 @@ function removeAllSuggestedTriggers_SAFE() {
  * Triggers 頁面手動加的其他觸發器），再重新執行 setupAllSuggestedTriggers_SAFE() 乾淨重建。
  */
 function listAllTriggers_() {
-  const triggers = ScriptApp.getProjectTriggers();
+  const triggers = getScriptApp_().getProjectTriggers();
   Logger.log(`目前共有 ${triggers.length} 個觸發器（帳號上限通常是 20 個）：`);
   triggers.forEach((t, i) => {
     Logger.log(`${i + 1}. 函式：${t.getHandlerFunction()}　類型：${t.getEventType()}　來源：${t.getTriggerSource()}`);
@@ -213,14 +237,14 @@ function listAllTriggers_() {
 
 /** 只新增「每日股票代碼補值＋修復」排程，不動到其他既有排程（避免重跑整批 setupAllSuggestedTriggers_SAFE 造成其他排程被重建） */
 function addDailyMaintenanceTrigger_SAFE() {
-  const already = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'dailyDataMaintenance_SAFE');
+  const already = getScriptApp_().getProjectTriggers().some(t => t.getHandlerFunction() === 'dailyDataMaintenance_SAFE');
   if (already) {
     Logger.log('ℹ️ 已經有 dailyDataMaintenance_SAFE 的排程了，不重複新增。');
     return;
   }
   const C  = getCfg_();
   const tz = C.TZ || 'Asia/Taipei';
-  ScriptApp.newTrigger('dailyDataMaintenance_SAFE').timeBased().everyDays(1).atHour(18).nearMinute(45).inTimezone(tz).create();
+  getScriptApp_().newTrigger('dailyDataMaintenance_SAFE').timeBased().everyDays(1).atHour(18).nearMinute(45).inTimezone(tz).create();
   Logger.log('✅ 已新增「每日股票代碼補值＋修復」排程：每天 18:45（交易紀錄重建之後、已實現損益重算之前）。');
 }
 
@@ -260,7 +284,7 @@ function learnSymNameFromSheet_(ss, sheetName, map, numericCodeOnly, overwrite) 
 }
 
 function ensureSheetWithHeader_(name, header) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const sh = ss.getSheetByName(name) || ss.insertSheet(name);
   if (sh.getLastRow() === 0) sh.appendRow(header);
   return sh;
@@ -369,7 +393,7 @@ function onError_(entryName, err, extra) {
   try {
     const A = getAlertCfg_();
     const now = Utilities.formatDate(new Date(), A.TZ, 'yyyy/MM/dd HH:mm:ss');
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS_();
     const sh = ss.getSheetByName(A.LOG_SHEET) || ss.insertSheet(A.LOG_SHEET);
     if (sh.getLastRow() === 0) {
       sh.appendRow(['時間','入口函式','錯誤訊息','堆疊','附加資訊','試算表名稱','URL']);
@@ -628,7 +652,7 @@ function ingestFromGmail_Plaintext() {
     throw new Error('ingestFromGmail_Plaintext: 另一個執行緒正在執行，請稍後再試');
   try {
   const C = getCfg_();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
 
   // 寫入目標：待確認交易（staging）
   const shStaging = ensureStagingSheet_();
@@ -968,7 +992,7 @@ function keepSide_(s){ return (s==null)?'':String(s).trim(); }
 
 function rebuildAll_B() {
   const C = getCfg_();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   
   const headersOpen = ['股票代碼','股票名稱','買進日期','買入價','持有股數','買入成本 (單純買入價*股數)','手續費','證券商'];
   const headersHold = ['股票代碼','股票名稱','買進日期','買入價','持有股數','買入成本 (單純買入價*股數)','手續費','證券商','現價','即時市值'];
@@ -1243,7 +1267,7 @@ function buildNameCache_(shHold, shOpen, shT) {
 
 function updateDividendsFromFinMind() {
   const C = getCfg_();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const shHold = ensureSheetWithHeader_(C.SHEET_HOLD, []);
   const shOpen = ensureSheetWithHeader_(C.SHEET_OPENING, []);
   const shT     = ensureSheetWithHeader_(C.SHEET_TRADES, []);
@@ -1565,7 +1589,7 @@ function avgBuyOnDate_(sym, cutoffDate, openRows, tradeRows) {
  */
 function rebuildRealizedPnL_FIFO(fullRebuild) {
   const C = getCfg_();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const shOpen = ensureSheetWithHeader_(C.SHEET_OPENING, []);
   const shT    = ensureSheetWithHeader_(C.SHEET_TRADES, []);
   const HEADERS = ['股票代碼','股票名稱','買進日期','股數','買進單價','買進成本','賣出日期','賣出單價','賣出總金額','買進手續費','賣出手續費','交易稅','淨獲利','股利','含息報酬','含息報酬率(%)','持有天數','每天獲利金額'];
@@ -1715,7 +1739,7 @@ function rebuildRealizedPnL_FIFO(fullRebuild) {
  */
 function auditInventoryGaps_() {
   const C = getCfg_();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const shT = ensureSheetWithHeader_(C.SHEET_TRADES, []);
   const shOpen = ensureSheetWithHeader_(C.SHEET_OPENING, []);
 
@@ -1827,7 +1851,7 @@ function buildBuyQueuesFromOpeningAndTrades_R4_(shOpen, shT) {
  */
 function appendDCAFromHoldings() {
   const C = getCfg_();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
 
   // 1. 準備分頁
   const shHold = ensureSheetWithHeader_(C.SHEET_HOLD, []);
@@ -1961,7 +1985,7 @@ function runDividendsFullCycle_() {
       const after = props.getProperty(CUR_KEY);
       if (after === '0' || after === null) return;
       if (Date.now() - startMs > 280000) {
-        ScriptApp.newTrigger('runDividendsFullCycle_SAFE').timeBased().at(new Date(Date.now()+60000)).create();
+        getScriptApp_().newTrigger('runDividendsFullCycle_SAFE').timeBased().at(new Date(Date.now()+60000)).create();
         return;
       }
       Utilities.sleep(500);
@@ -1970,7 +1994,7 @@ function runDividendsFullCycle_() {
 }
 
 function fixStockCodes_OneTime() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   ['交易紀錄', '庫存紀錄', '期初庫存'].forEach(sheetName => {
     const sh = ss.getSheetByName(sheetName);
     if (!sh || sh.getLastRow() < 2) return;
@@ -1992,7 +2016,7 @@ function fixStockCodes_OneTime() {
 }
 
 function tool_AuditBrokerInventory() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const C = getCfg_();
   let sh = ss.getSheetByName('【對帳】券商庫存比對');
   if (sh) sh.clear(); else sh = ss.insertSheet('【對帳】券商庫存比對');
@@ -2019,7 +2043,7 @@ function tool_AuditBrokerInventory() {
 }
 
 function cleanDuplicateDividends_OneTime() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const sh = ss.getSheetByName('股利狀況');
   if (!sh || sh.getLastRow()<2) return;
   const data = sh.getRange(2,1,sh.getLastRow()-1,sh.getLastColumn()).getValues();
@@ -2066,7 +2090,7 @@ function debug_TraceStock_V2() {
   const TARGET_STOCK = '2330'; 
   // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const shOpen = ss.getSheetByName('期初庫存');
   const shTrade = ss.getSheetByName('交易紀錄');
   const logs = [];
@@ -2212,7 +2236,7 @@ function debug_TraceStock_V2() {
  * 修正：強化代碼 (補零/轉字串) 與 日期格式 (統一轉 yyyy/MM/dd) 的比對能力
  */
 function cleanDuplicateDividends_Safe() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const sh = ss.getSheetByName('股利狀況');
   
   if (!sh || sh.getLastRow() < 2) {
@@ -2294,7 +2318,7 @@ function cleanDuplicateDividends_Safe() {
  * 不會讓整個排程失敗；訊息一律會寫進 Logger.log。
  */
 function fixStockCodes_Global() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
 
   const targets = [
     { name: '交易紀錄', col: 3 },
@@ -2379,7 +2403,7 @@ function fixStockCodes_Global() {
  */
 function fixSpecificCode_ONCE(oldCode, newCode) {
   if (!oldCode || !newCode) { Logger.log('請提供 oldCode 與 newCode'); return; }
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const targets = [
     { name: '交易紀錄', col: 3 },
     { name: '待確認交易', col: 3 },
@@ -2432,7 +2456,7 @@ function fixSpecificCode_00981A_ONCE() { return fixSpecificCode_ONCE('00981', '0
  * 手動加一行，兩者不衝突（自動學習只會新增、不會蓋掉你手動加/改過的列）。
  */
 function ensureStockCodeRefSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   let sh = ss.getSheetByName('股票代碼對照表');
   if (sh) return sh;
 
@@ -2475,7 +2499,7 @@ function ensureStockCodeRefSheet_() {
  * 只要你在《股票代碼對照表》裡有登記這支股票的代碼＋名稱，這裡就會自動幫你補上去。
  */
 function fillMissingStockCodes_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const shRef = ss.getSheetByName('股票代碼對照表');
   if (!shRef || shRef.getLastRow() < 2) return 0;
 
@@ -2534,7 +2558,7 @@ function fillMissingStockCodes_() {
  * 被這裡自動學進對照表，不用再手動維護第二次。
  */
 function learnNewCodesIntoRefSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const shRef = ensureStockCodeRefSheet_();
 
   const known = new Set();
@@ -2596,7 +2620,7 @@ function dailyDataMaintenance_() {
  * 只有在你想擴大驗證涵蓋的列數範圍時才需要重跑。
  */
 function setupStockCodeValidation_ONCE() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const shRef = ensureStockCodeRefSheet_();
 
   const REF_ROWS = 2000; // 對照表預留的列數空間，未來新增股票代碼都算在這個範圍內
@@ -2631,7 +2655,7 @@ function setupStockCodeValidation_ONCE() {
  * 回傳: { initialized: boolean }
  */
 function api_checkSystemStatus() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const sh = ss.getSheetByName('帳號管理'); // 或是您原本設定的 User Sheet 名稱
   
   // 如果分頁不存在，或只有標題列(沒有內容)，視為未初始化
@@ -2652,7 +2676,7 @@ function api_registerFirstUser(id, pwd) {
 
   if (!id || !pwd) return { ok: false, msg: '帳號密碼不能為空' };
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   let sh = ss.getSheetByName('帳號管理');
   
   // 如果分頁不存在，自動建立
@@ -2784,7 +2808,7 @@ function api_getSettingsSchema_UNUSED_() {
 
 /** @deprecated 已移至 WebAPI.js */
 function api_saveSettings_UNUSED_(newSettings) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const sh = ss.getSheetByName('設定');
   if (!sh) return { ok: false, msg: '找不到設定分頁' };
 
@@ -2822,7 +2846,7 @@ function ingestFromGmail_ByDateRange() {
   ];
 
   const C  = getCfg_();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const tz = C.TZ || 'Asia/Taipei';
 
   // --- 準備輸出分頁（每次清空重建）---
@@ -2982,4 +3006,4 @@ function ingestFromGmail_ByDateRange() {
   const msg = `✅ 完成！${START_DATE} ～ ${END_DATE}，共 ${toWrite.length} 筆 → 已寫入〈${OUTPUT_SHEET}〉`;
   Logger.log(msg);
   SpreadsheetApp.getUi().alert(msg);
-}
+}

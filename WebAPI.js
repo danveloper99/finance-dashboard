@@ -38,43 +38,81 @@ function makeToken_(pwd) {
   return Utilities.base64Encode(digest);
 }
 
+/**
+ * 後端版本號：每次發布新的程式庫版本時 +1，並同步修改 index.html 的 LATEST_BACKEND_VERSION。
+ * 前端會用它判斷朋友的後端是否過舊、需要更新程式庫版本。
+ */
+var APP_VERSION = 2;
+
+/**
+ * 帳號：每份後端（每個人用自己 Google 帳號部署的 GAS）只有一組帳號
+ * - APP_USER / APP_PASSWORD 存在 Script Properties，只有部署者本人看得到
+ * - 舊版沒有 APP_USER 時，帳號沿用《設定》的 ID_NUMBER
+ */
+function getAppUser_() {
+  const u = PropertiesService.getScriptProperties().getProperty('APP_USER');
+  return String(u || getCfg_()['ID_NUMBER'] || '').trim();
+}
+
+/** 這個後端是否已設定帳號（前端用來判斷要顯示「登入」還是「首次設定」） */
+function api_getSetupStatus() {
+  return { ok: true, configured: !!PropertiesService.getScriptProperties().getProperty('APP_PASSWORD') };
+}
+
+/** 首次設定帳號密碼：只有尚未設定過時可以呼叫 */
+function api_setupAccount(userInput, pwdInput) {
+  const user = String(userInput || '').trim();
+  const pwd  = String(pwdInput || '');
+  if (!/^[A-Za-z0-9_.@-]{3,40}$/.test(user)) return { ok: false, msg: '帳號限 3~40 個英數字（可含 _ . @ -）' };
+  if (pwd.length < 6) return { ok: false, msg: '密碼至少 6 個字元' };
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return { ok: false, msg: '系統忙碌中，請稍後再試' };
+  try {
+    const props = PropertiesService.getScriptProperties();
+    if (props.getProperty('APP_PASSWORD')) return { ok: false, msg: '這個後端已經設定過帳號，請直接登入' };
+    props.setProperties({ APP_USER: user, APP_PASSWORD: pwd });
+    return { ok: true, token: makeToken_(pwd), user, version: APP_VERSION };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 /** 登入驗證，回傳 Token */
 function api_login(idInput, pwdInput) {
-  const props     = PropertiesService.getScriptProperties();
-  const cfg       = getCfg_();
-  const storedId  = (cfg['ID_NUMBER'] || '').trim().toUpperCase();
-  const storedPwd = props.getProperty('APP_PASSWORD');
+  const id  = String(idInput  || '').trim();
+  const pwd = String(pwdInput || '');
+  if (!id || !pwd) return { ok: false, msg: '請輸入帳號與密碼' };
 
-  if (!storedPwd) {
-    if (!idInput || !pwdInput) return { ok: false, msg: '初次使用請輸入帳號與密碼' };
-    if (storedId && idInput.toUpperCase() !== storedId)
-      return { ok: false, msg: '輸入的帳號與後台設定不符' };
-    props.setProperty('APP_PASSWORD', pwdInput);
-    return { ok: true, token: makeToken_(pwdInput) };
-  }
+  const storedPwd = PropertiesService.getScriptProperties().getProperty('APP_PASSWORD');
+  if (!storedPwd) return { ok: false, needSetup: true, msg: '這個後端還沒設定帳號，請先到「首次設定」' };
 
-  if (idInput.toUpperCase() === storedId && pwdInput === storedPwd)
-    return { ok: true, token: makeToken_(storedPwd) };
-
+  const storedUser = getAppUser_();
+  if (storedUser && id.toUpperCase() === storedUser.toUpperCase() && pwd === storedPwd)
+    return { ok: true, token: makeToken_(storedPwd), user: storedUser, version: APP_VERSION };
   return { ok: false, msg: '帳號或密碼錯誤' };
+}
+
+/** 驗證 Token；改密碼後舊 Token 自動失效 */
+function resolveAuth_(token) {
+  const storedPwd = PropertiesService.getScriptProperties().getProperty('APP_PASSWORD');
+  return !!(token && storedPwd && token === makeToken_(storedPwd));
 }
 
 /** 自動登入 Token 驗證 */
 function api_auth_token(tokenInput) {
-  const props     = PropertiesService.getScriptProperties();
-  const storedPwd = props.getProperty('APP_PASSWORD');
-  if (!storedPwd) return { ok: false };
-  return { ok: tokenInput === makeToken_(storedPwd) };
+  return resolveAuth_(tokenInput) ? { ok: true, user: getAppUser_(), version: APP_VERSION } : { ok: false };
 }
 
-/** 修改密碼 */
+/** 修改密碼（需登入），回傳新 Token */
 function api_changePassword(oldPwd, newPwd) {
   const props     = PropertiesService.getScriptProperties();
   const storedPwd = props.getProperty('APP_PASSWORD');
   if (storedPwd && String(oldPwd) !== String(storedPwd))
     return { ok: false, msg: '舊密碼不正確' };
-  props.setProperty('APP_PASSWORD', newPwd);
-  return { ok: true, msg: '密碼已更新' };
+  if (String(newPwd || '').length < 6) return { ok: false, msg: '新密碼至少 6 個字元' };
+  props.setProperty('APP_PASSWORD', String(newPwd));
+  return { ok: true, msg: '密碼已更新', token: makeToken_(String(newPwd)) };
 }
 
 /* ============================================================
@@ -83,7 +121,7 @@ function api_changePassword(oldPwd, newPwd) {
 
 function api_getDashboard() {
   const C  = getCfg_();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
 
   // 1. 庫存：計算成本與市值
   const shHold = ss.getSheetByName(C.SHEET_HOLD);
@@ -149,7 +187,7 @@ function api_getDashboard() {
 
 function api_getDataList(type) {
   const C  = getCfg_();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const sheetMap = {
     holdings:  C.SHEET_HOLD,
     dividends: C.SHEET_DIV,
@@ -237,7 +275,7 @@ function api_getSettingsSchema() {
 }
 
 function api_saveSettings(newValues) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const sh = ss.getSheetByName('設定');
   if (!sh) return { ok: false, msg: '找不到設定頁' };
   const lastRow = sh.getLastRow();
@@ -275,7 +313,7 @@ function api_saveSettings(newValues) {
  */
 function api_getHoldingsForAnalysis() {
   const C  = getCfg_();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const sh = ss.getSheetByName(C.SHEET_HOLD || '庫存紀錄');
   if (!sh || sh.getLastRow() < 2) return { ok: false, msg: '找不到庫存紀錄或無資料' };
 
@@ -412,7 +450,7 @@ function api_callGemini(prompt, images) {
  */
 function api_saveAnalysis(text) {
   if (!text) return { ok: false };
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   let sh   = ss.getSheetByName('市場分析紀錄');
   if (!sh) {
     sh = ss.insertSheet('市場分析紀錄');
@@ -435,7 +473,7 @@ function api_saveAnalysis(text) {
  * 讀取《市場分析紀錄》歷史，最新在前，最多 30 筆
  */
 function api_getAnalysisHistory() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const sh = ss.getSheetByName('市場分析紀錄');
   if (!sh || sh.getLastRow() < 2) return { ok: true, data: [] };
 
@@ -469,26 +507,49 @@ var WEALTH_KEYS_ = [
   'taishin_twd','taishin_jpy',
   'richart_twd','richart_fund',
   'chang_twd','land_twd','post_twd',
-  'uni_stock','cathay_stock',
+  'uni_stock','cathay_stock','cathay_us_stock',
   'rate_usd','rate_jpy','rate_cny'
 ];
 
+var WEALTH_SHEET_HEADERS_ = ['記錄日期','期間',
+  '中信台幣活存','中信台幣定存','中信美金活存','中信美金定存','中信人民幣活存','中信人民幣定存',
+  '國泰台幣活存','國泰美金活存',
+  '台新台幣活存','台新日幣活存',
+  'Richart活存','Richart基金',
+  '彰銀台幣','合庫台幣','郵局台幣',
+  '統一證券','國泰證券','國泰證券（美）',
+  '匯率USD/TWD','匯率JPY/TWD','匯率CNY/TWD',
+  '台幣合計','備註'
+];
+
 function ensureWealthSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   let sh = ss.getSheetByName('資產快照');
   if (!sh) {
     sh = ss.insertSheet('資產快照');
-    const headers = ['記錄日期','期間',
-      '中信台幣活存','中信台幣定存','中信美金活存','中信美金定存','中信人民幣活存','中信人民幣定存',
-      '國泰台幣活存','國泰美金活存',
-      '台新台幣活存','台新日幣活存',
-      'Richart活存','Richart基金',
-      '彰銀台幣','合庫台幣','郵局台幣',
-      '統一證券','國泰證券',
-      '匯率USD/TWD','匯率JPY/TWD','匯率CNY/TWD',
-      '台幣合計','備註'];
-    sh.getRange(1,1,1,headers.length).setValues([headers]).setFontWeight('bold').setBackground('#344e41').setFontColor('white');
+    sh.getRange(1,1,1,WEALTH_SHEET_HEADERS_.length).setValues([WEALTH_SHEET_HEADERS_])
+      .setFontWeight('bold').setBackground('#344e41').setFontColor('white');
     sh.setFrozenRows(1);
+  } else {
+    const lastCol = sh.getLastColumn();
+    const col20Val = lastCol >= 20 ? sh.getRange(1, 20).getValue() : '';
+    const col21Val = lastCol >= 21 ? sh.getRange(1, 21).getValue() : '';
+    if (col20Val === '國泰美股') {
+      if (col21Val === '國泰證券（美）') {
+        // 舊版誤插了「國泰美股」空欄，刪除後「國泰證券（美）」自動回到 col20
+        sh.deleteColumn(20);
+      } else {
+        // 「國泰美股」存在但後面沒有「國泰證券（美）」，直接改名
+        sh.getRange(1, 20).setValue('國泰證券（美）')
+          .setFontWeight('bold').setBackground('#344e41').setFontColor('white');
+      }
+    } else if (col20Val !== '國泰證券（美）') {
+      // 兩個欄都不存在，補插入
+      sh.insertColumnAfter(19);
+      sh.getRange(1, 20).setValue('國泰證券（美）')
+        .setFontWeight('bold').setBackground('#344e41').setFontColor('white');
+    }
+    // col20Val === '國泰證券（美）' → 已正確，不需動
   }
   return sh;
 }
@@ -507,7 +568,7 @@ function api_saveWealthSnapshot(data) {
     const TWD_KEYS = ['ctbc_twd_saving','ctbc_twd_fixed','cathay_twd','taishin_twd',
                       'richart_twd','richart_fund','chang_twd','land_twd','post_twd',
                       'uni_stock','cathay_stock'];
-    const USD_KEYS = ['ctbc_usd_saving','ctbc_usd_fixed','cathay_usd'];
+    const USD_KEYS = ['ctbc_usd_saving','ctbc_usd_fixed','cathay_usd','cathay_us_stock'];
     const JPY_KEYS = ['taishin_jpy'];
     const CNY_KEYS = ['ctbc_cny_saving','ctbc_cny_fixed'];
     let total = 0;
@@ -525,9 +586,8 @@ function api_saveWealthSnapshot(data) {
 
 function api_getWealthHistory() {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sh = ss.getSheetByName('資產快照');
-    if (!sh || sh.getLastRow() < 2) return { ok: true, data: [], last: null };
+    const sh = ensureWealthSheet_(); // 確保欄位結構為最新（修正舊版欄位錯位問題）
+    if (sh.getLastRow() < 2) return { ok: true, data: [], last: null };
     const rows = sh.getRange(2, 1, sh.getLastRow()-1, sh.getLastColumn()).getValues();
     const data = rows.map(row => {
       const obj = {
@@ -554,7 +614,7 @@ function wealthReminder() {
   const year   = new Date().getFullYear();
   const qLabel = month<=3?'Q1':month<=6?'Q2':month<=9?'Q3':'Q4';
   const label  = type === 'halfyear' ? (month<=6?'上半年':'下半年') : qLabel;
-  const url    = ScriptApp.getService().getUrl();
+  const url    = getScriptApp_().getService().getUrl();
   const msg    = `【資產記帳提醒】${year} ${label} 到了！\n💰 記得記錄這期的總資產\n\n開啟 App：${url}`;
   try { const C=getCfg_(); if(C['ALERT_TO']) MailApp.sendEmail(C['ALERT_TO'],'【資產記帳提醒】'+year+' '+label, msg); } catch(e){}
 }
@@ -562,11 +622,11 @@ function wealthReminder() {
 function api_setupWealthTrigger(type) {
   // type: 'quarterly' | 'halfyear' | 'none'
   try {
-    ScriptApp.getProjectTriggers()
+    getScriptApp_().getProjectTriggers()
       .filter(t => t.getHandlerFunction() === 'wealthReminder')
-      .forEach(t => ScriptApp.deleteTrigger(t));
+      .forEach(t => getScriptApp_().deleteTrigger(t));
     if (type !== 'none') {
-      ScriptApp.newTrigger('wealthReminder').timeBased().onMonthDay(1).atHour(9).create();
+      getScriptApp_().newTrigger('wealthReminder').timeBased().onMonthDay(1).atHour(9).create();
       PropertiesService.getScriptProperties().setProperty('WEALTH_REMINDER_TYPE', type);
     } else {
       PropertiesService.getScriptProperties().deleteProperty('WEALTH_REMINDER_TYPE');
@@ -583,7 +643,7 @@ function api_setupWealthTrigger(type) {
 function api_lookupStockName(code) {
   if (!code) return { ok: true, name: '' };
   const C   = getCfg_();
-  const ss  = SpreadsheetApp.getActiveSpreadsheet();
+  const ss  = getSS_();
   const key = String(code).trim();
   const sheetNames = [C.SHEET_HOLD, C.SHEET_TRADES, C.SHEET_OPENING];
   for (const shName of sheetNames) {
@@ -602,10 +662,10 @@ function api_lookupStockName(code) {
 
 function api_addManualTrade(trade) {
   const C  = getCfg_();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const sh = ensureSheetWithHeader_(C.SHEET_TRADES || '交易紀錄', [
     '成交日期','成交時間','股票代碼','股票名稱','成交類別',
-    '股數','成交價','成交金額','委託單號','手續費','交易稅','淨收付金額','證券商','備註'
+    '股數','成交價','成交金額','委託單號','手續費','交易稅','淨收付金額','備註','證券商'
   ]);
 
   const type   = String(trade.type   || '現買').trim();
@@ -705,7 +765,7 @@ function api_saveGeminiKey(key) {
 
 function ensureStagingSheet_() {
   const C  = getCfg_();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS_();
   const name = C.SHEET_STAGING || '待確認交易';
   let sh = ss.getSheetByName(name);
   if (!sh) {
@@ -730,7 +790,7 @@ function api_confirmTrades(confirmedRows) {
   const shStaging = ensureStagingSheet_();
   const shTrades  = ensureSheetWithHeader_(C.SHEET_TRADES || '交易紀錄', [
     '成交日期','成交時間','股票代碼','股票名稱','成交類別',
-    '股數','成交價','成交金額','委託單號','手續費','交易稅','淨收付金額','證券商','備註'
+    '股數','成交價','成交金額','委託單號','手續費','交易稅','淨收付金額','備註','證券商'
   ]);
 
   // 一次讀取所有 staging 資料（含狀態欄），避免逐列讀取
@@ -762,7 +822,7 @@ function api_confirmTrades(confirmedRows) {
       Number(sr[5]), Number(sr[6]), amount,
       sr[8] || '',
       fee, tax, net,
-      sr[12] || '', sr[13] || '',
+      sr[13] || '', sr[12] || '',  // TRADES 欄位順序：備註(staging[13]), 証券商(staging[12])
     ]);
     confirmed.push(row._rowIndex);
   }
@@ -848,10 +908,17 @@ function doPost(e) {
       'api_getPendingTrades', 'api_confirmTrades', 'api_deletePendingTrade', 'api_batchDeletePendingTrades',
       'api_updatePendingTrade',
       'api_addManualTrade', 'api_lookupStockName',
+      'api_login', 'api_auth_token', 'api_getSetupStatus', 'api_setupAccount', 'api_changePassword',
     ]);
+    // 不需登入即可呼叫
+    const PUBLIC = new Set(['api_login', 'api_auth_token', 'api_getSetupStatus', 'api_setupAccount']);
 
     if (!ALLOWED.has(action)) {
       output.setContent(JSON.stringify({ ok: false, msg: '不允許的 action: ' + action }));
+      return output;
+    }
+    if (!PUBLIC.has(action) && !resolveAuth_(body.token)) {
+      output.setContent(JSON.stringify({ ok: false, authError: true, msg: '登入已失效，請重新登入' }));
       return output;
     }
     const fn = this[action];
@@ -869,7 +936,7 @@ function doPost(e) {
 
 function api_runDividendsUpdate() {
   PropertiesService.getScriptProperties().deleteProperty('DIV_CURSOR');
-  ScriptApp.newTrigger('runDividendsFullCycle_SAFE').timeBased().at(new Date(Date.now() + 3000)).create();
+  getScriptApp_().newTrigger('runDividendsFullCycle_SAFE').timeBased().at(new Date(Date.now() + 3000)).create();
   return { ok: true };
 }
 

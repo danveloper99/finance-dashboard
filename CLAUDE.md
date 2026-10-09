@@ -88,7 +88,22 @@ clasp deploy --deploymentId AKfycbzrFTtWxBH1aisKKkXWihYFittWQwUGldnjJTo3YE-jXonP
 - **原則**：vibe coding，先求功能正確，不過度工程化
 - **GAS 特性**：注意 6 分鐘執行時限；使用 `LockService` 避免並行寫入衝突
 
-## 未來規劃（分享給其他用戶）
-目前架構適合「每人複製一份試算表」的方式分享。
-前置作業：清空個人資料建立範本、Cloud Run 服務處理方案、友善化 `installWizard_Init`。
-**暫不考慮**單一 Web App 多用戶架構（改動量過大）。
+## 分享給其他用戶（程式庫架構）
+- **機密原則**：每人用自己的 Google 帳號複製「範本試算表」並自己部署後端，作者看不到任何人的資料。不要提議「主控試算表 + 使用者對應表」或要求共用試算表給作者的方案。
+- 範本試算表的 Apps Script 只有 `template/` 裡的殼程式，所有功能來自**程式庫 FinLib**（獨立的 Apps Script 專案，程式碼與本專案相同）。
+- 每份後端只有一組帳號：Script Properties 的 `APP_USER` / `APP_PASSWORD`，由前端「首次設定」呼叫 `api_setupAccount` 建立。
+- 程式庫裡建立的觸發器不會生效：觸發器一律透過 `getScriptApp_()`（殼程式會 `bindEnv` 傳入自己的 `ScriptApp`）。**新增排程用的函式時，`template/Code.js` 也要加同名轉接函式。**
+- 前端必須相容舊版後端（朋友不一定會更新）。
+
+| clasp 設定檔 | 對象 |
+|------|------|
+| `.clasp.json` | 你自己的正式專案（綁定主控試算表） |
+| `.clasp.lib.json` | 程式庫 FinLib（獨立專案） |
+| `.clasp.template.json` | 範本試算表的殼程式（`rootDir: template`） |
+| `.clasp.test.json` | 測試專案 |
+
+### 發布新版本給朋友
+1. `WebAPI.js` 的 `APP_VERSION` +1，`index.html` 的 `LATEST_BACKEND_VERSION` 改成一樣的數字
+2. `clasp -P .clasp.lib.json push`，再 `clasp -P .clasp.lib.json version "說明"` 建立程式庫新版本
+3. 正式專案照常 `clasp push` + `clasp deploy --deploymentId ...`
+4. 推前端（GitHub Pages）；朋友登入後會看到黃色更新提醒

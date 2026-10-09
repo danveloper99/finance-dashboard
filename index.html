@@ -193,6 +193,90 @@
 
 <div id="app">
 
+  <!-- ══ 登入 / 首次設定 ══ -->
+  <div v-if="authState!=='ok'" style="position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px 16px;overflow-y:auto">
+    <div style="max-width:420px;width:100%;margin:auto">
+      <div style="text-align:center;margin-bottom:24px">
+        <div style="font-size:32px;margin-bottom:10px">🌿</div>
+        <div style="font-size:22px;font-weight:700;color:#3a5a40">你不理財，才不理你</div>
+      </div>
+      <div v-if="authState==='checking'" style="text-align:center;padding:40px 0"><i class="ph ph-spinner spin" style="font-size:28px;color:#3a5a40"></i></div>
+      <div v-else class="card">
+        <div style="display:flex;gap:6px;margin-bottom:18px;background:var(--bg);padding:4px;border-radius:12px">
+          <button v-for="m in [{k:'login',l:'登入'},{k:'setup',l:'首次設定'}]" :key="m.k" @click="authState=m.k;authMsg=''" :style="authState===m.k?'background:white;color:#3a5a40;box-shadow:0 1px 4px rgba(0,0,0,.08)':'background:transparent;color:#999'" style="flex:1;padding:8px;border-radius:9px;font-weight:700;font-size:14px;border:none;cursor:pointer">{{ m.l }}</button>
+        </div>
+        <form v-if="authState==='login'" @submit.prevent="doLogin" style="display:flex;flex-direction:column;gap:12px">
+          <input v-model="authForm.user" class="input-custom" placeholder="帳號" autocomplete="username">
+          <input v-model="authForm.pwd" type="password" class="input-custom" placeholder="密碼" autocomplete="current-password">
+          <button type="submit" :disabled="authBusy" class="btn btn-primary" style="width:100%;font-size:15px;padding:12px">{{ authBusy?'登入中…':'登入' }}</button>
+          <div style="font-size:11px;color:#999;line-height:1.6;word-break:break-all">
+            連線的後端：{{ shortGasUrl }}
+            <a href="#" @click.prevent="authState='setup';authMsg=''" style="color:#588157;font-weight:700;margin-left:4px">改用我自己的後端</a>
+          </div>
+        </form>
+        <form v-else @submit.prevent="doSetup" style="display:flex;flex-direction:column;gap:12px">
+          <div style="font-size:12px;color:#666;line-height:1.8;background:#f7f9f4;border-radius:10px;padding:10px 12px">
+            第一次使用？先依下方「使用說明」部署好自己的後端，再把網址貼上、設定帳號密碼。
+          </div>
+          <input v-model="authForm.gasUrl" type="url" class="input-custom" placeholder="https://script.google.com/macros/s/.../exec">
+          <input v-model="authForm.user" class="input-custom" placeholder="帳號（3~40 個英數字）" autocomplete="username">
+          <input v-model="authForm.pwd" type="password" class="input-custom" placeholder="密碼（至少 6 個字元）" autocomplete="new-password">
+          <input v-model="authForm.pwd2" type="password" class="input-custom" placeholder="再輸入一次密碼" autocomplete="new-password">
+          <button type="submit" :disabled="authBusy" class="btn btn-primary" style="width:100%;font-size:15px;padding:12px">{{ authBusy?'設定中…':'完成設定並登入' }}</button>
+          <div style="font-size:11px;color:#999;line-height:1.6">已經設定過帳號？貼上網址後直接切到「登入」即可。
+            <a href="#" @click.prevent="useGasUrlOnly" style="color:#588157;font-weight:700">只儲存網址</a>
+          </div>
+        </form>
+        <div v-if="authMsg" style="margin-top:12px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;background:#fef2f2;color:#dc2626;line-height:1.6">{{ authMsg }}</div>
+      </div>
+      <!-- 使用說明 SOP -->
+      <details v-if="authState!=='checking'" class="card" style="margin-top:14px;font-size:13px;color:#444;line-height:1.85">
+        <summary style="cursor:pointer;font-weight:700;color:#3a5a40;font-size:14px">📘 使用說明（首次設定 SOP）</summary>
+        <div style="margin-top:12px">
+          <div style="background:#f7f9f4;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px">
+            🔒 每個人的資料都存在<b>自己的</b> Google 試算表，由<b>自己的</b> Google 帳號執行後端，其他人（包含 App 作者）都看不到。
+          </div>
+          <div style="font-weight:700;color:#588157;margin-bottom:4px">一、建立自己的試算表與後端（約 10 分鐘）</div>
+          <ol style="list-style:decimal;padding-left:20px;margin:0 0 12px">
+            <li>向 App 作者索取「範本試算表」連結，用自己的 Google 帳號打開</li>
+            <li>「檔案 → 建立副本」，副本會連同後端程式一起複製到你的雲端硬碟</li>
+            <li>在副本開啟「擴充功能 → Apps Script」</li>
+            <li>上方函式選單選 <code>installWizard_Init</code> → 執行。第一次會要求授權：選自己的帳號 →「進階 → 前往（不安全）」→ 允許（這是你自己的副本，不會分享給任何人）</li>
+            <li>回到試算表《設定》分頁，填好需要的欄位（時區、券商、FinMind Token 等），再執行 <code>installWizard_Apply</code> 建立各工作表</li>
+            <li>右上角「部署 → 新增部署作業」→ 類型選「網頁應用程式」→ 執行身分：<b>我</b>、存取權：<b>任何人</b> → 部署</li>
+            <li>複製產生的「網頁應用程式網址」（結尾是 /exec）</li>
+          </ol>
+          <div style="font-weight:700;color:#588157;margin-bottom:4px">二、在本頁完成設定</div>
+          <ol style="list-style:decimal;padding-left:20px;margin:0 0 12px">
+            <li>點上方「首次設定」，貼上剛剛的網址</li>
+            <li>自訂帳號與密碼 → 完成設定並登入</li>
+            <li><b>部署完請立刻完成這一步</b>：還沒設定帳號的後端，第一個設定的人就會成為擁有者</li>
+            <li>換手機或電腦時：同樣到「首次設定」貼網址 →「只儲存網址」→ 再用「登入」</li>
+          </ol>
+          <div style="font-weight:700;color:#588157;margin-bottom:4px">三、自動功能（選用）</div>
+          <ul style="list-style:disc;padding-left:20px;margin:0 0 12px">
+            <li>自動擷取 Gmail 成交回報：在 Gmail 建立標籤並套用到券商成交信，再把標籤名稱填進《設定》</li>
+            <li>每日自動更新庫存、損益、股利：在 Apps Script 執行一次 <code>setupAllSuggestedTriggers_SAFE</code></li>
+            <li>自動股利需要 FinMind Token（finmindtrade.com 免費申請）</li>
+            <li>加密 PDF 對帳單需要自己的 Cloud Run 解鎖服務；沒有的話只用 HTML 成交回報信即可</li>
+          </ul>
+          <div style="font-weight:700;color:#588157;margin-bottom:4px">四、更新到新版本</div>
+          <div style="margin:0 0 12px">App 有新功能時，登入後會出現黃色提醒，照著做即可（約 1 分鐘）：
+          <ol style="list-style:decimal;padding-left:20px;margin:4px 0 0;line-height:1.8">
+            <li>開啟你的試算表 →「擴充功能 → Apps Script」</li>
+            <li>左側「程式庫」點 <b>FinLib</b> → 版本選最新 → 儲存</li>
+            <li>右上「部署 → 管理部署作業」→ 鉛筆圖示 → 版本選「新版本」→ 部署（網址不會變）</li>
+          </ol>
+          </div>
+          <div style="font-weight:700;color:#588157;margin-bottom:4px">忘記密碼</div>
+          <ul style="list-style:disc;padding-left:20px;margin:0">
+            <li>到自己的 Apps Script →「專案設定 → 指令碼屬性」，刪除 <code>APP_USER</code> 和 <code>APP_PASSWORD</code>，再回本頁「首次設定」重設</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+  </div>
+
   <header style="position:fixed;top:0;left:0;right:0;height:64px;background:linear-gradient(135deg,#2d4a33 0%,#3a5a40 60%,#3e6145 100%);z-index:40;display:flex;align-items:center;justify-content:space-between;padding:0 16px;box-shadow:0 2px 16px rgba(0,0,0,.2);border-bottom:2px solid rgba(221,161,94,.35)">
     <button @click="isMobileSidebarOpen=true" class="p-2 rounded-xl text-white" style="background:rgba(255,255,255,.1)">
       <i class="ph ph-list" style="font-size:26px"></i>
@@ -222,6 +306,12 @@
   </transition>
 
   <main class="page-wrap">
+    <div v-if="backendOutdated && !updateBannerClosed" style="margin-bottom:16px;padding:12px 16px;border-radius:14px;background:#fff8e6;border:1px solid #f0d9a0;color:#7a5a12;font-size:13px;display:flex;gap:10px;align-items:flex-start">
+      <i class="ph ph-arrow-circle-up" style="font-size:20px;flex-shrink:0;margin-top:1px"></i>
+      <div style="flex:1">有新版本可以更新（你的後端 v{{ backendVersion }} → 最新 v{{ LATEST_BACKEND_VERSION }}），更新步驟在
+        <a href="#" @click.prevent="selectTab('settings')" style="font-weight:700;color:#bc6c25">設定 → 帳號</a>。</div>
+      <button @click="updateBannerClosed=true" style="background:none;border:none;cursor:pointer;color:#b08a3a;font-size:16px;line-height:1">✕</button>
+    </div>
 
     <!-- ══ 儀表板 ══ -->
     <div v-if="currentTab==='dashboard'" class="space-y-6">
@@ -786,6 +876,29 @@
     <!-- ══ 設定 ══ -->
     <div v-if="currentTab==='settings'" class="space-y-6" style="padding-bottom:100px">
       <div><h2 class="page-title">系統設定</h2><p style="color:#588157;font-size:13px;margin-top:4px">管理參數與連接設定</p></div>
+      <!-- 帳號 -->
+      <div class="settings-group">
+        <h3 class="section-title" style="margin-bottom:14px;display:flex;align-items:center;gap:8px"><span style="width:4px;height:22px;background:#bc6c25;border-radius:2px;display:inline-block"></span>帳號</h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div style="font-size:14px;color:#344e41">{{ authUser }} <span style="font-size:11px;color:#888;margin-left:6px">後端 v{{ backendVersion }}</span></div>
+          <button @click="logout" class="btn btn-outline" style="font-size:13px;padding:8px 16px">登出</button>
+        </div>
+        <div v-if="backendOutdated" style="margin-top:12px;padding:10px 14px;border-radius:10px;background:#fff8e6;color:#7a5a12;font-size:12px">
+          <b>有新版本 v{{ LATEST_BACKEND_VERSION }} 可以更新：</b>
+          <ol style="list-style:decimal;padding-left:20px;margin:6px 0 0;line-height:1.8">
+            <li>開啟你的試算表 →「擴充功能 → Apps Script」</li>
+            <li>左側「程式庫」點 <b>FinLib</b> → 版本選最新 → 儲存</li>
+            <li>右上「部署 → 管理部署作業」→ 鉛筆圖示 → 版本選「新版本」→ 部署（網址不會變）</li>
+          </ol>
+          <div style="margin-top:4px;color:#a08040">更新完重新整理本頁，這個提醒就會消失。</div>
+        </div>
+        <div style="display:grid;gap:8px;margin-top:14px">
+          <input v-model="pwdForm.old" type="password" class="input-custom" placeholder="舊密碼" autocomplete="current-password">
+          <input v-model="pwdForm.new1" type="password" class="input-custom" placeholder="新密碼（至少 6 個字元）" autocomplete="new-password">
+          <input v-model="pwdForm.new2" type="password" class="input-custom" placeholder="再輸入一次新密碼" autocomplete="new-password">
+          <button @click="changeMyPassword" class="btn btn-primary" style="font-size:13px">修改密碼</button>
+        </div>
+      </div>
       <!-- GAS URL 設定 -->
       <div class="settings-group">
         <h3 class="section-title" style="margin-bottom:14px;display:flex;align-items:center;gap:8px"><span style="width:4px;height:22px;background:#38bdf8;border-radius:2px;display:inline-block"></span>GAS Web App 網址</h3>
@@ -1040,16 +1153,22 @@
 const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
 
 // ── fetch 包裝：呼叫 GAS doPost ──────────────────────────────
+const AUTH_TOKEN_KEY = 'auth_token';
+// 最新後端（程式庫）版本：要和 WebAPI.js 的 APP_VERSION 一起改
+const LATEST_BACKEND_VERSION = 2;
+let onAuthExpired_ = null; // Vue 掛載後設定：Token 失效時切回登入畫面
 async function callGAS(action, args = []) {
   const url = getGasUrl();
   if (!url) throw new Error('尚未設定 GAS Web App 網址，請至「設定」頁填入。');
   const resp = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' }, // GAS doPost 需要 text/plain 繞過 CORS preflight
-    body: JSON.stringify({ action, args }),
+    body: JSON.stringify({ action, args, token: localStorage.getItem(AUTH_TOKEN_KEY) || '' }),
   });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json();
+  const data = await resp.json();
+  if (data && data.authError && onAuthExpired_) onAuthExpired_();
+  return data;
 }
 
 createApp({
@@ -1242,11 +1361,90 @@ createApp({
       }
     };
 
-    onMounted(() => {
-      if (getGasUrl()) {
-        loadData(currentTab.value);
-        loadPending(); // 啟動時預先載入待確認數量
-      }
+    // ── 登入 / 首次設定（每個人連到自己部署的後端） ──
+    const authState = ref('checking'); // checking | login | setup | ok
+    const authUser  = ref('');
+    const backendVersion = ref(0);
+    const backendOutdated = computed(() => authState.value === 'ok' && backendVersion.value < LATEST_BACKEND_VERSION);
+    const updateBannerClosed = ref(false);
+    const authForm  = ref({ user:'', pwd:'', pwd2:'', gasUrl:'' });
+    const authMsg   = ref('');
+    const authBusy  = ref(false);
+    const shortGasUrl = computed(() => { const u = currentGasUrl.value || ''; return u.length > 48 ? u.slice(0, 38) + '…' + u.slice(-10) : (u || '（未設定）'); });
+    const setGasUrl_ = () => {
+      const v = (authForm.value.gasUrl || '').trim();
+      if (!v) return true; // 沒填就沿用目前的後端
+      if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(v)) { authMsg.value = '網址格式不對，應該是 https://script.google.com/.../exec'; return false; }
+      localStorage.setItem(GAS_URL_KEY, v);
+      currentGasUrl.value = v; gasUrlInput.value = v;
+      return true;
+    };
+    const enterApp_ = res => {
+      if (res.token) localStorage.setItem(AUTH_TOKEN_KEY, res.token);
+      authUser.value = res.user || '';
+      backendVersion.value = Number(res.version) || 1; // 舊版後端沒有回傳版本號
+      authForm.value = { user:'', pwd:'', pwd2:'', gasUrl:'' };
+      authMsg.value = ''; authState.value = 'ok';
+      loadData(currentTab.value);
+      loadPending(); // 啟動時預先載入待確認數量
+    };
+    const doLogin = async () => {
+      if (authBusy.value) return;
+      authBusy.value = true; authMsg.value = '';
+      try {
+        const res = await callGAS('api_login', [authForm.value.user, authForm.value.pwd]);
+        if (res.ok) enterApp_(res);
+        else { authMsg.value = res.msg || '登入失敗'; if (res.needSetup) authState.value = 'setup'; }
+      } catch (e) { authMsg.value = '連線失敗：' + e.message; }
+      finally { authBusy.value = false; }
+    };
+    const doSetup = async () => {
+      if (authBusy.value) return;
+      const f = authForm.value;
+      authMsg.value = '';
+      if (!f.gasUrl.trim()) { authMsg.value = '請貼上你自己的後端網址'; return; }
+      if (f.pwd !== f.pwd2) { authMsg.value = '兩次輸入的密碼不一致'; return; }
+      if (!setGasUrl_()) return;
+      authBusy.value = true;
+      try {
+        const res = await callGAS('api_setupAccount', [f.user, f.pwd]);
+        if (res.ok) enterApp_(res); else authMsg.value = res.msg || '設定失敗';
+      } catch (e) { authMsg.value = '連線失敗，請確認網址正確且已部署為「任何人」可存取：' + e.message; }
+      finally { authBusy.value = false; }
+    };
+    const useGasUrlOnly = () => {
+      authMsg.value = '';
+      if (!authForm.value.gasUrl.trim()) { authMsg.value = '請先貼上網址'; return; }
+      if (setGasUrl_()) { localStorage.removeItem(AUTH_TOKEN_KEY); authState.value = 'login'; }
+    };
+    const logout = () => {
+      if (!confirm('確定要登出？')) return;
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      location.reload(); // 清掉畫面上的資料
+    };
+    const pwdForm = ref({ old:'', new1:'', new2:'' });
+    const changeMyPassword = async () => {
+      const f = pwdForm.value;
+      if (f.new1 !== f.new2) { alert('兩次輸入的新密碼不一致'); return; }
+      const res = await callGAS('api_changePassword', [f.old, f.new1]);
+      if (res.ok && res.token) localStorage.setItem(AUTH_TOKEN_KEY, res.token);
+      if (res.ok) pwdForm.value = { old:'', new1:'', new2:'' };
+      alert(res.ok ? '✅ ' + res.msg : '❌ ' + (res.msg || '修改失敗'));
+    };
+
+    onMounted(async () => {
+      if (!getGasUrl()) return;
+      onAuthExpired_ = () => {
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        if (authState.value === 'ok') { authState.value = 'login'; authMsg.value = '登入已失效，請重新登入'; }
+      };
+      const t = localStorage.getItem(AUTH_TOKEN_KEY);
+      if (!t) { authState.value = 'login'; return; }
+      try {
+        const res = await callGAS('api_auth_token', [t]);
+        if (res.ok) enterApp_(res);
+        else { localStorage.removeItem(AUTH_TOKEN_KEY); authState.value = 'login'; }
+      } catch (e) { authState.value = 'login'; authMsg.value = '連線失敗：' + e.message; }
     });
 
     // ── Gemini Key ──
@@ -1783,7 +1981,6 @@ createApp({
     Vue.watch(dashChartYearSet, () => { if (lastDashChartData) renderCharts(lastDashChartData); });
 
     // ══ 資產追蹤 ══════════════════════════════════════════════
-    // ★ 新增 cathay_us_stock（美股，USD）
     const WEALTH_ACCTS = [
       { key:'ctbc',       name:'中國信託',          icon:'ph-buildings',      color:'#4a7a9b', accounts:[
         { key:'ctbc_twd_saving', label:'台幣活存',   currency:'TWD' },
@@ -1819,7 +2016,7 @@ createApp({
       ]},
       { key:'cathay_sec', name:'國泰證券',            icon:'ph-chart-bar',      color:'#3a7a7a', accounts:[
         { key:'cathay_stock',    label:'台股總市值', currency:'TWD' },
-        { key:'cathay_us_stock', label:'美股總市值', currency:'USD' },  // ← 新增
+        { key:'cathay_us_stock', label:'美股總市值', currency:'USD' },
       ]},
     ];
 
@@ -2371,6 +2568,7 @@ createApp({
       dashboard,listData,holdingsConfig,settingsData,settingsSchema,settingsLoading,
       showDetailModal,currentDetailStock,currentDetailList,detailType,
       tabs,bottomTabs,actionFunctions,selectTab,loadData,
+      authState,authUser,backendVersion,backendOutdated,updateBannerClosed,LATEST_BACKEND_VERSION,authForm,authMsg,authBusy,shortGasUrl,doLogin,doSetup,useGasUrlOnly,logout,pwdForm,changeMyPassword,
       realizedFilter,realizedHeaders,uniqueYears,uniqueMonths,filteredRealizedList,filteredRealizedTotal,sortBy,sortKey,sortOrder,realizedColAlign,
       realizedChartFilterOpen,realizedChartSymbolSet,realizedChartYearSet,realizedAllSymbols,realizedAllChartYears,realizedMonthlyChartData,
       rcToggleYear,rcToggleSym,rcYearActive,rcSymActive,realizedChartHasData,realizedChartTotal,realizedChartMonths,

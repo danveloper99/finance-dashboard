@@ -1,0 +1,5 @@
+# clasp push 排除清單（正式專案與程式庫共用）
+**/node_modules/**
+.git/**
+.claude/**
+template/**
