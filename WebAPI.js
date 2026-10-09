@@ -42,7 +42,7 @@ function makeToken_(pwd) {
  * 後端版本號：每次發布新的程式庫版本時 +1，並同步修改 index.html 的 LATEST_BACKEND_VERSION。
  * 前端會用它判斷朋友的後端是否過舊、需要更新程式庫版本。
  */
-var APP_VERSION = 3;
+var APP_VERSION = 4;
 
 /**
  * 帳號：每份後端（每個人用自己 Google 帳號部署的 GAS）只有一組帳號
@@ -603,6 +603,124 @@ function api_getWealthHistory() {
   } catch(e) { return { ok: false, msg: e.message, data: [], last: null }; }
 }
 
+/* --- 第二份資產紀錄（自訂帳戶清單）---
+ * 名稱與帳戶清單存在《設定》：WEALTH_BOOK_A_NAME / WEALTH_BOOK_B_NAME / WEALTH_B_ACCOUNTS（JSON）
+ * 快照存在《資產快照2》，一個帳戶一列（改名、刪除帳戶都不影響舊紀錄）
+ */
+var WEALTH_B_SHEET_    = '資產快照2';
+var WEALTH_B_HEADERS_  = ['記錄日期','期間','帳戶ID','帳戶名稱','幣別','類型','金額','匯率','台幣金額','備註'];
+var WEALTH_CURRENCIES_ = ['TWD','USD','JPY','CNY'];
+
+/** 寫入目前試算表《設定》的某個 key（沒有該列就新增） */
+function setCfgValue_(key, value) {
+  const sh = getSS_().getSheetByName('設定');
+  if (!sh) throw new Error('找不到設定頁');
+  const lastRow = sh.getLastRow();
+  const keys = lastRow > 1 ? sh.getRange(2, 1, lastRow - 1, 1).getValues().map(r => String(r[0]).trim()) : [];
+  const idx = keys.indexOf(key);
+  const row = idx >= 0 ? idx + 2 : lastRow + 1;
+  sh.getRange(row, 2).setNumberFormat('@');
+  sh.getRange(row, 1, 1, 2).setValues([[key, value]]);
+}
+
+function readWealthBooksCfg_() {
+  const C = getCfg_();
+  let accounts = [];
+  try { accounts = JSON.parse(C.WEALTH_B_ACCOUNTS || '[]'); } catch (e) { accounts = []; }
+  return {
+    nameA:    C.WEALTH_BOOK_A_NAME || '我的資產',
+    nameB:    C.WEALTH_BOOK_B_NAME || '第二份紀錄',
+    accounts: Array.isArray(accounts) ? accounts : [],
+  };
+}
+
+function api_getWealthBooks() {
+  return Object.assign({ ok: true }, readWealthBooksCfg_());
+}
+
+/** 儲存兩份紀錄的名稱 + 第二份的帳戶清單 */
+function api_saveWealthBooks(cfg) {
+  try {
+    cfg = cfg || {};
+    const clean = s => String(s || '').trim().slice(0, 30);
+    const seen = new Set();
+    const accounts = (Array.isArray(cfg.accounts) ? cfg.accounts : [])
+      .map(a => ({
+        id:       String((a && a.id) || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 20),
+        name:     clean(a && a.name),
+        currency: WEALTH_CURRENCIES_.includes(a && a.currency) ? a.currency : 'TWD',
+        type:     (a && a.type) === 'invest' ? 'invest' : 'bank',
+      }))
+      .filter(a => a.id && a.name && !seen.has(a.id) && seen.add(a.id));
+    if (accounts.length > 50) return { ok: false, msg: '帳戶最多 50 個' };
+    const nameA = clean(cfg.nameA) || '我的資產';
+    const nameB = clean(cfg.nameB) || '第二份紀錄';
+    setCfgValue_('WEALTH_BOOK_A_NAME', nameA);
+    setCfgValue_('WEALTH_BOOK_B_NAME', nameB);
+    setCfgValue_('WEALTH_B_ACCOUNTS', JSON.stringify(accounts));
+    return { ok: true, nameA, nameB, accounts };
+  } catch (e) { return { ok: false, msg: e.message }; }
+}
+
+function ensureWealthBSheet_() {
+  const ss = getSS_();
+  let sh = ss.getSheetByName(WEALTH_B_SHEET_);
+  if (!sh) {
+    sh = ss.insertSheet(WEALTH_B_SHEET_);
+    sh.getRange(1, 1, 1, WEALTH_B_HEADERS_.length).setValues([WEALTH_B_HEADERS_])
+      .setFontWeight('bold').setBackground('#344e41').setFontColor('white');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+/** data: { values:{帳戶ID:原幣金額}, rate_usd, rate_jpy, rate_cny, period, note } */
+function api_saveWealthSnapshotB(data) {
+  try {
+    data = data || {};
+    const cfg = readWealthBooksCfg_();
+    if (!cfg.accounts.length) return { ok: false, msg: '請先在「管理帳戶」新增帳戶' };
+    const rates = { TWD: 1, USD: Number(data.rate_usd) || 32, JPY: Number(data.rate_jpy) || 0.22, CNY: Number(data.rate_cny) || 4.4 };
+    const vals  = data.values || {};
+    const now   = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm');
+    let total = 0;
+    const rows = cfg.accounts.map(a => {
+      const amt  = Number(vals[a.id]) || 0;
+      const rate = rates[a.currency] || 1;
+      const twd  = Math.round(amt * rate);
+      total += twd;
+      return [now, data.period || '', a.id, a.name, a.currency, a.type === 'invest' ? '投資' : '存款', amt, rate, twd, data.note || ''];
+    });
+    const sh = ensureWealthBSheet_();
+    sh.getRange(sh.getLastRow() + 1, 1, rows.length, WEALTH_B_HEADERS_.length).setValues(rows);
+    return { ok: true, msg: '快照已儲存', total };
+  } catch (e) { return { ok: false, msg: e.message }; }
+}
+
+/** 依「記錄日期」把多列組回一筆快照 */
+function api_getWealthHistoryB() {
+  try {
+    const sh = getSS_().getSheetByName(WEALTH_B_SHEET_);
+    if (!sh || sh.getLastRow() < 2) return { ok: true, data: [], last: null };
+    const rows = sh.getRange(2, 1, sh.getLastRow() - 1, WEALTH_B_HEADERS_.length).getValues();
+    const map = new Map();
+    rows.forEach(r => {
+      const key = r[0] instanceof Date ? Utilities.formatDate(r[0], 'Asia/Taipei', 'yyyy-MM-dd HH:mm') : String(r[0] || '').trim();
+      const id  = String(r[2] || '').trim();
+      if (!key || !id) return;
+      if (!map.has(key)) map.set(key, { date: key, period: String(r[1] || ''), note: String(r[9] || ''), values: {}, twd: {}, accounts: {}, totalTWD: 0 });
+      const s = map.get(key);
+      const twd = Number(r[8]) || 0;
+      s.values[id]   = Number(r[6]) || 0;
+      s.twd[id]      = twd;
+      s.accounts[id] = { name: String(r[3] || ''), currency: String(r[4] || 'TWD'), type: r[5] === '投資' ? 'invest' : 'bank' };
+      s.totalTWD    += twd;
+    });
+    const data = [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
+    return { ok: true, data, last: data[data.length - 1] || null };
+  } catch (e) { return { ok: false, msg: e.message, data: [], last: null }; }
+}
+
 /* --- 每季/每半年 Email 提醒 --- */
 function wealthReminder() {
   const props = getProps_();
@@ -901,7 +1019,7 @@ function doPost(e) {
       'api_saveSettings', 'api_getHoldingsForAnalysis', 'api_callGemini',
       'api_saveAnalysis', 'api_getAnalysisHistory', 'api_getGeminiKeyStatus',
       'api_saveGeminiKey', 'api_saveWealthSnapshot', 'api_getWealthHistory',
-      'api_setupWealthTrigger',
+      'api_setupWealthTrigger', 'api_getWealthBooks', 'api_saveWealthBooks', 'api_saveWealthSnapshotB', 'api_getWealthHistoryB',
       'ingestFromGmail_Plaintext_SAFE', 'rebuildAll_B_SAFE',
       'api_runDividendsUpdate', 'appendDCAFromHoldings_SAFE',
       'rebuildRealizedPnL_FIFO_SAFE', 'rebuildDCADividends_SAFE',
