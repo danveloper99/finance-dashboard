@@ -110,7 +110,8 @@ clasp deploy --deploymentId AKfycbzrFTtWxBH1aisKKkXWihYFittWQwUGldnjJTo3YE-jXonP
 
 ### 發布新版本
 1. `WebAPI.js` 的 `APP_VERSION` +1，`index.html` 的 `LATEST_BACKEND_VERSION` 改成一樣的數字
-2. 跑測試後 `node tools/build-release.js "這次更新的說明"`（產生 `releases/vN.js`、更新 `release.json`）
+2. 跑測試後 `node tools/build-release.js "這次更新的說明"`（產生 `releases/vN.js`、更新 `release.json`；朋友 1 天後自動換新版）
+   - 緊急修正或使用者說「立即發布」：加 `--now`（不留 previous，朋友約 10 分鐘內換新版）
 3. 正式專案 `clasp push` + `clasp deploy --deploymentId ...`
 4. （選用）舊程式庫使用者：`clasp -P .clasp.lib.json push --force` + `clasp -P .clasp.lib.json version "說明"`
 5. commit（含 `releases/`、`release.json`）並 push → GitHub Pages；朋友在 1 天後自動更新

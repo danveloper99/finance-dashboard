@@ -1,6 +1,7 @@
 /**
  * 打包發布：把 4.0.js + WebAPI.js 打包成 releases/v{APP_VERSION}.js，並更新 release.json
- * 用法：node tools/build-release.js "這次更新的說明"
+ * 用法：node tools/build-release.js "這次更新的說明"          （預設：朋友 1 天後自動換新版）
+ *       node tools/build-release.js "這次更新的說明" --now    （立即發布：朋友約 10 分鐘內換新版）
  *
  * 範本殼程式（template/Code.js）會從 GitHub Pages 下載這個檔案，用 new Function 執行，
  * 拿到回傳的物件（所有頂層函式）後再呼叫 doPost / 排程函式。
@@ -8,6 +9,10 @@
  */
 const fs = require('fs');
 const path = require('path');
+
+const args = process.argv.slice(2);
+const NOW = args.includes('--now');
+const notes = args.filter(a => !a.startsWith('--')).join(' ');
 
 const ROOT = path.join(__dirname, '..');
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\r\n/g, '\n');
@@ -44,12 +49,15 @@ fs.writeFileSync(out, bundle);
 const relPath = path.join(ROOT, 'release.json');
 const rel = fs.existsSync(relPath) ? JSON.parse(fs.readFileSync(relPath, 'utf8')) : {};
 const now = new Date(Date.now() + 8 * 3600e3).toISOString().replace(/\.\d+Z$/, '+08:00');
-const prev = rel.current && rel.current.version !== version ? { version: rel.current.version } : (rel.previous || null);
+// 立即發布：不留「上一版」，殼程式就會直接採用 current（不等 1 天）
+const prev = NOW ? null
+  : rel.current && rel.current.version !== version ? { version: rel.current.version } : (rel.previous || null);
 const next = {
-  current: { version, releasedAt: now, notes: process.argv[2] || '' },
+  current: { version, releasedAt: now, notes, immediate: NOW || undefined },
   previous: prev,
   libVersion: rel.libVersion, // 舊版「程式庫殼程式」用，保留
 };
 fs.writeFileSync(relPath, JSON.stringify(next, null, 2) + '\n');
 console.log(`✅ releases/v${version}.js（${(bundle.length / 1024).toFixed(0)} KB、${names.length} 個函式）`);
 console.log(`✅ release.json：current v${version}${prev ? `、previous v${prev.version}` : ''}`);
+console.log(NOW ? '⚡ 立即發布：朋友約 10 分鐘內換成新版' : '⏳ 朋友會在 1 天後自動換成新版（緊急修正可加 --now）');
