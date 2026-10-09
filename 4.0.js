@@ -3268,7 +3268,7 @@ function buildMonthlyReport_(year, month) {
   // 七、待辦提醒
   const pending = rows(C.SHEET_STAGING || '待確認交易').filter(r => !r['確認狀態'] || r['確認狀態'] === '待確認').length;
   const errors  = rows(C.ALERT_LOG_SHEET || '錯誤通知紀錄').filter(r => inMonth(r['時間'])).length;
-  const wealthDates = rows('資產快照').map(r => reportYMD_(r['記錄日期'], tz)).filter(Boolean).sort();
+  const wealthDates = rows('資產快照明細').concat(rows('資產快照')).map(r => reportYMD_(r['記錄日期'], tz)).filter(Boolean).sort();
   const lastWealth = wealthDates[wealthDates.length - 1] || '';
   const wealthDays = lastWealth ? Math.floor((Date.now() - new Date(lastWealth.replace(/\//g, '-')).getTime()) / 86400000) : null;
 
@@ -3395,7 +3395,7 @@ function renderMonthlyReportHtml_(d) {
         kv('累計已領股息', signed(dc.holdDiv), color(dc.holdDiv))) +
       table(dc.holdItems.map(o => listRow(o.name,
         o.unrealized == null ? '—' : signed(o.unrealized), color(o.unrealized || 0),
-        `${int(o.qty)} 股・均價 ${o.avgCost.toFixed(2)}${o.price ? '・現價 ' + o.price : ''}・報酬 <span style="color:${color(o.pct || 0)}">${pctTxt(o.pct)}</span>・股息 ${int(o.div)}`)).join(''))
+        `${int(o.qty)} 股・報酬 <span style="color:${color(o.pct || 0)}">${pctTxt(o.pct)}</span>・累計股利 ${int(o.div)}`)).join(''))
     : empty('目前沒有定期定額持股');
   const dcaHtml = dcaMonthHtml + sub('目前持有（從開始到現在）') + dcaHoldHtml;
 

@@ -1,9 +1,11 @@
 {
   "current": {
-    "version": 8,
-    "releasedAt": "2026-10-09T20:58:31+08:00",
-    "notes": "線上載入版：自動更新免設定"
+    "version": 9,
+    "releasedAt": "2026-10-09T21:40:47+08:00",
+    "notes": "資產追蹤改版：銀行／證券商與細項全部自訂；月報定期定額精簡"
   },
-  "previous": null,
+  "previous": {
+    "version": 8
+  },
   "libVersion": 9
 }

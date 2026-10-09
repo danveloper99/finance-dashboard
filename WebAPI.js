@@ -42,7 +42,7 @@ function makeToken_(pwd) {
  * 後端版本號：每次發布新的程式庫版本時 +1，並同步修改 index.html 的 LATEST_BACKEND_VERSION。
  * 前端會用它判斷朋友的後端是否過舊、需要更新程式庫版本。
  */
-var APP_VERSION = 8;
+var APP_VERSION = 9;
 
 /**
  * 帳號：每份後端（每個人用自己 Google 帳號部署的 GAS）只有一組帳號
@@ -726,6 +726,231 @@ function api_getWealthHistoryB() {
   } catch (e) { return { ok: false, msg: e.message, data: [], last: null }; }
 }
 
+/* ============================================================
+   資產追蹤 v2：兩份紀錄都用「機構（銀行／證券商）→ 帳戶」的自訂結構
+   - 設定：《設定》WEALTH_CONFIG（JSON：{ books: { A: {name, institutions}, B: {...} } }）
+   - 快照：《資產快照明細》一個帳戶一列（改名、刪除都不影響舊紀錄）
+   - 第一次讀取時自動把舊版《資產快照》《資產快照2》轉過來；舊工作表保留當備份、不再寫入
+   ============================================================ */
+var WEALTH_V2_SHEET_   = '資產快照明細';
+var WEALTH_V2_HEADERS_ = ['記錄日期','紀錄','機構ID','機構','機構類別','帳戶ID','帳戶','幣別','類型','金額','匯率','台幣金額','備註'];
+var WEALTH_COLORS_     = ['#4a7a9b','#4a8a5e','#b85c3a','#c4883a','#7a6545','#5a7a6a','#9a4a4a','#6a4a8a','#3a7a7a','#8a6a3a'];
+var WEALTH_BOOK_IDS_   = ['A', 'B'];
+var WEALTH_DEFAULT_NAMES_ = { A: '我的資產', B: '第二份紀錄' };
+// 舊版第一份紀錄寫死的機構與帳戶（只用於轉換舊資料；新使用者一開始是空白）
+var WEALTH_LEGACY_A_ = [
+  { id: 'ctbc',        name: '中國信託',          kind: 'bank',   color: '#4a7a9b', accounts: [['ctbc_twd_saving','台幣活存','TWD'],['ctbc_twd_fixed','台幣定存','TWD'],['ctbc_usd_saving','美金活存','USD'],['ctbc_usd_fixed','美金定存','USD'],['ctbc_cny_saving','人民幣活存','CNY'],['ctbc_cny_fixed','人民幣定存','CNY']] },
+  { id: 'cathay_bank', name: '國泰世華',          kind: 'bank',   color: '#4a8a5e', accounts: [['cathay_twd','台幣活存','TWD'],['cathay_usd','美金活存','USD']] },
+  { id: 'taishin',     name: '台新銀行',          kind: 'bank',   color: '#b85c3a', accounts: [['taishin_twd','台幣活存','TWD'],['taishin_jpy','日幣活存','JPY']] },
+  { id: 'richart',     name: 'Richart（台新數位）', kind: 'bank', color: '#c4883a', accounts: [['richart_twd','台幣活存','TWD'],['richart_fund','基金市值','TWD']] },
+  { id: 'chang',       name: '彰銀',              kind: 'bank',   color: '#7a6545', accounts: [['chang_twd','台幣活存','TWD']] },
+  { id: 'land',        name: '合庫',              kind: 'bank',   color: '#5a7a6a', accounts: [['land_twd','台幣活存','TWD']] },
+  { id: 'post',        name: '郵局',              kind: 'bank',   color: '#9a4a4a', accounts: [['post_twd','台幣活存','TWD']] },
+  { id: 'uni_sec',     name: '統一證券',          kind: 'broker', color: '#6a4a8a', accounts: [['uni_stock','台股總市值','TWD']] },
+  { id: 'cathay_sec',  name: '國泰證券',          kind: 'broker', color: '#3a7a7a', accounts: [['cathay_stock','台股總市值','TWD'],['cathay_us_stock','美股總市值','USD']] },
+];
+var WEALTH_LEGACY_INVEST_ = ['uni_stock', 'cathay_stock', 'cathay_us_stock', 'richart_fund'];
+
+function wealthRate_(rates, cur) {
+  if (cur === 'TWD') return 1;
+  return Number(rates && rates[cur]) || ({ USD: 32, JPY: 0.22, CNY: 4.4 })[cur] || 1;
+}
+function wealthDateKey_(v, tz) {
+  return v instanceof Date ? Utilities.formatDate(v, tz || 'Asia/Taipei', 'yyyy-MM-dd HH:mm') : String(v || '').trim();
+}
+
+/** 清理前端送來的一份紀錄設定 */
+function sanitizeWealthBook_(book, fallbackName) {
+  const clean = s => String(s == null ? '' : s).trim().slice(0, 30);
+  const toId  = s => String(s == null ? '' : s).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 30);
+  const seenI = new Set(), seenA = new Set();
+  const insts = (Array.isArray(book && book.institutions) ? book.institutions : []).map((it, i) => {
+    it = it || {};
+    const kind = it.kind === 'broker' ? 'broker' : 'bank';
+    return {
+      id: toId(it.id), name: clean(it.name), kind,
+      color: /^#[0-9a-fA-F]{6}$/.test(String(it.color || '')) ? it.color : WEALTH_COLORS_[i % WEALTH_COLORS_.length],
+      accounts: (Array.isArray(it.accounts) ? it.accounts : []).map(a => {
+        a = a || {};
+        return { id: toId(a.id), name: clean(a.name),
+                 currency: WEALTH_CURRENCIES_.includes(a.currency) ? a.currency : 'TWD',
+                 type: a.type === 'invest' || a.type === 'bank' ? a.type : (kind === 'broker' ? 'invest' : 'bank') };
+      }).filter(a => a.id && a.name && !seenA.has(a.id) && seenA.add(a.id)),
+    };
+  }).filter(it => it.id && it.name && !seenI.has(it.id) && seenI.add(it.id));
+  return { name: clean(book && book.name) || fallbackName, institutions: insts };
+}
+
+function readWealthConfig_() {
+  const raw = getCfg_().WEALTH_CONFIG;
+  if (!raw) return null;
+  try { const c = JSON.parse(raw); return c && c.books ? c : null; } catch (e) { return null; }
+}
+
+function ensureWealthV2Sheet_() {
+  const ss = getSS_();
+  let sh = ss.getSheetByName(WEALTH_V2_SHEET_);
+  if (!sh) {
+    sh = ss.insertSheet(WEALTH_V2_SHEET_);
+    sh.getRange(1, 1, 1, WEALTH_V2_HEADERS_.length).setValues([WEALTH_V2_HEADERS_])
+      .setFontWeight('bold').setBackground('#344e41').setFontColor('white');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+/** 第一次使用 v2：建立設定，並把舊工作表的快照轉成《資產快照明細》 */
+function migrateWealthToV2_() {
+  const lock = getScriptLock_();
+  if (!lock.tryLock(20000)) throw new Error('系統忙碌中，請稍後再試');
+  try {
+    const existing = readWealthConfig_();
+    if (existing) return existing;
+    const C = getCfg_(), ss = getSS_(), tz = C.TZ || 'Asia/Taipei';
+    const out = [];
+    const push = (date, book, inst, acc, amt, rate, twd, note) =>
+      out.push([date, book, inst.id, inst.name, inst.kind === 'broker' ? '證券商' : '銀行', acc.id, acc.name, acc.currency,
+                acc.type === 'invest' ? '投資' : '存款', amt, rate, twd, note || '']);
+
+    // 第一份：舊《資產快照》有資料才帶入原本的機構清單
+    let instA = [];
+    const shA = ss.getSheetByName('資產快照');
+    if (shA && shA.getLastRow() > 1) {
+      instA = WEALTH_LEGACY_A_.map(it => ({ id: it.id, name: it.name, kind: it.kind, color: it.color,
+        accounts: it.accounts.map(([id, name, currency]) => ({ id, name, currency, type: WEALTH_LEGACY_INVEST_.includes(id) ? 'invest' : 'bank' })) }));
+      // ★ 只讀不寫：依表頭名稱找欄位，完全不修改舊工作表（不呼叫會調整欄位的 ensureWealthSheet_）
+      const lastCol = shA.getLastColumn();
+      const hdr = shA.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h || '').trim());
+      const colOf = label => hdr.indexOf(label);
+      const colByKey = {};
+      WEALTH_KEYS_.forEach((k, i) => {
+        let c = colOf(WEALTH_SHEET_HEADERS_[i + 2]);
+        if (c < 0 && k === 'cathay_us_stock') c = colOf('國泰美股'); // 更早期的欄位名稱
+        colByKey[k] = c;
+      });
+      const noteCol = colOf('備註');
+      const vals = shA.getRange(2, 1, shA.getLastRow() - 1, lastCol).getValues();
+      vals.forEach(row => {
+        const date = wealthDateKey_(row[0], tz);
+        if (!date) return;
+        const o = {};
+        WEALTH_KEYS_.forEach(k => { o[k] = colByKey[k] >= 0 ? (Number(row[colByKey[k]]) || 0) : 0; });
+        const rates = { USD: o.rate_usd, JPY: o.rate_jpy, CNY: o.rate_cny };
+        const note = noteCol >= 0 ? String(row[noteCol] || '') : '';
+        instA.forEach(inst => inst.accounts.forEach(acc => {
+          const amt = o[acc.id] || 0, rate = wealthRate_(rates, acc.currency);
+          push(date, 'A', inst, acc, amt, rate, Math.round(amt * rate), note);
+        }));
+      });
+    }
+
+    // 第二份：舊版是單層帳戶，依「存款／投資」分成兩個機構
+    const oldB = readWealthBooksCfg_();
+    const instOf = type => type === 'invest'
+      ? { id: 'b_invest', name: '投資帳戶', kind: 'broker', color: WEALTH_COLORS_[1] }
+      : { id: 'b_bank',   name: '存款帳戶', kind: 'bank',   color: WEALTH_COLORS_[0] };
+    const instB = [];
+    ['bank', 'invest'].forEach(type => {
+      const accs = oldB.accounts.filter(a => (a.type === 'invest' ? 'invest' : 'bank') === type)
+        .map(a => ({ id: a.id, name: a.name, currency: a.currency, type }));
+      if (accs.length) instB.push(Object.assign(instOf(type), { accounts: accs }));
+    });
+    (api_getWealthHistoryB().data || []).forEach(snap => {
+      Object.keys(snap.values || {}).forEach(id => {
+        const a = (snap.accounts || {})[id] || {};
+        const acc = { id, name: a.name || id, currency: a.currency || 'TWD', type: a.type === 'invest' ? 'invest' : 'bank' };
+        const amt = Number(snap.values[id]) || 0, twd = Number((snap.twd || {})[id]) || 0;
+        push(snap.date, 'B', instOf(acc.type), acc, amt, amt ? Math.round(twd / amt * 10000) / 10000 : wealthRate_({}, acc.currency), twd, snap.note);
+      });
+    });
+
+    if (out.length) {
+      const sh = ensureWealthV2Sheet_();
+      sh.getRange(sh.getLastRow() + 1, 1, out.length, WEALTH_V2_HEADERS_.length).setValues(out);
+    }
+    const cfg = { books: {
+      A: { name: C.WEALTH_BOOK_A_NAME || WEALTH_DEFAULT_NAMES_.A, institutions: instA },
+      B: { name: oldB.nameB || WEALTH_DEFAULT_NAMES_.B, institutions: instB },
+    } };
+    setCfgValue_('WEALTH_CONFIG', JSON.stringify(cfg));
+    Logger.log(`資產追蹤 v2：已轉換 ${out.length} 列舊快照`);
+    return cfg;
+  } finally { lock.releaseLock(); }
+}
+
+function getWealthConfig_() { return readWealthConfig_() || migrateWealthToV2_(); }
+
+/** 《資產快照明細》依「紀錄 + 記錄日期」組回一筆筆快照 */
+function readWealthV2History_() {
+  const res = { A: [], B: [] };
+  const sh = getSS_().getSheetByName(WEALTH_V2_SHEET_);
+  if (!sh || sh.getLastRow() < 2) return res;
+  const tz = getCfg_().TZ || 'Asia/Taipei';
+  const map = new Map();
+  sh.getRange(2, 1, sh.getLastRow() - 1, WEALTH_V2_HEADERS_.length).getValues().forEach(r => {
+    const date = wealthDateKey_(r[0], tz), book = String(r[1] || '').trim(), id = String(r[5] || '').trim();
+    if (!date || !res[book] || !id) return;
+    const key = book + '|' + date;
+    if (!map.has(key)) map.set(key, { book, date, note: String(r[12] || ''), values: {}, twd: {}, accounts: {}, rates: {}, totalTWD: 0 });
+    const s = map.get(key), cur = String(r[7] || 'TWD'), twd = Number(r[11]) || 0;
+    s.values[id] = Number(r[9]) || 0;
+    s.twd[id] = twd;
+    s.accounts[id] = { name: String(r[6] || ''), instId: String(r[2] || ''), instName: String(r[3] || ''),
+                       kind: r[4] === '證券商' ? 'broker' : 'bank', currency: cur, type: r[8] === '投資' ? 'invest' : 'bank' };
+    if (cur !== 'TWD' && Number(r[10])) s.rates[cur] = Number(r[10]);
+    s.totalTWD += twd;
+  });
+  [...map.values()].sort((a, b) => a.date.localeCompare(b.date)).forEach(s => { const b = s.book; delete s.book; res[b].push(s); });
+  return res;
+}
+
+/** 資產追蹤頁一次拿齊：兩份紀錄的設定 + 歷史快照 */
+function api_getWealth() {
+  try {
+    const cfg = getWealthConfig_();
+    return { ok: true, books: cfg.books, history: readWealthV2History_() };
+  } catch (e) { return { ok: false, msg: e.message }; }
+}
+
+/** 儲存某一份紀錄的名稱與機構／帳戶設定 */
+function api_saveWealthConfig(bookId, book) {
+  try {
+    if (!WEALTH_BOOK_IDS_.includes(bookId)) return { ok: false, msg: '紀錄代號錯誤' };
+    const cfg = getWealthConfig_();
+    const clean = sanitizeWealthBook_(book, WEALTH_DEFAULT_NAMES_[bookId]);
+    const nAcc = clean.institutions.reduce((s, it) => s + it.accounts.length, 0);
+    if (clean.institutions.length > 30 || nAcc > 100) return { ok: false, msg: '機構最多 30 個、帳戶最多 100 個' };
+    cfg.books[bookId] = clean;
+    setCfgValue_('WEALTH_CONFIG', JSON.stringify(cfg));
+    return { ok: true, books: cfg.books };
+  } catch (e) { return { ok: false, msg: e.message }; }
+}
+
+/** data: { values:{帳戶ID:原幣金額}, rate_usd, rate_jpy, rate_cny, note } */
+function api_saveWealthSnapshotV2(bookId, data) {
+  try {
+    if (!WEALTH_BOOK_IDS_.includes(bookId)) return { ok: false, msg: '紀錄代號錯誤' };
+    data = data || {};
+    const book = getWealthConfig_().books[bookId];
+    const pairs = [];
+    (book.institutions || []).forEach(inst => (inst.accounts || []).forEach(acc => pairs.push([inst, acc])));
+    if (!pairs.length) return { ok: false, msg: '請先在「管理」新增銀行或證券商與帳戶' };
+    const rates = { USD: data.rate_usd, JPY: data.rate_jpy, CNY: data.rate_cny };
+    const date = Utilities.formatDate(new Date(), getCfg_().TZ || 'Asia/Taipei', 'yyyy-MM-dd HH:mm');
+    const vals = data.values || {};
+    let total = 0;
+    const rows = pairs.map(([inst, acc]) => {
+      const amt = Number(vals[acc.id]) || 0, rate = wealthRate_(rates, acc.currency), twd = Math.round(amt * rate);
+      total += twd;
+      return [date, bookId, inst.id, inst.name, inst.kind === 'broker' ? '證券商' : '銀行', acc.id, acc.name, acc.currency,
+              acc.type === 'invest' ? '投資' : '存款', amt, rate, twd, data.note || ''];
+    });
+    const sh = ensureWealthV2Sheet_();
+    sh.getRange(sh.getLastRow() + 1, 1, rows.length, WEALTH_V2_HEADERS_.length).setValues(rows);
+    return { ok: true, msg: '快照已儲存', total };
+  } catch (e) { return { ok: false, msg: e.message }; }
+}
+
 /* --- 月報 --- */
 /** 立刻寄一份月報。ym 例：'2026/09'；沒給就寄上個月 */
 function api_sendMonthlyReport(ym) {
@@ -1059,12 +1284,14 @@ function doPost(e) {
     const action = body.action;
     const args   = body.args || [];
 
+    // 資產追蹤舊版 API（《資產快照》《資產快照2》）已停用：避免舊頁面把快照寫進舊工作表、新頁面看不到
     const ALLOWED = new Set([
       'api_getDashboard', 'api_getDataList', 'api_getSettingsSchema',
       'api_saveSettings', 'api_getHoldingsForAnalysis', 'api_callGemini',
       'api_saveAnalysis', 'api_getAnalysisHistory', 'api_getGeminiKeyStatus',
-      'api_saveGeminiKey', 'api_saveWealthSnapshot', 'api_getWealthHistory',
-      'api_setupWealthTrigger', 'api_getWealthBooks', 'api_saveWealthBooks', 'api_saveWealthSnapshotB', 'api_getWealthHistoryB', 'api_sendMonthlyReport', 'api_getUpdateStatus', 'api_runAutoUpdate',
+      'api_saveGeminiKey',
+      'api_setupWealthTrigger', 'api_sendMonthlyReport', 'api_getUpdateStatus', 'api_runAutoUpdate',
+      'api_getWealth', 'api_saveWealthConfig', 'api_saveWealthSnapshotV2',
       'ingestFromGmail_Plaintext_SAFE', 'rebuildAll_B_SAFE',
       'api_runDividendsUpdate', 'appendDCAFromHoldings_SAFE',
       'rebuildRealizedPnL_FIFO_SAFE', 'rebuildDCADividends_SAFE',

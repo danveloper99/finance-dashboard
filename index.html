@@ -662,13 +662,17 @@
       </div>
       <div v-if="wealthLoading" style="text-align:center;padding:40px;color:#588157"><i class="ph ph-spinner spin" style="font-size:32px"></i></div>
       <template v-if="!wealthLoading">
+        <div v-if="!wealthSupported" class="card" style="text-align:center;color:#7a5a12;background:#fff8e6;font-size:13px;line-height:1.8">
+          資產追蹤已改版，你的後端會在 1 天內自動更新。<br>也可以到「設定 → 自動更新」按「立即套用最新版」。
+        </div>
+        <template v-else>
         <!-- 兩份紀錄切換 -->
-        <div v-if="wealthBooksSupported" style="display:flex;gap:6px;background:white;padding:5px;border-radius:14px;box-shadow:0 2px 10px rgba(58,90,64,.08)">
-          <button v-for="b in [{k:'A',n:wealthBooks.nameA},{k:'B',n:wealthBooks.nameB}]" :key="b.k" @click="wealthBook=b.k"
-            :style="wealthBook===b.k?'background:#3a5a40;color:white':'background:transparent;color:#888'"
+        <div style="display:flex;gap:6px;background:white;padding:5px;border-radius:14px;box-shadow:0 2px 10px rgba(58,90,64,.08)">
+          <button v-for="b in ['A','B']" :key="b" @click="wealthBook=b"
+            :style="wealthBook===b?'background:#3a5a40;color:white':'background:transparent;color:#888'"
             style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 10px;border-radius:10px;border:none;cursor:pointer;font-weight:700;font-size:14px;min-width:0;transition:all .15s">
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ b.n }}</span>
-            <i v-if="wealthBook===b.k" @click.stop="renameWealthBook(b.k)" class="ph ph-pencil-simple" title="改名" style="font-size:14px;opacity:.8;flex-shrink:0"></i>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ wealthBooks[b].name }}</span>
+            <i v-if="wealthBook===b" @click.stop="renameWealthBook(b)" class="ph ph-pencil-simple" title="改名" style="font-size:14px;opacity:.8;flex-shrink:0"></i>
           </button>
         </div>
         <!-- 匯率 -->
@@ -680,51 +684,53 @@
             <div><div style="font-size:12px;font-weight:700;color:#588157;margin-bottom:6px">¥ CNY → TWD</div><input v-model="wealthRates.rate_cny" type="number" step="0.01" class="input-custom" placeholder="4.40"></div>
           </div>
         </div>
-        <!-- 各機構（第一份） -->
-        <div v-if="wealthBook==='A'" style="display:grid;grid-template-columns:1fr;gap:14px">
-          <div v-for="inst in WEALTH_ACCTS" :key="inst.key" class="card" style="padding:18px">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-              <div :style="'width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:'+inst.color+';color:white;flex-shrink:0'"><i :class="['ph-bold',inst.icon]" style="font-size:20px"></i></div>
-              <div style="flex:1"><div class="font-bold" style="font-size:15px;color:#344e41">{{ inst.name }}</div></div>
-              <div class="num-font font-bold" :style="'font-size:14px;color:'+inst.color">{{ wealthBreakdown.find(b=>b.key===inst.key)?.twdTotal > 0 ? fmtInt(wealthBreakdown.find(b=>b.key===inst.key)?.twdTotal) + ' 元' : '' }}</div>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
-              <div v-for="acc in inst.accounts" :key="acc.key">
-                <div style="font-size:12px;font-weight:700;color:#588157;margin-bottom:5px">{{ acc.label }}<span v-if="acc.currency!=='TWD'" style="color:#aaa;font-weight:400">（{{ acc.currency }}）</span></div>
-                <input v-model="wealthForm[acc.key]" type="number" step="1" class="input-custom" :placeholder="acc.currency==='TWD'?'輸入金額':'原幣金額'">
-              </div>
-            </div>
-          </div>
+        <!-- 銀行與證券商：標題列 -->
+        <div style="display:flex;align-items:center;gap:10px;padding:0 4px">
+          <i class="ph ph-buildings" style="font-size:20px;color:#3a5a40"></i>
+          <span class="font-bold section-title" style="flex:1">銀行與證券商</span>
+          <button v-if="!wealthManageOpen" @click="openWealthManage" style="font-size:12px;font-weight:700;color:#588157;background:rgba(88,129,87,.08);border:1.5px solid rgba(88,129,87,.3);border-radius:9px;padding:5px 12px;cursor:pointer"><i class="ph ph-gear" style="font-size:13px"></i> 管理</button>
         </div>
-        <!-- 自訂帳戶（第二份） -->
-        <div v-if="wealthBook==='B'" class="card" style="padding:18px">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-            <i class="ph ph-wallet" style="font-size:20px;color:#3a5a40"></i>
-            <span class="font-bold section-title" style="flex:1">帳戶</span>
-            <button @click="openWealthBManage" style="font-size:12px;font-weight:700;color:#588157;background:rgba(88,129,87,.08);border:1.5px solid rgba(88,129,87,.3);border-radius:9px;padding:5px 12px;cursor:pointer">
-              <i class="ph ph-gear" style="font-size:13px"></i> 管理帳戶</button>
-          </div>
-          <!-- 管理帳戶 -->
-          <div v-if="wealthBManageOpen" style="background:#f7f9f4;border-radius:12px;padding:12px;margin-bottom:14px">
-            <div v-for="(a,i) in wealthBEdit" :key="a.id" style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
-              <input v-model="a.name" class="input-custom" placeholder="帳戶名稱，如：郵局活存" maxlength="30" style="flex:1 1 140px;min-width:0;background:white">
-              <select v-model="a.currency" class="input-custom" style="width:96px;flex:none;background:white;padding-right:6px"><option v-for="c in ['TWD','USD','JPY','CNY']" :key="c" :value="c">{{ c }}</option></select>
-              <select v-model="a.type" class="input-custom" style="width:96px;flex:none;background:white;padding-right:6px"><option value="bank">存款</option><option value="invest">投資</option></select>
-              <button @click="wealthBEdit.splice(i,1)" title="刪除" style="border:none;background:none;color:#c0756a;cursor:pointer;font-size:18px;padding:4px"><i class="ph ph-trash"></i></button>
+        <!-- 管理：新增／改名／刪除 機構與細項 -->
+        <div v-if="wealthManageOpen" class="card" style="padding:14px;background:#f7f9f4">
+          <div v-for="(it,i) in wealthEdit" :key="it.id" style="background:white;border-radius:12px;padding:12px;margin-bottom:10px;border:1px solid #ece9e2">
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+              <i :class="['ph-bold', WEALTH_KIND_[it.kind].icon]" :style="'color:'+it.color+';font-size:18px;flex:none'"></i>
+              <input v-model="it.name" class="input-custom" :placeholder="it.kind==='broker'?'證券商名稱，如：國泰證券':'銀行名稱，如：中國信託'" maxlength="30" style="flex:1 1 140px;min-width:0;font-weight:700">
+              <select v-model="it.kind" class="input-custom" style="width:92px;flex:none;padding-right:6px;background:white"><option value="bank">銀行</option><option value="broker">證券商</option></select>
+              <button @click="wealthEdit.splice(i,1)" title="刪除這個機構" style="border:none;background:none;color:#c0756a;cursor:pointer;font-size:18px;padding:4px"><i class="ph ph-trash"></i></button>
             </div>
-            <div v-if="!wealthBEdit.length" style="font-size:12px;color:#aaa;margin-bottom:8px">還沒有帳戶</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
-              <button @click="addWealthBAccount" class="btn btn-outline" style="font-size:13px;padding:7px 14px">＋ 新增帳戶</button>
-              <button @click="saveWealthBAccounts" :disabled="wealthBSavingCfg" class="btn btn-primary" style="font-size:13px;padding:7px 14px">{{ wealthBSavingCfg?'儲存中…':'儲存帳戶設定' }}</button>
-              <button @click="wealthBManageOpen=false" style="font-size:13px;color:#999;background:none;border:none;cursor:pointer">取消</button>
+            <div v-for="(a,j) in it.accounts" :key="a.id" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 6px 24px">
+              <input v-model="a.name" class="input-custom" placeholder="細項，如：台幣活存" maxlength="30" style="flex:1 1 120px;min-width:0;background:white">
+              <select v-model="a.currency" class="input-custom" style="width:92px;flex:none;padding-right:6px;background:white"><option v-for="c in ['TWD','USD','JPY','CNY']" :key="c" :value="c">{{ c }}</option></select>
+              <select v-model="a.type" class="input-custom" style="width:92px;flex:none;padding-right:6px;background:white"><option value="bank">存款</option><option value="invest">投資</option></select>
+              <button @click="it.accounts.splice(j,1)" title="刪除細項" style="border:none;background:none;color:#c0756a;cursor:pointer;font-size:16px;padding:4px"><i class="ph ph-x"></i></button>
             </div>
-            <p style="font-size:11px;color:#aaa;margin-top:8px">刪除帳戶不會刪掉過去的快照紀錄。</p>
+            <button @click="addWealthAcc(it)" style="margin-left:24px;font-size:12px;font-weight:700;color:#588157;background:none;border:none;cursor:pointer">＋ 新增細項</button>
           </div>
-          <div v-if="!wealthBooks.accounts.length && !wealthBManageOpen" style="text-align:center;padding:20px;color:#aaa;font-size:13px">還沒有帳戶，點右上「管理帳戶」新增</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
-            <div v-for="a in wealthBooks.accounts" :key="a.id">
-              <div style="font-size:12px;font-weight:700;color:#588157;margin-bottom:5px">{{ a.name }}<span style="color:#aaa;font-weight:400">（{{ a.currency!=='TWD'?a.currency+'・':'' }}{{ a.type==='invest'?'投資':'存款' }}）</span></div>
-              <input v-model="wealthBForm[a.id]" type="number" step="1" class="input-custom" :placeholder="a.currency==='TWD'?'輸入金額':'原幣金額'">
+          <div v-if="!wealthEdit.length" style="font-size:13px;color:#aaa;margin:4px 0 12px">還沒有銀行或證券商，從下面新增</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button @click="addWealthInst('bank')" class="btn btn-outline" style="font-size:13px;padding:7px 14px"><i class="ph ph-bank"></i> 新增銀行</button>
+            <button @click="addWealthInst('broker')" class="btn btn-outline" style="font-size:13px;padding:7px 14px"><i class="ph ph-chart-line-up"></i> 新增證券商</button>
+            <button @click="saveWealthManage" :disabled="wealthSavingCfg" class="btn btn-primary" style="font-size:13px;padding:7px 14px">{{ wealthSavingCfg?'儲存中…':'儲存設定' }}</button>
+            <button @click="wealthManageOpen=false" style="font-size:13px;color:#999;background:none;border:none;cursor:pointer">取消</button>
+          </div>
+          <p style="font-size:11px;color:#aaa;margin-top:10px;line-height:1.7">「存款／投資」決定在趨勢圖裡算在哪一塊（銀行預設存款、證券商預設投資）。<br>刪除不會影響過去的快照紀錄；沒填名稱的會被略過。</p>
+        </div>
+        <div v-if="!wealthManageOpen && !curWealthBook.institutions.length" class="card" style="text-align:center;padding:28px;color:#aaa;font-size:13px">還沒有任何銀行或證券商，點右上「管理」新增</div>
+        <!-- 各機構輸入金額 -->
+        <div v-if="!wealthManageOpen && curWealthBook.institutions.length" style="display:grid;grid-template-columns:1fr;gap:14px">
+          <div v-for="inst in curWealthBook.institutions" :key="inst.id" class="card" style="padding:18px">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+              <div :style="'width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:'+inst.color+';color:white;flex-shrink:0'"><i :class="['ph-bold',WEALTH_KIND_[inst.kind].icon]" style="font-size:20px"></i></div>
+              <div style="flex:1;min-width:0"><div class="font-bold" style="font-size:15px;color:#344e41">{{ inst.name }}</div><div style="font-size:11px;color:#aaa">{{ WEALTH_KIND_[inst.kind].label }}</div></div>
+              <div class="num-font font-bold" :style="'font-size:14px;color:'+inst.color">{{ wealthInstTotal(inst) > 0 ? fmtInt(wealthInstTotal(inst)) + ' 元' : '' }}</div>
+            </div>
+            <div v-if="!inst.accounts.length" style="font-size:12px;color:#aaa">這裡還沒有細項，點「管理」新增</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
+              <div v-for="a in inst.accounts" :key="a.id">
+                <div style="font-size:12px;font-weight:700;color:#588157;margin-bottom:5px">{{ a.name }}<span v-if="a.currency!=='TWD'||a.type!==(inst.kind==='broker'?'invest':'bank')" style="color:#aaa;font-weight:400">（{{ [a.currency!=='TWD'?a.currency:'', a.type!==(inst.kind==='broker'?'invest':'bank')?(a.type==='invest'?'投資':'存款'):''].filter(Boolean).join('・') }}）</span></div>
+                <input v-model="wealthForms[wealthBook][a.id]" type="number" step="1" class="input-custom" :placeholder="a.currency==='TWD'?'輸入金額':'原幣金額'">
+              </div>
             </div>
           </div>
         </div>
@@ -737,7 +743,7 @@
         </div>
         <!-- 儲存 -->
         <div style="display:flex;flex-direction:column;gap:10px">
-          <button @click="saveWealth" :disabled="wealthSaving" class="btn btn-primary" style="width:100%;font-size:16px;padding:14px;border-radius:1rem;display:flex;align-items:center;justify-content:center;gap:8px">
+          <button @click="saveWealth" :disabled="wealthSaving||wealthManageOpen" class="btn btn-primary" style="width:100%;font-size:16px;padding:14px;border-radius:1rem;display:flex;align-items:center;justify-content:center;gap:8px">
             <i :class="wealthSaving?'ph ph-spinner spin':'ph ph-floppy-disk'" style="font-size:20px"></i>{{ wealthSaving?'儲存中...':'儲存資產快照到 Google Sheets' }}
           </button>
           <div v-if="wealthMsg" :style="'padding:10px 16px;border-radius:10px;font-size:13px;font-weight:700;text-align:center;'+(wealthError?'background:rgba(248,113,113,.1);color:#f87171':'background:rgba(52,211,153,.1);color:#34d399')">{{ wealthMsg }}</div>
@@ -758,8 +764,7 @@
             </div>
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
-            <template v-if="wealthBook==='A'"><button v-for="inst in WEALTH_ACCTS" :key="inst.key" @click="toggleWealthFilter(inst.key)" :style="wealthChartFilter.includes(inst.key)?'background:'+inst.color+';color:white;border-color:'+inst.color:'background:white;color:#bbb;border-color:#e0ddd8'" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;border:1.5px solid;cursor:pointer;transition:all .15s"><i :class="['ph-bold',inst.icon]" style="font-size:12px"></i>{{ inst.name }}</button></template>
-            <template v-else><button v-for="c in wealthBChips" :key="c.key" @click="toggleWealthFilter(c.key)" :style="wealthBChartFilter.includes(c.key)?'background:'+c.color+';color:white;border-color:'+c.color:'background:white;color:#bbb;border-color:#e0ddd8'" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;border:1.5px solid;cursor:pointer;transition:all .15s">{{ c.name }}<span v-if="c.deleted" style="opacity:.7">（已刪除）</span></button></template>
+            <button v-for="c in wealthChips" :key="c.key" @click="toggleWealthFilter(c.key)" :style="wealthFilters[wealthBook].includes(c.key)?'background:'+c.color+';color:white;border-color:'+c.color:'background:white;color:#bbb;border-color:#e0ddd8'" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;border:1.5px solid;cursor:pointer;transition:all .15s"><i :class="['ph-bold',WEALTH_KIND_[c.kind].icon]" style="font-size:12px"></i>{{ c.name }}<span v-if="c.deleted" style="opacity:.7">（已刪除）</span></button>
           </div>
           <div v-if="!filteredWealthHistory.length" style="text-align:center;padding:32px;color:#aaa;font-size:13px">此範圍無紀錄</div>
           <!-- ★ 手機版可橫向捲動：長條數多時每筆維持最小寬度，避免擠成一團 -->
@@ -773,6 +778,7 @@
           <div style="padding:16px 20px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:8px;color:#3a5a40"><i class="ph ph-clock-counter-clockwise" style="font-size:18px"></i><span class="font-bold" style="font-size:15px">歷史快照</span></div>
           <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:380px"><thead><tr><th v-for="c in [{k:'dateStr',l:'日期'},{k:'total',l:'總資產（台幣）',r:1},{k:'diff',l:'環比增減',r:1}]" :key="c.k" @click="tblSortToggle('wealth',c.k)" class="table-th" :style="'cursor:pointer;user-select:none;'+(c.r?'text-align:right':'')">{{ c.l }}<span v-if="tblSortIcon('wealth',c.k)" style="margin-left:4px;color:#bc6c25"><i :class="tblSortIcon('wealth',c.k)"></i></span></th></tr></thead><tbody><tr v-for="(row,idx) in wealthHistoryRows" :key="row.date+'-'+idx"><td class="table-td">{{ row.dateStr }}</td><td class="table-td num-font font-bold" style="text-align:right">{{ fmtInt(row.totalTWD) }}</td><td class="table-td num-font font-bold" style="text-align:right"><span v-if="row.diff!==null" :class="row.diff>0?'val-pos':'val-neg'">{{ fmtInt(row.diff) }}</span><span v-else style="color:#aaa">—</span></td></tr></tbody></table></div>
         </div>
+        </template>
         <!-- Email 提醒 -->
         <div class="card">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;color:#3a5a40"><i class="ph ph-bell" style="font-size:20px"></i><span class="font-bold section-title">Email 定期提醒</span></div>
@@ -1217,7 +1223,7 @@ const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
 // ── fetch 包裝：呼叫 GAS doPost ──────────────────────────────
 const AUTH_TOKEN_KEY = 'auth_token';
 // 最新後端（程式庫）版本：要和 WebAPI.js 的 APP_VERSION 一起改
-const LATEST_BACKEND_VERSION = 8;
+const LATEST_BACKEND_VERSION = 9;
 let onAuthExpired_ = null; // Vue 掛載後設定：Token 失效時切回登入畫面
 async function callGAS(action, args = []) {
   const url = getGasUrl();
@@ -1402,19 +1408,9 @@ createApp({
           await loadPending();
         } else if (tab==='wealth') {
           wealthLoading.value=true;
-          const [hRes, bRes, bhRes] = await Promise.all([
-            callGAS('api_getWealthHistory'), callGAS('api_getWealthBooks'), callGAS('api_getWealthHistoryB'),
-          ]);
-          applyWealthBooks_(bRes, bhRes); // 舊版後端沒有這些 API → 不顯示第二份
-          if (hRes.ok) {
-            wealthHistory.value=hRes.data;
-            if (hRes.last) {
-              const last=hRes.last;
-              ['rate_usd','rate_jpy','rate_cny'].forEach(k=>{ if(last[k]!==undefined) wealthRates.value[k]=last[k]; });
-              WEALTH_ACCTS.forEach(inst=>inst.accounts.forEach(acc=>{ if(last[acc.key]!==undefined) wealthForm.value[acc.key]=last[acc.key]; }));
-            }
-            setTimeout(()=>renderWealthChart(),200);
-          }
+          const res = await callGAS('api_getWealth');
+          applyWealth_(res);
+          setTimeout(()=>renderWealthChart(),200);
           wealthLoading.value=false;
         } else {
           listLoading.value=true; listData.value=[];
@@ -2064,141 +2060,121 @@ createApp({
     };
     Vue.watch(dashChartYearSet, () => { if (lastDashChartData) renderCharts(lastDashChartData); });
 
-    // ══ 資產追蹤 ══════════════════════════════════════════════
-    const WEALTH_ACCTS = [
-      { key:'ctbc',       name:'中國信託',          icon:'ph-buildings',      color:'#4a7a9b', accounts:[
-        { key:'ctbc_twd_saving', label:'台幣活存',   currency:'TWD' },
-        { key:'ctbc_twd_fixed',  label:'台幣定存',   currency:'TWD' },
-        { key:'ctbc_usd_saving', label:'美金活存',   currency:'USD' },
-        { key:'ctbc_usd_fixed',  label:'美金定存',   currency:'USD' },
-        { key:'ctbc_cny_saving', label:'人民幣活存', currency:'CNY' },
-        { key:'ctbc_cny_fixed',  label:'人民幣定存', currency:'CNY' },
-      ]},
-      { key:'cathay_bank', name:'國泰世華',          icon:'ph-vault',          color:'#4a8a5e', accounts:[
-        { key:'cathay_twd', label:'台幣活存', currency:'TWD' },
-        { key:'cathay_usd', label:'美金活存', currency:'USD' },
-      ]},
-      { key:'taishin',    name:'台新銀行',           icon:'ph-credit-card',    color:'#b85c3a', accounts:[
-        { key:'taishin_twd', label:'台幣活存', currency:'TWD' },
-        { key:'taishin_jpy', label:'日幣活存', currency:'JPY' },
-      ]},
-      { key:'richart',    name:'Richart（台新數位）', icon:'ph-device-mobile', color:'#c4883a', accounts:[
-        { key:'richart_twd',  label:'台幣活存', currency:'TWD' },
-        { key:'richart_fund', label:'基金市值', currency:'TWD' },
-      ]},
-      { key:'chang',      name:'彰銀',               icon:'ph-coins',          color:'#7a6545', accounts:[
-        { key:'chang_twd', label:'台幣活存', currency:'TWD' },
-      ]},
-      { key:'land',       name:'合庫',               icon:'ph-leaf',           color:'#5a7a6a', accounts:[
-        { key:'land_twd', label:'台幣活存', currency:'TWD' },
-      ]},
-      { key:'post',       name:'郵局',               icon:'ph-mailbox',        color:'#9a4a4a', accounts:[
-        { key:'post_twd', label:'台幣活存', currency:'TWD' },
-      ]},
-      { key:'uni_sec',    name:'統一證券',            icon:'ph-chart-line-up',  color:'#6a4a8a', accounts:[
-        { key:'uni_stock', label:'台股總市值', currency:'TWD' },
-      ]},
-      { key:'cathay_sec', name:'國泰證券',            icon:'ph-chart-bar',      color:'#3a7a7a', accounts:[
-        { key:'cathay_stock',    label:'台股總市值', currency:'TWD' },
-        { key:'cathay_us_stock', label:'美股總市值', currency:'USD' },
-      ]},
-    ];
-
-    const INST_ACCT_MAP_   = Object.fromEntries(WEALTH_ACCTS.map(i=>[i.key, i.accounts.map(a=>a.key)]));
-    const ACCT_CURRENCY_   = Object.fromEntries(WEALTH_ACCTS.flatMap(i=>i.accounts.map(a=>[a.key,a.currency])));
-    const INVEST_KEYS_SET_ = new Set(['uni_stock','cathay_stock','cathay_us_stock','richart_fund']);
-
-    const _wealthFormInit = Object.fromEntries(
-      WEALTH_ACCTS.flatMap(inst => inst.accounts.map(acc => [acc.key, 0]))
-    );
-    const wealthForm        = ref({..._wealthFormInit});
+    // ══ 資產追蹤（兩份紀錄；機構＝銀行／證券商 → 細項帳戶，全部自訂） ══════════
+    const WEALTH_COLORS_ = ['#4a7a9b','#4a8a5e','#b85c3a','#c4883a','#7a6545','#5a7a6a','#9a4a4a','#6a4a8a','#3a7a7a','#8a6a3a'];
+    const WEALTH_KIND_ = { bank:{ label:'銀行', icon:'ph-bank' }, broker:{ label:'證券商', icon:'ph-chart-line-up' } };
     const wealthRates       = ref({ rate_usd:32, rate_jpy:0.22, rate_cny:4.4 });
-    const wealthHistory     = ref([]);
     const wealthLoading     = ref(false);
     const wealthSaving      = ref(false);
     const wealthMsg         = ref('');
     const wealthError       = ref(false);
     const wealthReminderType= ref('quarterly');
     const wealthChartInst   = ref(null);
-    const wealthChartFilter = ref(WEALTH_ACCTS.map(i=>i.key));
     const wealthTimeRange   = ref('all');
     const wealthPointLimit  = ref('all'); // '6' | '12' | '20' | 'all' — 手機上減少長條數量用
+    const wealthBook        = ref((()=>{ try { return localStorage.getItem('wealth_book')==='B'?'B':'A'; } catch(e) { return 'A'; } })());
+    const wealthSupported   = ref(true);  // 舊版後端沒有 api_getWealth
+    const wealthBooks       = ref({ A:{ name:'我的資產', institutions:[] }, B:{ name:'第二份紀錄', institutions:[] } });
+    const wealthHist        = ref({ A:[], B:[] });
+    const wealthForms       = ref({ A:{}, B:{} });
+    const wealthFilters     = ref({ A:[], B:[] }); // 圖表要顯示的機構 ID
+    const wealthManageOpen  = ref(false);
+    const wealthEdit        = ref([]);             // 管理中的機構清單（複本，按儲存才寫回）
+    const wealthSavingCfg   = ref(false);
+    const wealthNewId_ = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-    // ── 第二份資產紀錄（自訂帳戶） ──
-    const wealthBook           = ref((()=>{ try { return localStorage.getItem('wealth_book')==='B'?'B':'A'; } catch(e) { return 'A'; } })());
-    const wealthBooksSupported = ref(false);
-    const wealthBooks          = ref({ nameA:'我的資產', nameB:'第二份紀錄', accounts:[] });
-    const wealthBHistory       = ref([]);
-    const wealthBForm          = ref({});
-    const wealthBChartFilter   = ref([]);
-    const wealthBManageOpen    = ref(false);
-    const wealthBEdit          = ref([]);
-    const wealthBSavingCfg     = ref(false);
-    const WEALTH_B_COLORS_ = ['#4a7a9b','#4a8a5e','#b85c3a','#c4883a','#7a6545','#5a7a6a','#9a4a4a','#6a4a8a','#3a7a7a','#8a6a3a'];
-    const activeWealthHistory = computed(() => wealthBook.value==='B' ? wealthBHistory.value : wealthHistory.value);
-    // 篩選鈕：目前帳戶 + 歷史裡出現過但已刪除的帳戶
-    const wealthBChips = computed(() => {
-      const chips = wealthBooks.value.accounts.map(a => ({ key:a.id, name:a.name, deleted:false }));
-      const known = new Set(chips.map(c => c.key));
-      wealthBHistory.value.forEach(snap => Object.entries(snap.accounts||{}).forEach(([id, a]) => {
-        if (!known.has(id)) { known.add(id); chips.push({ key:id, name:a.name, deleted:true }); }
-      }));
-      return chips.map((c, i) => ({ ...c, color: WEALTH_B_COLORS_[i % WEALTH_B_COLORS_.length] }));
-    });
-    const wealthFilterAllOn = computed(() => wealthBook.value==='B'
-      ? wealthBChips.value.every(c => wealthBChartFilter.value.includes(c.key))
-      : wealthChartFilter.value.length === WEALTH_ACCTS.length);
-    const applyWealthBooks_ = (bRes, bhRes) => {
-      wealthBooksSupported.value = !!(bRes && bRes.ok);
-      if (!wealthBooksSupported.value) { wealthBook.value = 'A'; return; }
-      wealthBooks.value = { nameA:bRes.nameA, nameB:bRes.nameB, accounts:bRes.accounts||[] };
-      wealthBHistory.value = (bhRes && bhRes.ok) ? (bhRes.data||[]) : [];
-      const last = bhRes && bhRes.last;
-      const f = {};
-      wealthBooks.value.accounts.forEach(a => { f[a.id] = last && last.values && last.values[a.id]!==undefined ? last.values[a.id] : 0; });
-      wealthBForm.value = f;
-      wealthBChartFilter.value = wealthBChips.value.map(c => c.key);
+    const curWealthBook       = computed(() => wealthBooks.value[wealthBook.value] || { name:'', institutions:[] });
+    const activeWealthHistory = computed(() => wealthHist.value[wealthBook.value] || []);
+
+    const toTWD_ = (val, currency) => {
+      const v = parseFloat(val)||0;
+      const r = wealthRates.value;
+      if (currency==='USD') return v*(parseFloat(r.rate_usd)||32);
+      if (currency==='JPY') return v*(parseFloat(r.rate_jpy)||0.22);
+      if (currency==='CNY') return v*(parseFloat(r.rate_cny)||4.4);
+      return v;
     };
-    const wealthBTotalTWD = computed(() => wealthBooks.value.accounts.reduce((t, a) => t + toTWD_(wealthBForm.value[a.id], a.currency), 0));
-    const wealthCurTotal  = computed(() => wealthBook.value==='B' ? wealthBTotalTWD.value : wealthTotalTWD.value);
-    const saveWealthBooks_ = async patch => {
-      const res = await callGAS('api_saveWealthBooks', [JSON.parse(JSON.stringify({ ...wealthBooks.value, ...patch }))]);
+    const wealthInstTotal = inst => (inst.accounts||[]).reduce((s, a) => s + toTWD_(wealthForms.value[wealthBook.value][a.id], a.currency), 0);
+    const wealthCurTotal  = computed(() => curWealthBook.value.institutions.reduce((s, it) => s + wealthInstTotal(it), 0));
+
+    // 圖表篩選鈕：目前的機構 + 歷史快照裡出現過、但已刪除的機構
+    const wealthChipsFor_ = b => {
+      const chips = (wealthBooks.value[b].institutions||[]).map(it => ({ key:it.id, name:it.name, color:it.color, kind:it.kind, deleted:false }));
+      const known = new Set(chips.map(c => c.key));
+      (wealthHist.value[b]||[]).forEach(snap => Object.values(snap.accounts||{}).forEach(a => {
+        if (a.instId && !known.has(a.instId)) { known.add(a.instId); chips.push({ key:a.instId, name:a.instName||a.instId, color:'#b0aca2', kind:a.kind==='broker'?'broker':'bank', deleted:true }); }
+      }));
+      return chips;
+    };
+    const wealthChips       = computed(() => wealthChipsFor_(wealthBook.value));
+    const wealthFilterAllOn = computed(() => wealthChips.value.every(c => wealthFilters.value[wealthBook.value].includes(c.key)));
+
+    const wealthFormFromLast_ = b => {
+      const hist = wealthHist.value[b] || [], last = hist[hist.length-1];
+      const prev = wealthForms.value[b] || {}, f = {};
+      (wealthBooks.value[b].institutions||[]).forEach(it => it.accounts.forEach(a => {
+        f[a.id] = prev[a.id] !== undefined ? prev[a.id] : (last && last.values && last.values[a.id] !== undefined ? last.values[a.id] : 0);
+      }));
+      return f;
+    };
+    const applyWealth_ = res => {
+      wealthSupported.value = !!(res && res.ok && res.books);
+      if (!wealthSupported.value) return;
+      const blank = b => ({ name: b==='A' ? '我的資產' : '第二份紀錄', institutions: [] });
+      wealthBooks.value = { A: res.books.A || blank('A'), B: res.books.B || blank('B') };
+      wealthHist.value  = { A: (res.history && res.history.A) || [], B: (res.history && res.history.B) || [] };
+      wealthForms.value = { A:{}, B:{} };
+      wealthForms.value = { A: wealthFormFromLast_('A'), B: wealthFormFromLast_('B') };
+      wealthFilters.value = { A: wealthChipsFor_('A').map(c => c.key), B: wealthChipsFor_('B').map(c => c.key) };
+      // 匯率：用兩份紀錄中最新一筆快照的匯率
+      const lasts = ['A','B'].map(b => wealthHist.value[b][wealthHist.value[b].length-1]).filter(Boolean).sort((x, y) => x.date.localeCompare(y.date));
+      const lr = lasts.length ? (lasts[lasts.length-1].rates || {}) : {};
+      if (lr.USD) wealthRates.value.rate_usd = lr.USD;
+      if (lr.JPY) wealthRates.value.rate_jpy = lr.JPY;
+      if (lr.CNY) wealthRates.value.rate_cny = lr.CNY;
+    };
+
+    // ── 管理：機構（銀行／證券商）與細項 ──
+    const openWealthManage = () => {
+      wealthEdit.value = JSON.parse(JSON.stringify(curWealthBook.value.institutions || []));
+      wealthManageOpen.value = true;
+    };
+    const addWealthAcc = inst => inst.accounts.push({ id: wealthNewId_('a'), name:'', currency:'TWD', type: inst.kind==='broker' ? 'invest' : 'bank' });
+    const addWealthInst = kind => {
+      const it = { id: wealthNewId_('i'), name:'', kind, color: WEALTH_COLORS_[wealthEdit.value.length % WEALTH_COLORS_.length], accounts:[] };
+      addWealthAcc(it);
+      wealthEdit.value.push(it);
+    };
+    const saveWealthConfig_ = async (b, book) => {
+      const res = await callGAS('api_saveWealthConfig', [b, JSON.parse(JSON.stringify(book))]);
       if (!res.ok) { alert('❌ ' + (res.msg || '儲存失敗')); return false; }
-      wealthBooks.value = { nameA:res.nameA, nameB:res.nameB, accounts:res.accounts||[] };
+      wealthBooks.value = { A: res.books.A, B: res.books.B };
       return true;
     };
-    const renameWealthBook = async which => {
-      const key = which==='A' ? 'nameA' : 'nameB';
-      const v = prompt('輸入這份紀錄的名稱（最多 30 字）', wealthBooks.value[key]);
-      if (v === null || !v.trim()) return;
-      await saveWealthBooks_({ [key]: v.trim() });
-    };
-    const openWealthBManage = () => {
-      wealthBEdit.value = wealthBooks.value.accounts.map(a => ({ ...a }));
-      if (!wealthBEdit.value.length) addWealthBAccount();
-      wealthBManageOpen.value = true;
-    };
-    const addWealthBAccount = () => {
-      wealthBEdit.value.push({ id: 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name:'', currency:'TWD', type:'bank' });
-    };
-    const saveWealthBAccounts = async () => {
-      const list = wealthBEdit.value.map(a => ({ ...a, name: String(a.name||'').trim() })).filter(a => a.name);
-      wealthBSavingCfg.value = true;
+    const saveWealthManage = async () => {
+      const b = wealthBook.value;
+      const insts = wealthEdit.value
+        .map(it => ({ ...it, name: String(it.name||'').trim(), accounts: it.accounts.map(a => ({ ...a, name: String(a.name||'').trim() })).filter(a => a.name) }))
+        .filter(it => it.name);
+      wealthSavingCfg.value = true;
       try {
-        if (!(await saveWealthBooks_({ accounts: list }))) return;
-        const f = {};
-        wealthBooks.value.accounts.forEach(a => { f[a.id] = wealthBForm.value[a.id] !== undefined ? wealthBForm.value[a.id] : 0; });
-        wealthBForm.value = f;
-        const on = new Set(wealthBChartFilter.value);
-        wealthBooks.value.accounts.forEach(a => on.add(a.id)); // 新帳戶預設顯示
-        wealthBChartFilter.value = [...on];
-        wealthBManageOpen.value = false;
+        if (!(await saveWealthConfig_(b, { name: curWealthBook.value.name, institutions: insts }))) return;
+        wealthForms.value[b] = wealthFormFromLast_(b);
+        const on = new Set(wealthFilters.value[b]);
+        wealthBooks.value[b].institutions.forEach(it => on.add(it.id)); // 新機構預設顯示在圖表
+        wealthFilters.value[b] = [...on];
+        wealthManageOpen.value = false;
         scheduleRender_();
-      } finally { wealthBSavingCfg.value = false; }
+      } finally { wealthSavingCfg.value = false; }
+    };
+    const renameWealthBook = async b => {
+      const v = prompt('輸入這份紀錄的名稱（最多 30 字）', wealthBooks.value[b].name);
+      if (v === null || !v.trim()) return;
+      await saveWealthConfig_(b, { ...wealthBooks.value[b], name: v.trim() });
     };
     watch(wealthBook, v => {
       try { localStorage.setItem('wealth_book', v); } catch(e) {}
-      wealthMsg.value = ''; wealthBManageOpen.value = false;
+      wealthMsg.value = ''; wealthManageOpen.value = false;
       scheduleRender_();
     });
 
@@ -2222,46 +2198,15 @@ createApp({
       return Math.max(n * 52, 0) + 'px';
     });
 
-    const toTWD_ = (val, currency) => {
-      const v = parseFloat(val)||0;
-      const r = wealthRates.value;
-      if (currency==='USD') return v*(parseFloat(r.rate_usd)||32);
-      if (currency==='JPY') return v*(parseFloat(r.rate_jpy)||0.22);
-      if (currency==='CNY') return v*(parseFloat(r.rate_cny)||4.4);
-      return v;
-    };
-
-    const wealthTotalTWD = computed(()=>{
-      let t=0;
-      WEALTH_ACCTS.forEach(inst=>inst.accounts.forEach(acc=>{ t+=toTWD_(wealthForm.value[acc.key],acc.currency); }));
-      return t;
-    });
-
-    const wealthBreakdown = computed(()=>
-      WEALTH_ACCTS.map(inst=>({
-        ...inst,
-        twdTotal: inst.accounts.reduce((s,acc)=>s+toTWD_(wealthForm.value[acc.key],acc.currency),0)
-      }))
-    );
-
     const saveWealth = async () => {
       wealthSaving.value=true; wealthMsg.value='';
+      const b = wealthBook.value;
       try {
-        if (wealthBook.value==='B') {
-          const res=await callGAS('api_saveWealthSnapshotB',[{ values:{...wealthBForm.value}, ...wealthRates.value }]);
-          if (res.ok) {
-            wealthMsg.value='✅ 快照已儲存！台幣總資產：'+fmtInt(res.total||0)+' 元'; wealthError.value=false;
-            const bh=await callGAS('api_getWealthHistoryB');
-            if (bh.ok) { wealthBHistory.value=bh.data; scheduleRender_(); }
-          } else { wealthMsg.value='❌ '+(res.msg||'儲存失敗'); wealthError.value=true; }
-          return;
-        }
-        const payload={...wealthForm.value, ...wealthRates.value, totalTWD:wealthTotalTWD.value};
-        const res=await callGAS('api_saveWealthSnapshot',[payload]);
+        const res = await callGAS('api_saveWealthSnapshotV2', [b, { values:{ ...wealthForms.value[b] }, ...wealthRates.value }]);
         if (res.ok) {
           wealthMsg.value='✅ 快照已儲存！台幣總資產：'+fmtInt(res.total||0)+' 元'; wealthError.value=false;
-          const hRes=await callGAS('api_getWealthHistory');
-          if (hRes.ok) { wealthHistory.value=hRes.data; setTimeout(()=>renderWealthChart(),100); }
+          const r2 = await callGAS('api_getWealth');
+          if (r2.ok) { wealthHist.value = { A: r2.history.A||[], B: r2.history.B||[] }; scheduleRender_(); }
         } else { wealthMsg.value='❌ '+(res.msg||'儲存失敗'); wealthError.value=true; }
       } catch(e) { wealthMsg.value='❌ '+e.message; wealthError.value=true; }
       finally { wealthSaving.value=false; }
@@ -2276,14 +2221,13 @@ createApp({
     const scheduleRender_ = () => { clearTimeout(_wealthRenderTimer); _wealthRenderTimer = setTimeout(renderWealthChart, 80); };
 
     const toggleWealthFilter = key => {
-      const target = wealthBook.value==='B' ? wealthBChartFilter : wealthChartFilter;
-      const arr = target.value;
-      target.value = arr.includes(key) ? arr.filter(k => k !== key) : [...arr, key];
+      const b = wealthBook.value, arr = wealthFilters.value[b];
+      wealthFilters.value[b] = arr.includes(key) ? arr.filter(k => k !== key) : [...arr, key];
       scheduleRender_();
     };
     const toggleAllWealthFilter = () => {
-      if (wealthBook.value==='B') wealthBChartFilter.value = wealthFilterAllOn.value ? [] : wealthBChips.value.map(c => c.key);
-      else wealthChartFilter.value = wealthFilterAllOn.value ? [] : WEALTH_ACCTS.map(i => i.key);
+      const b = wealthBook.value;
+      wealthFilters.value[b] = wealthFilterAllOn.value ? [] : wealthChips.value.map(c => c.key);
       scheduleRender_();
     };
 
@@ -2309,30 +2253,16 @@ createApp({
         const hist = filteredWealthHistory.value;
         if (!hist.length) return;
 
-        const selected = wealthChartFilter.value;
+        const selected = new Set(wealthFilters.value[wealthBook.value]);
         const sorted = [...hist].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
         const labels  = sorted.map(d=>String(d.date||'').slice(0,10));
 
-        _wRows = wealthBook.value==='B' ? sorted.map(snap => {
+        _wRows = sorted.map(snap => {
           let bank=0, invest=0;
-          wealthBChartFilter.value.forEach(id => {
-            const twd = Number((snap.twd||{})[id])||0;
-            if (((snap.accounts||{})[id]||{}).type==='invest') invest+=twd; else bank+=twd;
-          });
-          return { bank:Math.round(bank), invest:Math.round(invest), total:Math.round(bank+invest) };
-        }) : sorted.map(snap => {
-          let bank=0, invest=0;
-          selected.forEach(instKey => {
-            (INST_ACCT_MAP_[instKey]||[]).forEach(k => {
-              const val = Number(snap[k])||0;
-              const cur = ACCT_CURRENCY_[k]||'TWD';
-              let twd = val;
-              if (cur==='USD') twd = val*(Number(snap.rate_usd)||32);
-              else if (cur==='JPY') twd = val*(Number(snap.rate_jpy)||0.22);
-              else if (cur==='CNY') twd = val*(Number(snap.rate_cny)||4.4);
-              if (INVEST_KEYS_SET_.has(k)) invest+=twd;
-              else bank+=twd;
-            });
+          Object.entries(snap.twd||{}).forEach(([id, twd]) => {
+            const a = (snap.accounts||{})[id] || {};
+            if (!selected.has(a.instId)) return;
+            if (a.type==='invest') invest += Number(twd)||0; else bank += Number(twd)||0;
           });
           return { bank:Math.round(bank), invest:Math.round(invest), total:Math.round(bank+invest) };
         });
@@ -2765,12 +2695,12 @@ createApp({
       GeminiKeyStatus,GeminiKeyInput,expandedIdx,analysisResult,userNotes,includeDividend,
       analysisDimensions,uploadedImages,addImages,removeImage,
       saveGeminiKey,runAnalysis,
-      WEALTH_ACCTS,wealthForm,wealthRates,wealthHistory,wealthLoading,wealthSaving,wealthMsg,wealthError,
-      wealthTotalTWD,wealthBreakdown,
-      wealthReminderType,wealthChartFilter,wealthTimeRange,wealthPointLimit,wealthChartMinWidth,filteredWealthHistory,
+      WEALTH_KIND_,wealthRates,wealthLoading,wealthSaving,wealthMsg,wealthError,
+      wealthReminderType,wealthTimeRange,wealthPointLimit,wealthChartMinWidth,filteredWealthHistory,
       saveWealth,setupWealthTrigger,toggleWealthFilter,toggleAllWealthFilter,
-      wealthBook,wealthBooksSupported,wealthBooks,wealthBForm,wealthBChartFilter,wealthBChips,wealthBManageOpen,wealthBEdit,wealthBSavingCfg,
-      activeWealthHistory,wealthFilterAllOn,wealthCurTotal,renameWealthBook,openWealthBManage,addWealthBAccount,saveWealthBAccounts,
+      wealthBook,wealthSupported,wealthBooks,wealthForms,wealthFilters,wealthChips,wealthManageOpen,wealthEdit,wealthSavingCfg,
+      curWealthBook,activeWealthHistory,wealthFilterAllOn,wealthCurTotal,wealthInstTotal,
+      renameWealthBook,openWealthManage,addWealthInst,addWealthAcc,saveWealthManage,
       gasUrlInput,currentGasUrl,updateGasUrl,
       pendingList,pendingSelected,pendingLoading,pendingConfirming,pendingMsg,pendingError,pendingDeleting,
       pendingGrouped,loadPending,toggleSelectAll,togglePendingRow,recalcTax,confirmSelected,deletePendingRow,
