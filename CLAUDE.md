@@ -12,6 +12,8 @@
 | `Index.html` | 前端單頁應用（Vue 3 + Tailwind），含所有頁面與互動邏輯 |
 | `appsscript.json` | GAS 設定檔，通常不需要動 |
 | `.clasp.json` | clasp 設定，含 Script ID，**不要刪除、不要公開** |
+| `topics.js` | 「題材清單」分頁的靜態資料（純前端，改內容只需改這個檔並 push） |
+| `cloudrun/` | PDF 解鎖服務（Cloud Run，Python）：給使用者用設定頁的「一鍵部署」架在自己的 Google Cloud。介面：POST `{file_content, password}` → `{status, data: [[...]]}`，對應 `callCloudRunToUnlock_` / `parseCloudRunData_` |
 
 > GAS 專案裡所有 `.gs` 檔案共用同一個命名空間，**不可有重複的函式名稱**。
 > **函式歸屬原則：`api_*` 函式只放 `WebAPI.js`；核心排程邏輯放 `4.0.js`。不跨檔重複定義。**

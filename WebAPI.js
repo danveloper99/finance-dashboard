@@ -42,7 +42,7 @@ function makeToken_(pwd) {
  * 後端版本號：每次發布新的程式庫版本時 +1，並同步修改 index.html 的 LATEST_BACKEND_VERSION。
  * 前端會用它判斷朋友的後端是否過舊、需要更新程式庫版本。
  */
-var APP_VERSION = 11;
+var APP_VERSION = 12;
 
 /**
  * 帳號：每份後端（每個人用自己 Google 帳號部署的 GAS）只有一組帳號
@@ -223,7 +223,7 @@ function api_getSettingsSchema() {
       { key: 'FEE_DISCOUNT', label: '手續費折數 (0~1)',   type: 'number', placeholder: '0.28' },
     ]},
     { group: 'Gmail 擷取', icon: 'ph-envelope',
-      desc: '設定 Gmail 往回搜尋天數與郵件分類標籤（請先在 Gmail 建立對應標籤並套用至成交回報信件）。Cloud Run 網址為 PDF 解鎖服務，留空則跳過 PDF 解析。',
+      desc: '設定 Gmail 往回搜尋天數與郵件分類標籤（請先在 Gmail 建立對應標籤並套用至成交回報信件）。PDF 標籤與 Cloud Run 網址為選填，留空則跳過 PDF 解析；Cloud Run 部署教學在本頁最下面。',
       items: [
       { key: 'GMAIL_QUERY_DAYS', label: '往回搜尋天數',  type: 'number', placeholder: '7' },
       { key: 'GMAIL_LABEL_PDF',  label: 'PDF 郵件標籤',  type: 'text',   placeholder: '如: 對帳單' },

@@ -5,3 +5,5 @@
 template/**
 releases/**
 tools/**
+cloudrun/**
+topics.js

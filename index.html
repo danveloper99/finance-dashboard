@@ -56,6 +56,31 @@
     .table-td{color:var(--primary-dark);border-bottom:1px solid rgba(240,240,235,.9);padding:11px 16px;font-size:14px;white-space:nowrap;transition:background .12s}
     @media(min-width:768px){.table-th{padding:12px 20px;font-size:11px}.table-td{padding:12px 20px;font-size:15px}}
     tr:hover .table-td{background:#f8fbf6}
+    .tp-chip{display:inline-block;font-size:13px;font-weight:700;padding:4px 9px;border-radius:8px;line-height:1.25;white-space:nowrap;cursor:pointer;font-family:inherit;border:1px solid #cfdcc9;background:#eef3ea;color:#3a5a40;transition:background .15s}
+    .tp-chip:hover{background:#dfe9d8}
+    .tp-chip.ext{background:#f7f6f2;color:#6b6b60;border-color:#e4e1d8;font-weight:500}
+    .tp-chip.ext:hover{background:#eeece5}
+    .tp-chip.held{box-shadow:0 0 0 2px #dda15e}
+    .tp-tag{display:inline-block;font-size:12px;font-weight:700;padding:2px 10px;border-radius:999px;white-space:nowrap}
+    .tp-tag.hi{color:#b4432f;background:#fbece8}.tp-tag.mid{color:#a0661a;background:#fdf3e2}.tp-tag.lo{color:#3a7a45;background:#e9f3ea}
+    .tp-filter{font-size:13px;font-weight:700;padding:6px 14px;border-radius:999px;border:1.5px solid #dad7cd;background:white;color:#588157;cursor:pointer;font-family:inherit}
+    .tp-filter.on{background:#3a5a40;border-color:#3a5a40;color:white}
+    .sop summary{list-style:none;cursor:pointer}
+    .sop summary::-webkit-details-marker{display:none}
+    .sop-top{font-weight:700;color:#3a5a40;font-size:14px}
+    .sop-h{font-weight:700;color:#344e41;font-size:14px;margin:16px 0 8px;padding-left:8px;border-left:3px solid #588157}
+    .sop-step{border:1px solid #ebe9e2;border-radius:10px;margin-bottom:6px;background:white}
+    .sop-step>summary{display:flex;align-items:center;gap:10px;padding:9px 12px;font-weight:700;color:#3a5a40}
+    .sop-step>summary::after{content:'';margin-left:auto;width:7px;height:7px;border-right:2px solid #9aab95;border-bottom:2px solid #9aab95;transform:rotate(45deg);transition:transform .15s;flex-shrink:0}
+    .sop-step[open]>summary::after{transform:rotate(-135deg)}
+    .sop-step[open]{background:#fafcf8}
+    .sop-n{flex-shrink:0;width:22px;height:22px;border-radius:50%;background:#eef3ea;color:#3a5a40;font-size:12px;display:flex;align-items:center;justify-content:center}
+    .sop-tag{font-size:11px;padding:1px 8px;border-radius:999px;background:#eef3ea;color:#3a5a40;font-weight:700}
+    .sop-tag.gray{background:#f2f1ec;color:#888}
+    .sop-body{padding:0 14px 10px 44px;font-size:13px}
+    .sop-body ul{list-style:disc;padding-left:16px;margin:0}
+    .sop-body ol{list-style:decimal;padding-left:18px;margin:0}
+    .sop-sub{font-weight:700;color:#588157;font-size:12px;margin:6px 0 2px}
     .no-scrollbar::-webkit-scrollbar{display:none}
     .no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
     .fade-enter-active,.fade-leave-active{transition:opacity .25s}
@@ -231,51 +256,99 @@
         </form>
         <div v-if="authMsg" style="margin-top:12px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;background:#fef2f2;color:#dc2626;line-height:1.6">{{ authMsg }}</div>
       </div>
-      <!-- 使用說明 SOP -->
-      <details v-if="authState!=='checking'" class="card" style="margin-top:14px;font-size:13px;color:#444;line-height:1.85">
-        <summary style="cursor:pointer;font-weight:700;color:#3a5a40;font-size:14px">📘 使用說明（首次設定 SOP）</summary>
+      <!-- 使用說明 SOP：章節 → 步驟標題，細節點開才顯示 -->
+      <details v-if="authState!=='checking'" class="card sop" style="margin-top:14px;font-size:13px;color:#444;line-height:1.8">
+        <summary class="sop-top">📘 使用說明（首次設定 SOP）</summary>
         <div style="margin-top:12px">
-          <div style="background:#f7f9f4;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px">
-            🔒 每個人的資料都存在<b>自己的</b> Google 試算表，由<b>自己的</b> Google 帳號執行後端，其他人（包含 App 作者）都看不到。
+          <div style="background:#f7f9f4;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px">
+            🔒 每個人的資料都存在<b>自己的</b> Google 試算表，由<b>自己的</b> Google 帳號執行後端，其他人（包含 App 作者）都看不到。點每個步驟可以看細節。
           </div>
-          <div style="font-weight:700;color:#588157;margin-bottom:4px">一、建立自己的試算表與後端（約 10 分鐘）</div>
-          <ol style="list-style:decimal;padding-left:20px;margin:0 0 12px">
-            <li>用自己的 Google 帳號打開 <a href="https://docs.google.com/spreadsheets/d/1r39mSkFwr6uVsofeOl1VvP3krzSKIN1p3IT0x0gwqq8/copy" target="_blank" rel="noopener" style="color:#bc6c25;font-weight:700">範本試算表（建立副本）</a></li>
-            <li>按「建立副本」，副本會連同後端程式一起複製到你的雲端硬碟</li>
-            <li>在副本開啟「擴充功能 → Apps Script」</li>
-            <li>上方函式選單選 <code>installWizard_Init</code> → 執行。第一次會要求授權：選自己的帳號 →「進階 → 前往（不安全）」→ 允許（這是你自己的副本，不會分享給任何人）</li>
-            <li>回到試算表《設定》分頁，填好需要的欄位（時區、券商、FinMind Token 等），再執行 <code>installWizard_Apply</code> 建立各工作表</li>
-            <li>右上角「部署 → 新增部署作業」→ 類型選「網頁應用程式」→ 執行身分：<b>我</b>、存取權：<b>任何人</b> → 部署</li>
-            <li>複製產生的「網頁應用程式網址」（結尾是 /exec）</li>
-            <li>回到 Apps Script 執行 <code>setupAllSuggestedTriggers_SAFE</code>，建立每日排程與自動更新</li>
-          </ol>
-          <div style="font-weight:700;color:#588157;margin-bottom:4px">二、在本頁完成設定</div>
-          <ol style="list-style:decimal;padding-left:20px;margin:0 0 12px">
-            <li>點上方「首次設定」，貼上剛剛的網址</li>
-            <li>自訂帳號與密碼 → 完成設定並登入</li>
-            <li><b>部署完請立刻完成這一步</b>：還沒設定帳號的後端，第一個設定的人就會成為擁有者</li>
-            <li>換手機或電腦時：同樣到「首次設定」貼網址 →「只儲存網址」→ 再用「登入」</li>
-          </ol>
-          <div style="font-weight:700;color:#588157;margin-bottom:4px">三、自動功能（選用）</div>
-          <ul style="list-style:disc;padding-left:20px;margin:0 0 12px">
-            <li>自動擷取 Gmail 成交回報：在 Gmail 建立標籤並套用到券商成交信，再把標籤名稱填進《設定》</li>
-            <li>每日自動更新庫存、損益、股利：在 Apps Script 執行一次 <code>setupAllSuggestedTriggers_SAFE</code></li>
-            <li>自動股利需要 FinMind Token（finmindtrade.com 免費申請）</li>
-            <li>加密 PDF 對帳單需要自己的 Cloud Run 解鎖服務；沒有的話只用 HTML 成交回報信即可</li>
-          </ul>
-          <div style="font-weight:700;color:#588157;margin-bottom:4px">四、更新到新版本</div>
-          <div style="margin:0 0 12px"><b>會自動更新</b>，不需要做任何事：新版本發布 1 天後自動生效（網址不變、資料不受影響）。想馬上用新版，可以到「設定 → 自動更新」按「立即套用最新版」。<br>
-          2026/10/10 以前建立的副本需要換一次新版殼程式（之後就會自動）：重新從範本建立副本最簡單；或照下面步驟手動更新程式庫：
-          <ol style="list-style:decimal;padding-left:20px;margin:4px 0 0;line-height:1.8">
-            <li>開啟你的試算表 →「擴充功能 → Apps Script」</li>
-            <li>左側「程式庫」點 <b>FinLib</b> → 版本選最新 → 儲存</li>
-            <li>右上「部署 → 管理部署作業」→ 鉛筆圖示 → 版本選「新版本」→ 部署（網址不會變）</li>
-          </ol>
-          </div>
-          <div style="font-weight:700;color:#588157;margin-bottom:4px">忘記密碼</div>
-          <ul style="list-style:disc;padding-left:20px;margin:0">
-            <li>到自己的 Apps Script →「專案設定 → 指令碼屬性」，刪除 <code>APP_USER</code> 和 <code>APP_PASSWORD</code>，再回本頁「首次設定」重設</li>
-          </ul>
+
+          <div class="sop-h">一、建立自己的試算表與後端（約 10 分鐘）</div>
+          <details class="sop-step"><summary><span class="sop-n">1</span>建立範本副本</summary><div class="sop-body">
+            <ul>
+              <li>用自己的 Google 帳號打開 <a href="https://docs.google.com/spreadsheets/d/1r39mSkFwr6uVsofeOl1VvP3krzSKIN1p3IT0x0gwqq8/copy" target="_blank" rel="noopener" style="color:#bc6c25;font-weight:700">範本試算表（建立副本）</a>，按「建立副本」</li>
+              <li>副本會連同後端程式一起複製到你的雲端硬碟</li>
+            </ul></div></details>
+          <details class="sop-step"><summary><span class="sop-n">2</span>執行安裝精靈、授權</summary><div class="sop-body">
+            <ul>
+              <li>在副本開啟「擴充功能 → Apps Script」</li>
+              <li>上方函式選單選 <code>installWizard_Init</code> → 執行</li>
+              <li>第一次會要求授權：選自己的帳號 →「進階 → 前往（不安全）」→ 允許（這是你自己的副本，不會分享給任何人）</li>
+            </ul></div></details>
+          <details class="sop-step"><summary><span class="sop-n">3</span>填《設定》並建立工作表</summary><div class="sop-body">
+            <ul>
+              <li>回到試算表《設定》分頁，填好時區、券商、手續費折數、FinMind Token 等</li>
+              <li>Gmail 相關欄位可以先空著，之後照「二、自動擷取 Gmail」再填</li>
+              <li>回 Apps Script 執行 <code>installWizard_Apply</code> 建立各工作表</li>
+            </ul></div></details>
+          <details class="sop-step"><summary><span class="sop-n">4</span>部署成網頁應用程式</summary><div class="sop-body">
+            <ul>
+              <li>Apps Script 右上角「部署 → 新增部署作業」→ 類型選「網頁應用程式」</li>
+              <li>執行身分：<b>我</b>、存取權：<b>任何人</b> → 部署</li>
+              <li>複製產生的「網頁應用程式網址」（結尾是 /exec）</li>
+            </ul></div></details>
+          <details class="sop-step"><summary><span class="sop-n">5</span>建立每日排程</summary><div class="sop-body">
+            <ul>
+              <li>在 Apps Script 執行一次 <code>setupAllSuggestedTriggers_SAFE</code></li>
+              <li>之後每天會自動擷取 Gmail、更新庫存、損益、股利，每月 1 號寄月報</li>
+            </ul></div></details>
+          <details class="sop-step"><summary><span class="sop-n">6</span>在本頁設定帳號密碼</summary><div class="sop-body">
+            <ul>
+              <li>點上方「首次設定」，貼上剛剛的網址，自訂帳號與密碼 → 完成設定並登入</li>
+              <li><b>部署完請立刻完成這一步</b>：還沒設定帳號的後端，第一個設定的人就會成為擁有者</li>
+              <li>換手機或電腦時：到「首次設定」貼網址 →「只儲存網址」→ 再用「登入」</li>
+            </ul></div></details>
+
+          <div class="sop-h">二、自動擷取 Gmail（選用）</div>
+          <div style="font-size:12px;color:#777;margin:-2px 0 8px">兩種可以只開一種，也可以都開。每天 18:00 用<b>你自己的</b> Google 帳號讀<b>你自己的</b>信箱，信件內容不會經過別人。</div>
+          <details class="sop-step"><summary><span class="sop-n">A</span>抓取信件內的純文字（成交回報）<span class="sop-tag">建議</span></summary><div class="sop-body">
+            <div style="font-size:12px;color:#777;margin-bottom:4px">適用券商寄來、內文直接寫成交明細的「成交回報」信。不需要其他服務。</div>
+            <div class="sop-sub">前置作業</div>
+            <ol>
+              <li>在 Gmail 建立一個標籤，例如「成交回報」</li>
+              <li>建立篩選器：寄件者填券商的成交回報信箱 →「套用標籤：成交回報」（也勾「套用到符合的郵件」，把舊信一起貼上）</li>
+              <li>App「設定 → Gmail 擷取」的「HTML 郵件標籤」填 <code>成交回報</code></li>
+              <li>「往回搜尋天數」維持 7 即可；想補抓更早的信可暫時調大，抓完再改回</li>
+              <li>到「設定 → 手動執行 → 擷取信件」測試一次，新的交易會出現在「待確認交易」</li>
+            </ol></div></details>
+          <details class="sop-step"><summary><span class="sop-n">B</span>抓取信件內的 PDF 內容（加密對帳單）<span class="sop-tag gray">進階</span></summary><div class="sop-body">
+            <div style="background:#fff8e6;border:1px solid #f0d9a0;border-radius:8px;padding:8px 10px;color:#7a5a12;font-size:12px;margin-bottom:6px">
+              ⚠️ <b>請注意定期定額的交易是不是只會出現在 PDF</b>：有些券商的定期定額扣款不會寄成交回報信，只會列在每月的 PDF 對帳單裡。先翻一下自己的信箱確認，如果成交回報信裡就有，只開 A 就夠了；只有 PDF 才有的話，不開 B 就要手動「新增交易」。
+            </div>
+            <div class="sop-sub">前置作業</div>
+            <ol>
+              <li>需要一個<b>自己的</b>「PDF 解鎖服務」（Google Cloud Run）：登入後到「設定」頁最下面，有<b>一鍵部署</b>按鈕和完整步驟（需要 Google Cloud 帳號並綁定信用卡，每天跑一次通常免費）</li>
+              <li>不要用別人的 Cloud Run：對帳單和解鎖密碼都會傳過去，等於把資料交給對方</li>
+              <li>在 Gmail 建立標籤，例如「對帳單」，用篩選器把券商的 PDF 對帳單信自動貼上</li>
+              <li>App「設定 → Gmail 擷取」的「PDF 郵件標籤」填 <code>對帳單</code></li>
+              <li>「設定 → 基本設定 → 解鎖對帳單密碼」填 PDF 的開啟密碼（通常是身分證字號）</li>
+              <li>有定期定額的話，到「設定 → 定期定額」填 PDF 裡的中文名稱（例：國泰永續高股息）、股票代碼與開始日</li>
+              <li>同一筆交易若 A、B 都抓到，系統會自動去重，不會重複記錄</li>
+            </ol></div></details>
+
+          <div class="sop-h">三、其他</div>
+          <details class="sop-step"><summary><span class="sop-n"><i class="ph ph-arrow-circle-up"></i></span>更新到新版本</summary><div class="sop-body">
+            <ul>
+              <li><b>會自動更新</b>，不需要做任何事：新版本發布 1 天後自動生效（網址不變、資料不受影響）</li>
+              <li>想馬上用新版：「設定 → 自動更新」按「立即套用最新版」</li>
+              <li>2026/10/10 以前建立的副本需要換一次新版殼程式：重新從範本建立副本最簡單；或手動更新程式庫：
+                <ol style="margin-top:2px">
+                  <li>開啟試算表 →「擴充功能 → Apps Script」</li>
+                  <li>左側「程式庫」點 <b>FinLib</b> → 版本選最新 → 儲存</li>
+                  <li>右上「部署 → 管理部署作業」→ 鉛筆圖示 → 版本選「新版本」→ 部署（網址不會變）</li>
+                </ol></li>
+            </ul></div></details>
+          <details class="sop-step"><summary><span class="sop-n"><i class="ph ph-plant"></i></span>自動更新股利</summary><div class="sop-body">
+            <ul>
+              <li>到 finmindtrade.com 免費申請 Token，填進試算表《設定》的 <code>FINMIND_TOKEN</code></li>
+              <li>每日排程（步驟 5）建立後就會自動抓</li>
+            </ul></div></details>
+          <details class="sop-step"><summary><span class="sop-n"><i class="ph ph-key"></i></span>忘記密碼</summary><div class="sop-body">
+            <ul>
+              <li>到自己的 Apps Script →「專案設定 → 指令碼屬性」，刪除 <code>APP_USER</code> 和 <code>APP_PASSWORD</code></li>
+              <li>再回本頁「首次設定」重設</li>
+            </ul></div></details>
         </div>
       </details>
     </div>
@@ -802,6 +875,71 @@
     </div>
 
 
+    <!-- ══ 題材清單（純前端靜態資料：topics.js） ══ -->
+    <div v-if="currentTab==='topics'" class="space-y-4">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:220px">
+            <h2 class="font-bold" style="font-size:20px;color:#344e41;display:flex;align-items:center;gap:8px"><i class="ph-fill ph-lightbulb" style="color:#dda15e"></i>台股題材清單</h2>
+            <p style="font-size:13px;color:#777;margin-top:6px;line-height:1.7">依「AI 算力鏈 → 電力基建 → 分散題材」分區；每個題材標示與 AI 資本支出的連動程度，方便檢查佈局是否過度集中。點題材可展開說明，點個股可看簡介<span v-if="topicsHeldCodes.size">，<span style="box-shadow:0 0 0 2px #dda15e;border-radius:4px;padding:0 3px">橘框</span>是你目前持有的</span>。</p>
+          </div>
+          <div style="font-size:12px;color:#aaa;white-space:nowrap">整理日期 {{ TOPICS_UPDATED }}</div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">
+          <div v-for="s in topicsSummary" :key="s.l" style="font-size:12px;color:#588157;padding:6px 12px;border-radius:12px;background:#f4f6f0"><b class="num-font" style="font-size:16px;color:#344e41;margin-right:4px">{{ s.v }}</b>{{ s.l }}</div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;align-items:center">
+          <span style="font-size:13px;color:#888;font-weight:700">AI 連動度</span>
+          <button v-for="f in [['all','全部'],['hi','高'],['mid','中'],['lo','低']]" :key="f[0]" @click="topicsFilter=f[0]" class="tp-filter" :class="topicsFilter===f[0]?'on':''">{{ f[1] }}</button>
+          <button @click="topicsToggleAll" class="tp-filter" style="margin-left:auto">{{ topicsAllOpen ? '全部收合' : '全部展開' }}</button>
+        </div>
+      </div>
+
+      <div v-for="g in topicsGroups" :key="g.group" class="card" style="padding:0;overflow:hidden">
+        <div style="padding:12px 18px;background:linear-gradient(to right,#eef3ea,#f7f9f4);border-bottom:1px solid #e6ebe2">
+          <div class="font-bold" style="font-size:15px;color:#344e41">{{ g.group }}</div>
+          <div style="font-size:12px;color:#888;margin-top:2px">{{ g.note }}</div>
+        </div>
+        <div v-for="t in g.items" :key="t.key" style="border-bottom:1px solid #f0efea" :style="topicsOpen[t.key]?'background:#fafcf8':''">
+          <div @click="topicsOpen[t.key]=!topicsOpen[t.key]" style="padding:14px 18px;cursor:pointer">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <i class="ph-bold ph-caret-right" style="font-size:13px;color:#588157;transition:transform .15s" :style="topicsOpen[t.key]?'transform:rotate(90deg)':''"></i>
+              <span class="font-bold" style="font-size:15px;color:#344e41">{{ t.topic }}</span>
+              <span v-if="t.note" style="font-size:12px;color:#999">（{{ t.note }}）</span>
+              <span class="tp-tag" :class="t.link">連動 {{ TOPICS_LINK[t.link] }}</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
+              <button v-for="st in t.stocks" :key="st[0]" @click.stop="openTopicStock(st, t)" class="tp-chip" :class="[st[1]?'':'ext', topicsHeldCodes.has(topicCode(st[0]))?'held':'']">{{ st[0] }}</button>
+            </div>
+            <div style="font-size:13.5px;color:#444;line-height:1.7;margin-top:10px">{{ t.desc }}</div>
+            <div style="font-size:12.5px;color:#888;line-height:1.65;margin-top:6px"><i class="ph ph-eye" style="margin-right:4px"></i>{{ t.watch }}</div>
+          </div>
+          <div v-if="topicsOpen[t.key] && t.intro" style="margin:0 18px 14px;padding:10px 14px;border-left:3px solid #588157;background:white;border-radius:0 10px 10px 0;font-size:13.5px;line-height:1.8;color:#444">{{ t.intro }}</div>
+        </div>
+      </div>
+
+      <div class="card" style="font-size:12px;color:#888;line-height:1.85">
+        <b style="color:#588157">連動度說明：</b>高＝營收與 AI 伺服器／AI 晶片出貨直接掛鉤，AI 資本支出放緩時一起回檔；中＝受惠 AI 但另有其他需求支撐（如台電標案、半導體擴廠）；低＝基本上與 AI 循環脫鉤，用於分散風險。<br>
+        <b style="color:#588157">使用提醒：</b>表中不附股價、本益比與目標價，這些數字變動太快，請以最新行情與財報為準。「龍頭／延伸」是依題材代表性排列，不是買進順序或評等。僅供研究參考，非投資建議。<br>
+        <b style="color:#588157">個股簡介：</b>只說明公司做什麼，不含財務數字；部分小型股描述較概略，請以公司公告與財報為準。
+      </div>
+
+      <transition name="fade">
+        <div v-if="topicStock" @click.self="topicStock=null" style="position:fixed;inset:0;background:rgba(52,78,65,.35);z-index:60;display:flex;align-items:flex-end;justify-content:center;padding:12px 12px calc(12px + var(--safe-bottom))">
+          <div class="card" style="width:100%;max-width:440px;position:relative;margin-bottom:70px">
+            <button @click="topicStock=null" style="position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.05);border:none;cursor:pointer;color:#588157"><i class="ph ph-x"></i></button>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-right:36px">
+              <span class="font-bold" style="font-size:16px;color:#344e41">{{ topicStock.name }}</span>
+              <span class="tp-tag" :style="topicStock.lead?'background:#eef3ea;color:#3a5a40':'background:#f2f1ec;color:#888'">{{ topicStock.lead ? '龍頭' : '延伸' }}</span>
+              <span v-if="topicStock.held" class="tp-tag" style="background:#fdf3e2;color:#a0661a">持有中</span>
+            </div>
+            <p style="font-size:14px;color:#444;line-height:1.8;margin-top:10px">{{ topicStock.info }}</p>
+            <div v-if="topicStock.others.length" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;font-size:12px;color:#888">同時列在：{{ topicStock.others.join('、') }}</div>
+          </div>
+        </div>
+      </transition>
+    </div>
+
     <!-- ══ 待確認交易 ══ -->
     <div v-if="currentTab==='pending'" class="space-y-4">
       <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-end">
@@ -1010,6 +1148,50 @@
           </div>
         </div>
       </template>
+      <!-- Cloud Run PDF 解鎖服務教學（選用） -->
+      <div class="settings-group sop" style="font-size:13px;color:#444;line-height:1.8">
+        <h3 class="section-title" style="margin-bottom:6px;display:flex;align-items:center;gap:8px"><span style="width:4px;height:22px;background:#9aab95;border-radius:2px;display:inline-block"></span>PDF 解鎖服務（Cloud Run）・選用</h3>
+        <p style="font-size:12px;color:#888;margin-bottom:12px">只有要自動抓「加密 PDF 對帳單」（例如只出現在 PDF 的定期定額）才需要。只用成交回報信的話可以略過。點各步驟看細節。</p>
+        <details class="sop-step"><summary><span class="sop-n"><i class="ph ph-info"></i></span>這是什麼、要花錢嗎</summary><div class="sop-body">
+          <ul>
+            <li>券商的 PDF 對帳單有密碼，Apps Script 自己打不開，所以需要一個小服務幫忙解鎖並把表格讀出來</li>
+            <li>服務架在<b>你自己的</b> Google Cloud，PDF 只在記憶體處理、不存檔，其他人（包含 App 作者）都看不到</li>
+            <li>Google Cloud 需要綁信用卡，但 Cloud Run 有每月免費額度，每天跑一次通常是 <b>0 元</b>；擔心的話可以在「帳單 → 預算與快訊」設一個小額提醒</li>
+            <li>程式碼公開在 <a href="https://github.com/danveloper99/finance-dashboard/tree/main/cloudrun" target="_blank" rel="noopener" style="color:#bc6c25;font-weight:700">GitHub 的 cloudrun 資料夾</a>，可以自己檢查</li>
+          </ul></div></details>
+        <details class="sop-step"><summary><span class="sop-n">1</span>準備 Google Cloud 專案</summary><div class="sop-body">
+          <ol>
+            <li>用自己的 Google 帳號打開 <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener" style="color:#bc6c25;font-weight:700">Google Cloud 主控台・建立專案</a>，第一次會要求同意服務條款</li>
+            <li>專案名稱隨意，例如 <code>pdf-unlock</code> → 建立</li>
+            <li>左上選單「帳單」→ 連結帳單帳戶（沒有的話依畫面新增信用卡）</li>
+          </ol></div></details>
+        <details class="sop-step"><summary><span class="sop-n">2</span>一鍵部署</summary><div class="sop-body">
+          <a href="https://deploy.cloud.run/?git_repo=https://github.com/danveloper99/finance-dashboard&dir=cloudrun" target="_blank" rel="noopener" style="display:inline-block;margin:4px 0 8px"><img src="https://deploy.cloud.run/button.svg" alt="Run on Google Cloud" style="height:32px"></a>
+          <ol>
+            <li>按上面的按鈕，會開啟 Google Cloud Shell（網頁版終端機）</li>
+            <li>跳出「信任此存放區？」→ 勾選信任 → 確認；要求授權時按「授權」</li>
+            <li>依提示選擇剛剛建立的專案；問到區域時選 <code>asia-east1</code>（台灣）</li>
+            <li>如果問要不要啟用 API（Cloud Run、Cloud Build 等），輸入 <code>y</code></li>
+            <li>等 3～5 分鐘，最後會顯示一個網址，像 <code>https://pdf-unlock-xxxxx.asia-east1.run.app</code>，複製起來</li>
+            <li>用瀏覽器打開這個網址，看到 <code>ok</code> 就代表服務正常</li>
+          </ol></div></details>
+        <details class="sop-step"><summary><span class="sop-n">3</span>填回本頁設定</summary><div class="sop-body">
+          <ol>
+            <li>上面「Gmail 擷取 → Cloud Run 網址」貼上剛剛的網址</li>
+            <li>「PDF 郵件標籤」填 Gmail 裡 PDF 對帳單信的標籤（要先在 Gmail 用篩選器自動貼上）</li>
+            <li>「基本設定 → 解鎖對帳單密碼」填 PDF 開啟密碼（通常是身分證字號）</li>
+            <li>有定期定額的話，「定期定額」區塊填 PDF 裡的中文名稱、股票代碼與開始日</li>
+            <li>按右下「儲存」</li>
+          </ol></div></details>
+        <details class="sop-step"><summary><span class="sop-n">4</span>測試與疑難排解</summary><div class="sop-body">
+          <ul>
+            <li>「手動執行 → 擷取信件」，PDF 裡的交易會出現在「待確認交易」</li>
+            <li>第一次呼叫服務要「冷啟動」，可能等 10～30 秒，系統會自動重試</li>
+            <li>出現「密碼錯誤」：檢查解鎖對帳單密碼（英文字母大小寫也要一樣）</li>
+            <li>抓不到交易：可能是券商 PDF 格式不同，到「錯誤通知紀錄」看訊息</li>
+            <li>不想用了：到 Google Cloud 主控台「Cloud Run」刪除服務，並把本頁 Cloud Run 網址清空</li>
+          </ul></div></details>
+      </div>
       <div v-if="!settingsLoading" class="save-fab"><button @click="saveSettings" style="background:#3a5a40;color:white;box-shadow:0 8px 24px rgba(58,90,64,.4);border-radius:9999px;padding:14px 24px;display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;transition:all .2s;border:none;cursor:pointer"><i class="ph ph-floppy-disk" style="font-size:22px"></i> 儲存變更</button></div>
     </div>
 
@@ -1223,13 +1405,14 @@
 
 </div>
 
+<script src="topics.js"></script>
 <script>
 const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
 
 // ── fetch 包裝：呼叫 GAS doPost ──────────────────────────────
 const AUTH_TOKEN_KEY = 'auth_token';
 // 最新後端（程式庫）版本：要和 WebAPI.js 的 APP_VERSION 一起改
-const LATEST_BACKEND_VERSION = 11;
+const LATEST_BACKEND_VERSION = 12;
 let onAuthExpired_ = null; // Vue 掛載後設定：Token 失效時切回登入畫面
 async function callGAS(action, args = []) {
   const url = getGasUrl();
@@ -1361,6 +1544,7 @@ createApp({
       { id:'analysis',  name:'市場分析',  icon:'ph-robot' },
       { id:'pending',   name:'待確認交易',icon:'ph-clock-countdown' },
       { id:'wealth',    name:'資產追蹤',  icon:'ph-piggy-bank' },
+      { id:'topics',    name:'題材清單',  icon:'ph-lightbulb' },
       { id:'settings',  name:'設定',      icon:'ph-gear' },
     ];
     const bottomTabs = [
@@ -1387,6 +1571,46 @@ createApp({
     const fmtInt = v => { if (v==null||v==='') return '0'; const n=parseFloat(v); return isNaN(n)?'0':new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(n); };
     const fmtDec = v => { if (v==null||v==='') return '0.00'; const n=parseFloat(v); return isNaN(n)?'0.00':new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n); };
 
+    // ── 題材清單 ──
+    const TOPICS_DATA = window.TOPICS_DATA || [], TOPICS_INTRO = window.TOPICS_INTRO || {}, TOPICS_INFO = window.TOPICS_INFO || {};
+    const TOPICS_LINK = window.TOPICS_LINK || {}, TOPICS_UPDATED = window.TOPICS_UPDATED || '';
+    const topicCode = n => (String(n).match(/\((\d+)\)/) || [])[1] || '';
+    const topicLabel = t => t.topic + (t.note ? '（' + t.note + '）' : '');
+    const topicsAll = TOPICS_DATA.filter(d => !d.group).map((t, i) => ({ ...t, key: 'tp' + i, intro: TOPICS_INTRO[t.topic + '|' + t.note] || TOPICS_INTRO[t.topic] || '' }));
+    const topicsAppears = {};
+    topicsAll.forEach(t => t.stocks.forEach(st => { const c = topicCode(st[0]); (topicsAppears[c] = topicsAppears[c] || []).push(topicLabel(t)); }));
+    const topicsFilter = ref('all');
+    const topicsOpen = ref({});
+    const topicStock = ref(null);
+    const topicsHeldCodes = ref(new Set());
+    let topicsHeldLoaded = false;
+    const topicsGroups = computed(() => {
+      const out = []; let cur = null, i = 0;
+      TOPICS_DATA.forEach(d => {
+        if (d.group) { cur = { group: d.group, note: d.note || '', items: [] }; out.push(cur); return; }
+        const t = topicsAll[i++];
+        if (topicsFilter.value === 'all' || t.link === topicsFilter.value) cur.items.push(t);
+      });
+      return out.filter(g => g.items.length);
+    });
+    const topicsSummary = computed(() => {
+      const names = new Set(); topicsAll.forEach(t => t.stocks.forEach(st => names.add(st[0])));
+      const cnt = k => topicsAll.filter(t => t.link === k).length;
+      const rows = [{ v: topicsAll.length, l: '個題材' }, { v: names.size, l: '檔個股' }, { v: cnt('hi'), l: '高連動' }, { v: cnt('mid'), l: '中連動' }, { v: cnt('lo'), l: '低連動' }];
+      if (topicsHeldCodes.value.size) rows.push({ v: [...names].filter(n => topicsHeldCodes.value.has(topicCode(n))).length, l: '檔你有持有' });
+      return rows;
+    });
+    const topicsAllOpen = computed(() => topicsGroups.value.every(g => g.items.every(t => topicsOpen.value[t.key])));
+    const topicsToggleAll = () => {
+      const open = !topicsAllOpen.value, o = { ...topicsOpen.value };
+      topicsGroups.value.forEach(g => g.items.forEach(t => { o[t.key] = open; }));
+      topicsOpen.value = o;
+    };
+    const openTopicStock = (st, t) => {
+      const code = topicCode(st[0]);
+      topicStock.value = { name: st[0], lead: !!st[1], held: topicsHeldCodes.value.has(code), info: TOPICS_INFO[code] || '尚未補充簡介。', others: (topicsAppears[code] || []).filter(l => l !== topicLabel(t)) };
+    };
+
     const selectTab = id => { currentTab.value=id; isMobileSidebarOpen.value=false; };
     watch(currentTab, v => { localStorage.setItem('last_tab',v); searchText.value=''; loadData(v); });
 
@@ -1412,6 +1636,12 @@ createApp({
           analysisLoading.value=false;
         } else if (tab==='pending') {
           await loadPending();
+        } else if (tab==='topics') {
+          if (!topicsHeldLoaded) {
+            topicsHeldLoaded = true;
+            const res = await callGAS('api_getDataList',['holdings']);
+            if (res && res.ok) topicsHeldCodes.value = new Set((res.data||[]).map(r => String(r['股票代碼']||'').trim()).filter(Boolean));
+          }
         } else if (tab==='wealth') {
           wealthLoading.value=true;
           const res = await callGAS('api_getWealth');
@@ -2722,6 +2952,7 @@ createApp({
       dashboard,listData,holdingsConfig,settingsData,settingsSchema,settingsLoading,
       showDetailModal,currentDetailStock,currentDetailList,detailType,
       tabs,bottomTabs,actionFunctions,selectTab,loadData,
+      TOPICS_LINK,TOPICS_UPDATED,topicsFilter,topicsOpen,topicStock,topicsHeldCodes,topicsGroups,topicsSummary,topicsAllOpen,topicsToggleAll,openTopicStock,topicCode,
       authState,authUser,backendVersion,backendAutoUpdate,updateInfo,updateRunning,runAutoUpdateNow,backendOutdated,updateBannerClosed,LATEST_BACKEND_VERSION,authForm,authMsg,authBusy,shortGasUrl,doLogin,doSetup,useGasUrlOnly,logout,pwdForm,changeMyPassword,
       realizedFilter,realizedHeaders,uniqueYears,uniqueMonths,filteredRealizedList,filteredRealizedTotal,sortBy,sortKey,sortOrder,realizedColAlign,
       realizedChartFilterOpen,realizedChartSymbolSet,realizedChartYearSet,realizedAllSymbols,realizedAllChartYears,realizedMonthlyChartData,

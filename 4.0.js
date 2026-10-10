@@ -28,7 +28,7 @@ function installWizard_Init() {
   const rows = [
     ['TZ', 'Asia/Taipei', '時區（IANA 格式），例：Asia/Taipei、America/Los_Angeles。影響日期格式與排程時區。'],
     ['GMAIL_LABEL_HTML', '', '【HTML信件】單純內文解析的標籤名稱（無加密PDF）。'],
-    ['GMAIL_LABEL_PDF',  '',  '【PDF信件】含有加密 PDF 附件的標籤名稱（需 Cloud Run 解鎖）。'],
+    ['GMAIL_LABEL_PDF',  '',  '【PDF信件・選填】含有加密 PDF 附件的標籤名稱（需 Cloud Run 解鎖）。留空＝不抓 PDF。'],
     ['GMAIL_QUERY_DAYS', '7', '往回撈幾天的郵件。整數，例：7。'],
     
     // --- 🆕 券商設定 ---
@@ -39,8 +39,8 @@ function installWizard_Init() {
     ['BROKER_2_DISCOUNT', '0.6', '【券商】第二券商手續費折數 (0~1)。'],
     // ------------------
 
-    ['ID_NUMBER', '', '【必要】身分證字號（用於 PDF 解鎖密碼）。'],
-    ['CLOUD_RUN_URL', '', '【必要】Google Cloud Run 服務網址（https://...）。'],
+    ['ID_NUMBER', '', '【選填】PDF 對帳單開啟密碼（通常是身分證字號）。不抓 PDF 可留空。'],
+    ['CLOUD_RUN_URL', '', '【選填】PDF 解鎖服務（Cloud Run）網址。不抓 PDF 可留空；部署教學在 App「設定」頁最下面。'],
     ['SHEET_TRADES', '交易紀錄', '交易紀錄分頁名稱（可自訂，但需與其它設定一致）。'],
     ['SHEET_HOLD', '庫存紀錄', '庫存紀錄分頁名稱。'],
     ['SHEET_OPENING', '期初庫存', '期初庫存分頁名稱（表頭與庫存相同）。'],
@@ -2686,6 +2686,30 @@ function dailyDataMaintenance_() {
   Logger.log(`📋 每日資料維護完成：對照表自動學到新代碼 ${learned} 筆、補上缺代碼 ${filled} 筆、修正代碼格式 ${fixed} 筆。`);
   // 順便確保月報排程存在（舊使用者不用重跑 setupAllSuggestedTriggers_SAFE）
   try { ensureMonthlyReportTrigger_(); } catch (e) { Logger.log('月報排程檢查失敗：' + e.message); }
+  try { fixSettingDescriptions_(); } catch (e) { Logger.log('設定說明更新失敗：' + e.message); }
+}
+
+/**
+ * 舊試算表《設定》C 欄（說明）的過時文字換成新版；只動說明欄，不動值。
+ * 只有說明仍是舊文字時才改，使用者自己改過的不碰。
+ */
+function fixSettingDescriptions_() {
+  const sh = getSS_().getSheetByName('設定');
+  if (!sh || sh.getLastRow() < 2) return 0;
+  const NEW = {
+    GMAIL_LABEL_PDF: ['【PDF信件】含有加密 PDF 附件的標籤名稱（需 Cloud Run 解鎖）。', '【PDF信件・選填】含有加密 PDF 附件的標籤名稱（需 Cloud Run 解鎖）。留空＝不抓 PDF。'],
+    ID_NUMBER:       ['【必要】身分證字號（用於 PDF 解鎖密碼）。', '【選填】PDF 對帳單開啟密碼（通常是身分證字號）。不抓 PDF 可留空。'],
+    CLOUD_RUN_URL:   ['【必要】Google Cloud Run 服務網址（https://...）。', '【選填】PDF 解鎖服務（Cloud Run）網址。不抓 PDF 可留空；部署教學在 App「設定」頁最下面。'],
+  };
+  const n = sh.getLastRow() - 1;
+  const keys = sh.getRange(2, 1, n, 1).getValues();
+  const descs = sh.getRange(2, 3, n, 1).getValues();
+  let changed = 0;
+  keys.forEach((k, i) => {
+    const pair = NEW[String(k[0]).trim()];
+    if (pair && String(descs[i][0]).trim() === pair[0]) { sh.getRange(i + 2, 3).setValue(pair[1]); changed++; }
+  });
+  return changed;
 }
 
 /**

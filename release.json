@@ -1,10 +1,11 @@
 {
   "current": {
-    "version": 11,
-    "releasedAt": "2026-10-09T23:52:24+08:00",
-    "notes": "月報加近 12 個月獲利與總資產圖；立即套用最新版按鈕修正",
-    "immediate": true
+    "version": 12,
+    "releasedAt": "2026-10-10T13:36:55+08:00",
+    "notes": "設定說明 Cloud Run/身分證改為選填；PDF 解鎖服務一鍵部署教學"
   },
-  "previous": null,
+  "previous": {
+    "version": 11
+  },
   "libVersion": 9
 }
