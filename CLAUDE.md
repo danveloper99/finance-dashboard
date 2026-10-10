@@ -79,6 +79,12 @@ clasp deploy --deploymentId AKfycbzrFTtWxBH1aisKKkXWihYFittWQwUGldnjJTo3YE-jXonP
 - 已是增量設計，`existingDivKeys` 去重，不會重複寫入
 - 分批處理（每次 `DIV_SYMBOLS_PER_RUN` 檔），大量股票透過 `runDividendsFullCycle_SAFE` 自動接力
 
+### AI 市場分析（v13）
+- `runMarketAnalysis_`（4.0.js）：FinMind 抓數字（`stockMetrics_`）→ Gemini＋Google 搜尋整理消息面與熱門股 → Gemini（JSON 模式、不開搜尋）只用前面的數字與新聞判斷加碼／持有／減碼
+- 原則：**數字由程式算，AI 只解讀**；題材連動度讀 GitHub Pages 的 `topics.js`；結果以 JSON（`{"v":2,...}`）存在《市場分析紀錄》
+- 排程 `marketReport_SAFE`：《設定》`MARKET_REPORT_SCHEDULE`（每週一／每天／關閉）、`MARKET_REPORT_HOUR`，沒有 Gemini Key 不建立
+- Gemini 免費版超量回 429（不收費），程式轉成友善訊息
+
 ### 設定頁面
 - 前端設定頁由 `api_getSettingsSchema` 的 schema 動態渲染
 - Schema 全部使用 `group` 結構（含 `icon` 屬性）

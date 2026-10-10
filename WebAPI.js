@@ -42,7 +42,7 @@ function makeToken_(pwd) {
  * 後端版本號：每次發布新的程式庫版本時 +1，並同步修改 index.html 的 LATEST_BACKEND_VERSION。
  * 前端會用它判斷朋友的後端是否過舊、需要更新程式庫版本。
  */
-var APP_VERSION = 12;
+var APP_VERSION = 13;
 
 /**
  * 帳號：每份後端（每個人用自己 Google 帳號部署的 GAS）只有一組帳號
@@ -260,6 +260,12 @@ function api_getSettingsSchema() {
       { key: 'ALERT_ENABLED', label: '啟用錯誤通知', type: 'select', options: ['TRUE', 'FALSE'] },
       { key: 'MONTHLY_REPORT_ENABLED', label: '每月月報（1 號早上寄上個月摘要）', type: 'select', options: ['TRUE', 'FALSE'] },
     ]},
+    { group: 'AI 市場分析排程', icon: 'ph-robot',
+      desc: '定時執行市場分析（消息面＋持股加減碼＋熱門個股）並寄到通知 Email。需要先在「市場分析」頁儲存 Gemini API Key；Gemini 免費額度用完只會暫停，不會收費。',
+      items: [
+      { key: 'MARKET_REPORT_SCHEDULE', label: '執行頻率', type: 'select', options: ['每週一', '每天', '關閉'] },
+      { key: 'MARKET_REPORT_HOUR',     label: '執行時間（0～23 點，台北時間）', type: 'number', placeholder: '7' },
+    ]},
   ];
 
   const dcaDesc = '設定一組定期定額標的。填入 PDF 信件中出現的關鍵字（用於識別此標的）、股票代碼與投資期間，系統會自動彙整累計股數、平均成本與殖利率。';
@@ -288,7 +294,7 @@ function api_saveSettings(newValues) {
   data.forEach(([k], i) => { if (k) keyMap.set(String(k).trim(), i); });
 
   let changed = false;
-  const NEW_KEYS = new Set(['MONTHLY_REPORT_ENABLED', 'AUTO_UPDATE']); // schema 新增、舊試算表還沒有的 key
+  const NEW_KEYS = new Set(['MONTHLY_REPORT_ENABLED', 'AUTO_UPDATE', 'MARKET_REPORT_SCHEDULE', 'MARKET_REPORT_HOUR']); // schema 新增、舊試算表還沒有的 key
   const toAppend = [];
   Object.entries(newValues).forEach(([key, val]) => {
     if (keyMap.has(key)) { data[keyMap.get(key)][1] = val; changed = true; }
@@ -305,6 +311,7 @@ function api_saveSettings(newValues) {
     });
     sh.getRange(2, 2, data.length, 1).setValues(data.map(r => [r[1]]));
   }
+  try { ensureMarketReportTrigger_(); } catch (e) { Logger.log('市場分析排程：' + e.message); }
   return { ok: true, msg: '設定已儲存' };
 }
 
@@ -445,6 +452,22 @@ function api_callGemini(prompt, images) {
     if (!text) return { ok: false, msg: 'Gemini 回傳空白內容，請稍後再試' };
 
     return { ok: true, text, finishReason };
+  } catch (e) {
+    return { ok: false, msg: e.message };
+  }
+}
+
+/**
+ * 新版市場分析（v13）：數字由 FinMind、新聞由 Gemini 搜尋，再由 Gemini 整合判斷
+ * opts: { notes: 使用者補充資訊, email: true 時順便寄一份到通知 Email }
+ */
+function api_runMarketAnalysis(opts) {
+  opts = opts || {};
+  try {
+    const result = runMarketAnalysis_(String(opts.notes || '').slice(0, 3000));
+    let mail = null;
+    if (opts.email) { try { mail = sendMarketReportMail_(result); } catch (e) { result.errors.push('寄信失敗：' + e.message); } }
+    return { ok: true, result, mail };
   } catch (e) {
     return { ok: false, msg: e.message };
   }
@@ -1186,6 +1209,7 @@ function api_getGeminiKeyStatus() {
 function api_saveGeminiKey(key) {
   if (!key) return { ok: false, msg: 'Key 不能為空' };
   getProps_().setProperty('GEMINI_API_KEY', key.trim());
+  try { ensureMarketReportTrigger_(); } catch (e) { Logger.log('市場分析排程：' + e.message); }
   return { ok: true };
 }
 
@@ -1332,7 +1356,7 @@ function doPost(e) {
       'api_saveSettings', 'api_getHoldingsForAnalysis', 'api_callGemini',
       'api_saveAnalysis', 'api_getAnalysisHistory', 'api_getGeminiKeyStatus',
       'api_saveGeminiKey',
-      'api_setupWealthTrigger', 'api_sendMonthlyReport', 'api_getUpdateStatus', 'api_runAutoUpdate',
+      'api_setupWealthTrigger', 'api_sendMonthlyReport','api_runMarketAnalysis', 'api_getUpdateStatus', 'api_runAutoUpdate',
       'api_getWealth', 'api_saveWealthConfig', 'api_saveWealthSnapshotV2', 'api_deleteWealthBook',
       'ingestFromGmail_Plaintext_SAFE', 'rebuildAll_B_SAFE',
       'api_runDividendsUpdate', 'appendDCAFromHoldings_SAFE',

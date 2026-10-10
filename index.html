@@ -81,6 +81,11 @@
     .sop-body ul{list-style:disc;padding-left:16px;margin:0}
     .sop-body ol{list-style:decimal;padding-left:18px;margin:0}
     .sop-sub{font-weight:700;color:#588157;font-size:12px;margin:6px 0 2px}
+    .mk-chip{display:inline-block;font-size:12px;padding:2px 9px;border-radius:8px;background:#f4f6f0;color:#555;white-space:nowrap}
+    .mk-chip.up{background:#fdf1e6;color:#a0561a}.mk-chip.down{background:#eaf3ea;color:#3a7a45}
+    .mk-pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 10px;border-radius:999px;white-space:nowrap;background:#f2f1ec;color:#777}
+    .mk-pill.sm{font-size:11px;padding:1px 7px;height:fit-content}
+    .mk-pill.up{background:#bc6c25;color:white}.mk-pill.down{background:#588157;color:white}.mk-pill.neu{background:#e9e7df;color:#666}
     .no-scrollbar::-webkit-scrollbar{display:none}
     .no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
     .fade-enter-active,.fade-leave-active{transition:opacity .25s}
@@ -657,8 +662,123 @@
       </div>
     </div>
 
-    <!-- ══ 市場分析 ══ -->
-    <div v-if="currentTab==='analysis'" class="space-y-5">
+    <!-- ══ 市場分析（新版：後端 v13 起） ══ -->
+    <div v-if="currentTab==='analysis' && backendVersion>=13" class="space-y-4">
+      <div>
+        <h2 class="page-title">市場分析</h2>
+        <p style="color:#588157;font-size:13px;margin-top:4px">持股健檢・消息面・加減碼參考・市場熱門個股</p>
+        <p style="font-size:11px;color:#999;margin-top:4px">AI 整理的參考資訊，不是投資建議。數字來自 FinMind，新聞由 Gemini 搜尋；最後決定請自己判斷。</p>
+      </div>
+
+      <div class="card" style="padding:16px 18px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><i class="ph ph-key" style="font-size:18px;color:#3a5a40"></i><span style="font-weight:700;font-size:14px;color:#3a5a40">Gemini API Key</span>
+          <span v-if="GeminiKeyStatus.hasKey" style="font-size:11px;font-weight:700;color:#16a34a;background:#f0fdf4;padding:2px 8px;border-radius:999px">已設定 {{ GeminiKeyStatus.masked }}</span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><input v-model="GeminiKeyInput" type="password" class="input-custom" placeholder="AIza..." style="flex:1;min-width:200px"><button @click="saveGeminiKey" class="btn btn-primary" style="white-space:nowrap;font-size:13px">儲存</button></div>
+        <p style="font-size:11px;color:#999;margin-top:8px;line-height:1.7">到 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:#bc6c25;font-weight:700">Google AI Studio</a> 免費申請。免費版額度用完只會暫停到隔天，<b>不會收費</b>；請不要在有綁信用卡的 Google Cloud 專案（例如 Cloud Run 那個）裡建立 Key，那樣會變成付費方案。</p>
+      </div>
+
+      <div class="card" style="padding:16px 18px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><i class="ph ph-note-pencil" style="font-size:16px;color:#3a5a40"></i><span style="font-weight:700;font-size:13px;color:#3a5a40">想讓 AI 特別注意的事（選填）</span></div>
+        <textarea v-model="userNotes" class="input-custom" rows="2" style="resize:vertical;font-size:13px;line-height:1.7" placeholder="例：我在考慮加碼高股息、最近很在意美國關稅…"></textarea>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#588157;cursor:pointer"><input type="checkbox" v-model="mkEmail"> 同時寄一份到通知 Email</label>
+          <button @click="runMarketAnalysis2" :disabled="mkRunning" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:8px;font-size:14px">
+            <i :class="mkRunning?'ph ph-spinner spin':'ph ph-sparkle'"></i>{{ mkRunning ? '分析中（約 1～2 分鐘）…' : '開始分析' }}</button>
+        </div>
+        <div v-if="mkMsg" style="margin-top:10px;padding:8px 12px;border-radius:10px;font-size:13px;font-weight:600;line-height:1.6" :style="mkError?'background:#fef2f2;color:#dc2626':'background:#f0fdf4;color:#16a34a'">{{ mkMsg }}</div>
+        <p style="font-size:11px;color:#aaa;margin-top:8px">定時自動分析（預設每週一 07:30 寄信）可在「設定 → AI 市場分析排程」調整或關閉。</p>
+      </div>
+
+      <template v-if="mkResult">
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#888"><i class="ph ph-clock"></i>{{ mkResult.ts }} 的分析<span v-if="mkHistoryV2.length>1">・</span>
+          <select v-if="mkHistoryV2.length>1" @change="e=>mkResult=mkHistoryV2[+e.target.value].data" style="font-size:12px;border:1px solid #dad7cd;border-radius:8px;padding:2px 6px;background:white;color:#588157">
+            <option v-for="(h,i) in mkHistoryV2" :key="i" :value="i" :selected="h.data===mkResult">{{ h.ts }}</option></select></div>
+        <div v-if="mkResult.errors && mkResult.errors.length" style="padding:10px 14px;border-radius:12px;background:#fff8e6;border:1px solid #f0d9a0;color:#7a5a12;font-size:12px;line-height:1.7"><div v-for="e in mkResult.errors" :key="e">⚠ {{ e }}</div></div>
+
+        <!-- 大盤與國際局勢 -->
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span class="font-bold" style="font-size:16px;color:#344e41"><i class="ph ph-globe-hemisphere-east" style="color:#588157"></i> 大盤與國際局勢</span>
+            <span class="mk-pill" :class="mkSigCls(mkResult.marketSignal)">{{ mkResult.marketSignal }}</span>
+          </div>
+          <p style="font-size:14px;color:#444;line-height:1.8;margin-top:10px">{{ mkResult.marketSummary }}</p>
+          <div v-if="mkResult.market && mkResult.market.close" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
+            <span class="mk-chip">加權指數 {{ fmtInt(mkResult.market.close) }}</span>
+            <span v-for="c in mkChips(mkResult.market)" :key="c.t" class="mk-chip" :class="c.c">{{ c.t }}</span>
+            <span v-if="mkResult.market.foreign5dYi!=null" class="mk-chip" :class="mkResult.market.foreign5dYi>0?'up':'down'">外資 5 日 {{ mkResult.market.foreign5dYi>0?'+':'' }}{{ mkResult.market.foreign5dYi }} 億</span>
+          </div>
+          <div v-for="(sec,si) in [['國際',mkResult.global],['台股',mkResult.taiwan]]" :key="si" style="margin-top:12px">
+            <div style="font-size:12px;font-weight:700;color:#588157;margin-bottom:4px">{{ sec[0] }}</div>
+            <div v-for="(p,i) in sec[1]" :key="i" style="display:flex;gap:8px;padding:7px 0;border-top:1px solid #f0efea;font-size:13.5px;line-height:1.7">
+              <span class="mk-pill sm" :class="mkImpCls(p.impact)">{{ p.impact||'—' }}</span>
+              <div style="flex:1">{{ p.point }}<div v-if="p.source" style="font-size:11px;color:#aaa">{{ p.source }}</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 持股健檢 -->
+        <div class="card">
+          <div class="font-bold" style="font-size:16px;color:#344e41"><i class="ph ph-stethoscope" style="color:#588157"></i> 持股健檢</div>
+          <div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin-top:12px;background:#f0efea">
+            <div v-for="b in mkBuckets" :key="b.k" :style="{width:b.v+'%',background:b.color}" :title="b.l+' '+b.v+'%'"></div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;font-size:12px;color:#666">
+            <span v-for="b in mkBuckets" :key="b.k"><span :style="{display:'inline-block',width:'10px',height:'10px',borderRadius:'3px',background:b.color,marginRight:'4px'}"></span>{{ b.l }} <b class="num-font">{{ b.v }}%</b></span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
+            <span v-for="tp in mkResult.exposure.topTopics" :key="tp.topic" class="mk-chip">{{ tp.topic }} {{ tp.pct }}%</span>
+          </div>
+          <div v-for="w in mkResult.exposure.warnings" :key="w" style="margin-top:8px;font-size:13px;color:#bc6c25">⚠ {{ w }}</div>
+          <div v-if="mkResult.overall" style="margin-top:12px;padding:10px 14px;background:#f7f9f4;border-left:3px solid #588157;border-radius:0 10px 10px 0;font-size:13.5px;line-height:1.8;color:#444">{{ mkResult.overall }}</div>
+        </div>
+
+        <!-- 持股加減碼 -->
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="font-bold" style="font-size:16px;color:#344e41;padding:16px 18px 6px"><i class="ph ph-list-checks" style="color:#588157"></i> 持股：加碼／持有／減碼</div>
+          <div v-for="h in mkResult.holdings" :key="h.code" style="padding:12px 18px;border-top:1px solid #f0efea">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span class="font-bold" style="font-size:15px;color:#344e41">{{ h.name }}</span>
+              <span style="font-size:12px;color:#999">{{ h.code }}・佔 {{ h.weight }}%<span v-if="h.pct!=null">・帳面 {{ h.pct>0?'+':'' }}{{ h.pct }}%</span></span>
+              <span class="mk-pill" :class="mkActCls(h.action)">{{ h.action||'未判斷' }}</span>
+              <span v-if="h.confidence" style="font-size:11px;color:#999">信心 {{ h.confidence }}</span>
+              <span v-if="h.link" class="tp-tag" :class="h.link" style="margin-left:auto">連動 {{ TOPICS_LINK[h.link] }}{{ h.linkByAI?'（AI 推估）':'' }}</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px"><span v-for="c in mkChips(h.metrics)" :key="c.t" class="mk-chip" :class="c.c">{{ c.t }}</span></div>
+            <ul v-if="h.reasons.length" style="margin-top:8px;padding-left:18px;list-style:disc;font-size:13.5px;line-height:1.75;color:#444"><li v-for="(x,i) in h.reasons" :key="i">{{ x }}</li></ul>
+            <div v-if="h.watch" style="font-size:12px;color:#888;margin-top:4px"><i class="ph ph-eye"></i> 觀察：{{ h.watch }}</div>
+            <details v-if="h.news && h.news.length" style="margin-top:6px;font-size:12.5px;color:#666"><summary style="cursor:pointer;color:#588157">相關新聞（{{ h.news.length }}）</summary>
+              <div v-for="(nw,i) in h.news" :key="i" style="padding:4px 0"><span class="mk-pill sm" :class="mkImpCls(nw.impact)">{{ nw.impact||'—' }}</span> {{ nw.title }} <span style="color:#aaa">{{ nw.source }}</span></div></details>
+          </div>
+        </div>
+
+        <!-- 熱門個股 -->
+        <div class="card" style="padding:0;overflow:hidden">
+          <div style="padding:16px 18px 6px"><div class="font-bold" style="font-size:16px;color:#344e41"><i class="ph ph-fire" style="color:#bc6c25"></i> 市場熱門、你還沒有的</div>
+            <div style="font-size:12px;color:#999;margin-top:2px">AI 從新聞找出熱門股，再用成交量、漲幅、營收驗證是不是真的熱；最後一行是買進持股市值 {{ mkResult.buyPct }}% 後的 AI 高連動佔比變化。</div></div>
+          <div v-if="!mkResult.hotPicks.length" style="padding:12px 18px 18px;color:#aaa;font-size:13px">這次沒有找到</div>
+          <div v-for="s in mkResult.hotPicks" :key="s.code" style="padding:12px 18px;border-top:1px solid #f0efea">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span class="font-bold" style="font-size:15px;color:#344e41">{{ s.name }}</span>
+              <span style="font-size:12px;color:#999">{{ s.code }}・{{ s.topic || s.theme }}</span>
+              <span class="mk-pill" :class="s.verdict==='可留意'?'up':s.verdict==='避開'?'down':'neu'">{{ s.verdict||'未判斷' }}</span>
+              <span v-if="s.heat" style="font-size:11px;color:#999">{{ s.heat }}</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px"><span v-for="c in mkChips(s.metrics)" :key="c.t" class="mk-chip" :class="c.c">{{ c.t }}</span></div>
+            <div style="font-size:13.5px;color:#444;line-height:1.75;margin-top:6px">{{ s.why }}</div>
+            <ul v-if="s.reasons.length" style="margin-top:4px;padding-left:18px;list-style:disc;font-size:13.5px;line-height:1.75;color:#444"><li v-for="(x,i) in s.reasons" :key="i">{{ x }}</li></ul>
+            <div v-if="s.risk" style="font-size:12.5px;color:#588157;margin-top:4px">風險：{{ s.risk }}</div>
+            <div v-if="s.link" style="font-size:12px;color:#888;margin-top:4px"><span class="tp-tag" :class="s.link">連動 {{ TOPICS_LINK[s.link] }}</span> AI 高連動佔比 {{ s.hiBefore }}% → <b :style="s.hiAfter>s.hiBefore?'color:#bc6c25':'color:#588157'">{{ s.hiAfter }}%</b></div>
+          </div>
+        </div>
+
+        <details v-if="mkResult.sources && mkResult.sources.length" class="card" style="font-size:12.5px"><summary style="cursor:pointer;font-weight:700;color:#588157">新聞來源（{{ mkResult.sources.length }}）</summary>
+          <div v-for="(x,i) in mkResult.sources" :key="i" style="padding:3px 0"><a :href="x.uri" target="_blank" rel="noopener" style="color:#bc6c25">{{ x.title || x.uri }}</a></div></details>
+      </template>
+      <div v-else-if="!analysisLoading" class="card" style="text-align:center;color:#aaa;padding:36px;font-weight:700">還沒有分析紀錄，按「開始分析」試試看</div>
+    </div>
+
+    <!-- ══ 市場分析（舊版後端） ══ -->
+    <div v-if="currentTab==='analysis' && backendVersion<13" class="space-y-5">
       <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-end">
         <div><h2 class="page-title">市場分析</h2><p style="color:#588157;font-size:13px;margin-top:4px">Gemini AI 分析七大維度</p></div>
         <div v-if="analysisResult" :class="analysisResult.marketSignal==='偏多'?'signal-bull':analysisResult.marketSignal==='偏空'?'signal-bear':'signal-neu'" class="signal-badge">{{ analysisResult.marketSignal==='偏多'?'📈':analysisResult.marketSignal==='偏空'?'📉':'➡️' }} {{ analysisResult.marketSignal }}</div>
@@ -1412,7 +1532,7 @@ const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
 // ── fetch 包裝：呼叫 GAS doPost ──────────────────────────────
 const AUTH_TOKEN_KEY = 'auth_token';
 // 最新後端（程式庫）版本：要和 WebAPI.js 的 APP_VERSION 一起改
-const LATEST_BACKEND_VERSION = 12;
+const LATEST_BACKEND_VERSION = 13;
 let onAuthExpired_ = null; // Vue 掛載後設定：Token 失效時切回登入畫面
 async function callGAS(action, args = []) {
   const url = getGasUrl();
@@ -1631,7 +1751,7 @@ createApp({
         } else if (tab==='analysis') {
           analysisLoading.value=true;
           const [hRes,kRes] = await Promise.all([callGAS('api_getAnalysisHistory'),callGAS('api_getGeminiKeyStatus')]);
-          if (hRes.ok) analysisHistory.value=hRes.data;
+          if (hRes.ok) { analysisHistory.value=hRes.data; if (!mkResult.value && mkHistoryV2.value.length) mkResult.value=mkHistoryV2.value[0].data; }
           if (kRes.ok) GeminiKeyStatus.value=kRes;
           analysisLoading.value=false;
         } else if (tab==='pending') {
@@ -1780,6 +1900,46 @@ createApp({
         if (m2) return JSON.parse(m2[0]);
       } catch(e) { console.error('JSON 解析失敗:', e); }
       return null;
+    };
+
+    // ── 新版市場分析（後端 v13） ──
+    const mkResult = ref(null), mkRunning = ref(false), mkMsg = ref(''), mkError = ref(false), mkEmail = ref(false);
+    const mkHistoryV2 = computed(() => analysisHistory.value.map(h => {
+      if (!String(h.text).startsWith('{"v":2')) return null;
+      try { return { ts: h.ts, data: JSON.parse(h.text) }; } catch (e) { return null; }
+    }).filter(Boolean));
+    const mkSigCls = s => s==='偏多'?'up':s==='偏空'?'down':'neu';
+    const mkImpCls = s => s==='利多'?'up':s==='利空'?'down':'neu';
+    const mkActCls = s => s==='加碼'?'up':s==='減碼'?'down':'neu';
+    const mkChips = m => {
+      if (!m) return [];
+      const a = [], sg = v => (v>0?'+':'')+v;
+      if (m.chg1m!=null) a.push({ t:'近 1 月 '+sg(m.chg1m)+'%', c:m.chg1m>0?'up':m.chg1m<0?'down':'' });
+      if (m.aboveMa60!=null) a.push({ t:m.aboveMa60?'站上季線':'跌破季線', c:m.aboveMa60?'up':'down' });
+      if (m.volRatio!=null && m.volRatio>=1.5) a.push({ t:'量增 '+m.volRatio+' 倍', c:'up' });
+      if (m.revYoY!=null) a.push({ t:'營收年增 '+sg(m.revYoY)+'%（'+m.revMonth+'）', c:m.revYoY>0?'up':'down' });
+      if (m.per!=null) a.push({ t:'本益比 '+m.per+(m.perRank!=null?'（近一年 '+m.perRank+' 百分位）':''), c:'' });
+      if (m.foreign5d!=null) a.push({ t:'外資 5 日 '+sg(m.foreign5d.toLocaleString())+' 張', c:m.foreign5d>0?'up':m.foreign5d<0?'down':'' });
+      if (m.trust5d!=null && m.trust5d!==0) a.push({ t:'投信 5 日 '+sg(m.trust5d.toLocaleString())+' 張', c:m.trust5d>0?'up':'down' });
+      return a;
+    };
+    const mkBuckets = computed(() => {
+      const b = (mkResult.value && mkResult.value.exposure && mkResult.value.exposure.buckets) || {};
+      return [{k:'hi',l:'AI 高連動',color:'#bc6c25'},{k:'mid',l:'中連動',color:'#dda15e'},{k:'lo',l:'低連動',color:'#588157'},{k:'na',l:'未分類',color:'#c9c6bb'}]
+        .map(x => ({ ...x, v: b[x.k]||0 })).filter(x => x.v>0);
+    });
+    const runMarketAnalysis2 = async () => {
+      if (mkRunning.value) return;
+      if (!GeminiKeyStatus.value.hasKey) { mkMsg.value='請先輸入並儲存 Gemini API Key'; mkError.value=true; return; }
+      mkRunning.value=true; mkError.value=false; mkMsg.value='⏳ 抓數據、搜尋新聞、整理判斷中，約 1～2 分鐘，請不要關閉頁面…';
+      try {
+        const res = await callGAS('api_runMarketAnalysis',[{ notes:userNotes.value, email:mkEmail.value }]);
+        if (!res.ok) throw new Error(res.msg||'分析失敗');
+        mkResult.value = res.result;
+        analysisHistory.value = [{ ts:res.result.ts, text:JSON.stringify(res.result) }, ...analysisHistory.value].slice(0,30);
+        mkMsg.value = '✅ 分析完成' + (res.mail ? '，已寄到 '+res.mail.to : '');
+      } catch(e) { mkMsg.value='❌ '+e.message; mkError.value=true; }
+      finally { mkRunning.value=false; }
     };
 
     const runAnalysis = async () => {
@@ -2952,6 +3112,7 @@ createApp({
       dashboard,listData,holdingsConfig,settingsData,settingsSchema,settingsLoading,
       showDetailModal,currentDetailStock,currentDetailList,detailType,
       tabs,bottomTabs,actionFunctions,selectTab,loadData,
+      mkResult,mkRunning,mkMsg,mkError,mkEmail,mkHistoryV2,mkSigCls,mkImpCls,mkActCls,mkChips,mkBuckets,runMarketAnalysis2,
       TOPICS_LINK,TOPICS_UPDATED,topicsFilter,topicsOpen,topicStock,topicsHeldCodes,topicsGroups,topicsSummary,topicsAllOpen,topicsToggleAll,openTopicStock,topicCode,
       authState,authUser,backendVersion,backendAutoUpdate,updateInfo,updateRunning,runAutoUpdateNow,backendOutdated,updateBannerClosed,LATEST_BACKEND_VERSION,authForm,authMsg,authBusy,shortGasUrl,doLogin,doSetup,useGasUrlOnly,logout,pwdForm,changeMyPassword,
       realizedFilter,realizedHeaders,uniqueYears,uniqueMonths,filteredRealizedList,filteredRealizedTotal,sortBy,sortKey,sortOrder,realizedColAlign,

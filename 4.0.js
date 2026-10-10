@@ -219,6 +219,7 @@ function setupAllSuggestedTriggers_SAFE() {
   getScriptApp_().newTrigger('appendDCAFromHoldings_SAFE').timeBased().everyDays(1).atHour(12).nearMinute(0).inTimezone(tz).create();
   getScriptApp_().newTrigger('runDividendsFullCycle_SAFE').timeBased().everyDays(1).atHour(11).nearMinute(0).inTimezone(tz).create();
   ensureMonthlyReportTrigger_(); // 每月 1 號 8 點寄月報（依《設定》MONTHLY_REPORT_ENABLED）
+  try { ensureMarketReportTrigger_(); } catch (e) { Logger.log('市場分析排程：' + e.message); } // 依《設定》MARKET_REPORT_SCHEDULE
 
   Logger.log('✅ 已建立新排程。');
 }
@@ -234,6 +235,7 @@ function removeAllSuggestedTriggers_SAFE() {
     'runDividendsFullCycle_SAFE',
     'updateDividendsFromFinMind_SAFE',
     'monthlyReport_SAFE',
+    'marketReport_SAFE',
     'autoUpdate_SAFE', // 舊版（Apps Script API）自動更新，已停用；保留名稱以便清掉
     'finTrigger'
   ]);
@@ -2687,6 +2689,7 @@ function dailyDataMaintenance_() {
   // 順便確保月報排程存在（舊使用者不用重跑 setupAllSuggestedTriggers_SAFE）
   try { ensureMonthlyReportTrigger_(); } catch (e) { Logger.log('月報排程檢查失敗：' + e.message); }
   try { fixSettingDescriptions_(); } catch (e) { Logger.log('設定說明更新失敗：' + e.message); }
+  try { ensureMarketReportTrigger_(); } catch (e) { Logger.log('市場分析排程檢查失敗：' + e.message); }
 }
 
 /**
@@ -3589,4 +3592,456 @@ function runTriggerTask(e) {
   const name = e && e.triggerUid ? getProps_().getProperty('TASK_' + e.triggerUid) : '';
   if (!name || typeof this[name] !== 'function') throw new Error('找不到排程對應的函式：' + (name || '(未記錄)'));
   return this[name](e);
+}
+
+/***** =======================
+ * AI 市場分析（v13）
+ * ① 持股健檢（程式算：題材連動度、集中度）
+ * ② 大盤與國際局勢、持股新聞、市場熱門個股（Gemini + Google 搜尋）
+ * ③ 每檔持股加碼／持有／減碼、熱門個股評估（Gemini，只能用前面整理好的數字與新聞）
+ * 數字一律由程式從 FinMind 抓，AI 只負責讀新聞與整合判斷。
+ * ======================== */
+
+var MARKET_SHEET_ = '市場分析紀錄';
+var MARKET_MODEL_ = 'gemini-2.5-flash';
+var MARKET_BUY_PCT_ = 5; // 熱門個股「買進後」試算：假設買進金額 = 目前持股市值的 5%
+
+/** 排程入口：依《設定》MARKET_REPORT_SCHEDULE 定時分析並寄信 */
+function marketReport_SAFE() {
+  return runWithAlert_(() => {
+    if (marketScheduleCfg_(getCfg_()).mode === 'OFF') return;
+    const r = runMarketAnalysis_('');
+    sendMarketReportMail_(r);
+  }, 'marketReport');
+}
+
+/** 《設定》→ { mode: WEEKLY|DAILY|OFF, hour } */
+function marketScheduleCfg_(C) {
+  const raw = String(C.MARKET_REPORT_SCHEDULE || '每週一').trim();
+  const mode = /關閉|OFF|FALSE/i.test(raw) ? 'OFF' : /每天|DAILY/i.test(raw) ? 'DAILY' : 'WEEKLY';
+  let hour = parseInt(C.MARKET_REPORT_HOUR, 10);
+  if (!(hour >= 0 && hour <= 23)) hour = 7;
+  return { mode, hour };
+}
+
+/** 依《設定》與 Gemini Key 確保排程存在；設定改變時重建（每日資料維護、存設定時會呼叫） */
+function ensureMarketReportTrigger_() {
+  if (SCRIPT_APP_) return; // 舊版程式庫殼程式：排程掛不上去
+  const C = getCfg_();
+  const s = marketScheduleCfg_(C);
+  const props = getProps_();
+  const hasKey = !!props.getProperty('GEMINI_API_KEY');
+  const want = hasKey && s.mode !== 'OFF' ? s.mode + '@' + s.hour : '';
+  const app = getScriptApp_();
+  const existing = app.getProjectTriggers().filter(t => triggerTaskName_(t) === 'marketReport_SAFE');
+  if (want && existing.length === 1 && props.getProperty('MARKET_TRIGGER_SIG') === want) return;
+  existing.forEach(t => { props.deleteProperty('TASK_' + t.getUniqueId()); app.deleteTrigger(t); });
+  props.deleteProperty('MARKET_TRIGGER_SIG');
+  if (!want) return;
+  let b = newTaskTrigger_('marketReport_SAFE').timeBased();
+  b = s.mode === 'DAILY' ? b.everyDays(1) : b.onWeekDay(ScriptApp.WeekDay.MONDAY);
+  b.atHour(s.hour).nearMinute(30).inTimezone(C.TZ || 'Asia/Taipei').create();
+  props.setProperty('MARKET_TRIGGER_SIG', want);
+  Logger.log('📅 市場分析排程：' + want);
+}
+
+/* ---------- 資料：FinMind ---------- */
+
+/** reqs: [{key, dataset, id, start}] → { key: rows[] }（並行抓，失敗的給空陣列） */
+function finmindFetchAll_(reqs, token) {
+  const headers = token ? { Authorization: 'Bearer ' + token } : {};
+  const out = {};
+  for (let i = 0; i < reqs.length; i += 20) {
+    const chunk = reqs.slice(i, i + 20);
+    const resps = UrlFetchApp.fetchAll(chunk.map(r => ({
+      url: 'https://api.finmindtrade.com/api/v4/data?' +
+        ['dataset=' + r.dataset, r.id ? 'data_id=' + encodeURIComponent(r.id) : '', 'start_date=' + r.start].filter(Boolean).join('&'),
+      headers, muteHttpExceptions: true,
+    })));
+    resps.forEach((res, j) => {
+      let rows = [];
+      try {
+        if (res.getResponseCode() === 200) {
+          const js = JSON.parse(res.getContentText('utf-8'));
+          if (Array.isArray(js.data)) rows = js.data;
+        }
+      } catch (e) {}
+      out[chunk[j].key] = rows;
+    });
+  }
+  return out;
+}
+
+function mktDaysAgo_(n, tz) {
+  return Utilities.formatDate(new Date(Date.now() - n * 864e5), tz || 'Asia/Taipei', 'yyyy-MM-dd');
+}
+function mktRound_(v, d) { if (v == null || !isFinite(v)) return null; const f = Math.pow(10, d || 0); return Math.round(v * f) / f; }
+
+/** 個股（或大盤）的客觀數字 */
+function stockMetrics_(px, rev, per, inst) {
+  const m = {};
+  const p = (px || []).filter(r => Number(r.close) > 0).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  if (p.length) {
+    const close = Number(p[p.length - 1].close);
+    const avg = (n, f) => { const s = p.slice(-n); return s.reduce((t, r) => t + Number(r[f] || 0), 0) / s.length; };
+    m.date = p[p.length - 1].date;
+    m.close = close;
+    const ago = p[Math.max(0, p.length - 21)];
+    m.chg1m = mktRound_((close / Number(ago.close) - 1) * 100, 1);
+    if (p.length >= 60) { m.ma60 = mktRound_(avg(60, 'close'), 2); m.aboveMa60 = close >= m.ma60; }
+    if (p.length >= 20) {
+      m.ma20 = mktRound_(avg(20, 'close'), 2);
+      const v20 = avg(20, 'Trading_Volume');
+      if (v20 > 0) m.volRatio = mktRound_(avg(5, 'Trading_Volume') / v20, 2); // 近 5 日均量 ÷ 近 20 日均量
+    }
+  }
+  const rv = (rev || []).filter(r => Number(r.revenue) > 0);
+  if (rv.length) {
+    const last = rv.reduce((a, b) => (String(a.date) > String(b.date) ? a : b));
+    const prev = rv.find(r => Number(r.revenue_year) === Number(last.revenue_year) - 1 && Number(r.revenue_month) === Number(last.revenue_month));
+    m.revMonth = last.revenue_year + '/' + last.revenue_month;
+    if (prev) m.revYoY = mktRound_((Number(last.revenue) / Number(prev.revenue) - 1) * 100, 1);
+  }
+  const pe = (per || []).filter(r => Number(r.PER) > 0).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  if (pe.length) {
+    const last = Number(pe[pe.length - 1].PER);
+    m.per = mktRound_(last, 1);
+    m.pbr = mktRound_(Number(pe[pe.length - 1].PBR), 2);
+    m.perRank = mktRound_(pe.filter(r => Number(r.PER) <= last).length / pe.length * 100, 0); // 近一年本益比百分位
+  }
+  const ins = inst || [];
+  if (ins.length) {
+    const dates = Array.from(new Set(ins.map(r => r.date))).sort().slice(-5);
+    const net = re => ins.filter(r => dates.includes(r.date) && re.test(r.name)).reduce((t, r) => t + Number(r.buy || 0) - Number(r.sell || 0), 0);
+    m.foreign5d = Math.round(net(/^Foreign_Investor$|^Foreign_Dealer_Self$/) / 1000); // 張
+    m.trust5d = Math.round(net(/^Investment_Trust$/) / 1000);
+  }
+  return m;
+}
+
+/** 抓一批股票的數字：codes → { code: metrics } */
+function fetchStockMetrics_(codes, token, tz) {
+  const reqs = [];
+  codes.forEach(c => {
+    reqs.push({ key: c + '|px', dataset: 'TaiwanStockPrice', id: c, start: mktDaysAgo_(100, tz) });
+    reqs.push({ key: c + '|rev', dataset: 'TaiwanStockMonthRevenue', id: c, start: mktDaysAgo_(430, tz) });
+    reqs.push({ key: c + '|per', dataset: 'TaiwanStockPER', id: c, start: mktDaysAgo_(365, tz) });
+    reqs.push({ key: c + '|inst', dataset: 'TaiwanStockInstitutionalInvestorsBuySell', id: c, start: mktDaysAgo_(14, tz) });
+  });
+  const raw = finmindFetchAll_(reqs, token);
+  const out = {};
+  codes.forEach(c => { out[c] = stockMetrics_(raw[c + '|px'], raw[c + '|rev'], raw[c + '|per'], raw[c + '|inst']); });
+  return out;
+}
+
+/** 大盤：加權指數走勢、外資近 5 日買賣超（億元） */
+function fetchMarketMetrics_(token, tz) {
+  const raw = finmindFetchAll_([
+    { key: 'taiex', dataset: 'TaiwanStockPrice', id: 'TAIEX', start: mktDaysAgo_(100, tz) },
+    { key: 'inst', dataset: 'TaiwanStockTotalInstitutionalInvestors', start: mktDaysAgo_(14, tz) },
+  ], token);
+  const m = stockMetrics_(raw.taiex, [], [], []);
+  const ins = raw.inst || [];
+  if (ins.length) {
+    const dates = Array.from(new Set(ins.map(r => r.date))).sort().slice(-5);
+    const f = ins.filter(r => dates.includes(r.date) && /^Foreign_Investor$|^Foreign_Dealer_Self$/.test(r.name))
+      .reduce((t, r) => t + Number(r.buy || 0) - Number(r.sell || 0), 0);
+    m.foreign5dYi = mktRound_(f / 1e8, 1);
+  }
+  return m;
+}
+
+/** 題材清單（GitHub Pages 的 topics.js）→ { code: {link, topic} } */
+function loadTopicsMap_() {
+  try {
+    const cache = CacheService.getScriptCache();
+    let code = cache.get('fin_topics_js');
+    if (!code) {
+      const res = UrlFetchApp.fetch(APP_URL_ + 'topics.js', { muteHttpExceptions: true });
+      if (res.getResponseCode() !== 200) return {};
+      code = res.getContentText('utf-8');
+      if (code.length < 90000) cache.put('fin_topics_js', code, 21600);
+    }
+    const win = {};
+    new Function('window', code)(win);
+    const map = {};
+    (win.TOPICS_DATA || []).forEach(t => {
+      if (t.group) return;
+      t.stocks.forEach(s => {
+        const c = (String(s[0]).match(/\((\d+)\)/) || [])[1];
+        if (c && !map[c]) map[c] = { link: t.link, topic: t.topic + (t.note ? '（' + t.note + '）' : '') };
+      });
+    });
+    return map;
+  } catch (e) { Logger.log('題材清單讀取失敗：' + e.message); return {}; }
+}
+
+/* ---------- Gemini ---------- */
+
+function geminiGenerate_(prompt, opts) {
+  opts = opts || {};
+  const key = getProps_().getProperty('GEMINI_API_KEY') || '';
+  if (!key) throw new Error('尚未設定 Gemini API Key（到「市場分析」頁儲存）');
+  const body = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { temperature: opts.temperature == null ? 0.2 : opts.temperature, maxOutputTokens: 16384 },
+  };
+  if (opts.search) body.tools = [{ google_search: {} }];
+  if (opts.json) body.generationConfig.responseMimeType = 'application/json';
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + MARKET_MODEL_ + ':generateContent?key=' + key;
+  let lastErr = '';
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const res = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', payload: JSON.stringify(body), muteHttpExceptions: true });
+    const code = res.getResponseCode();
+    let js = {};
+    try { js = JSON.parse(res.getContentText('utf-8')); } catch (e) {}
+    if (code === 200) {
+      const cand = (js.candidates || [])[0] || {};
+      const text = ((cand.content || {}).parts || []).map(p => p.text || '').join('');
+      const chunks = ((cand.groundingMetadata || {}).groundingChunks || []).map(c => c.web).filter(Boolean);
+      const seen = new Set();
+      const sources = chunks.filter(w => w.uri && !seen.has(w.uri) && seen.add(w.uri)).map(w => ({ title: w.title || '', uri: w.uri }));
+      if (!text) { lastErr = 'Gemini 回傳空白內容'; continue; }
+      return { text, sources };
+    }
+    const msg = (js.error && js.error.message) || '';
+    if (code === 429) throw new Error('Gemini 免費額度暫時用完（429），請稍後或明天再試；免費版不會因此收費。' + (msg ? '（' + msg.slice(0, 120) + '）' : ''));
+    if (code === 400 || code === 401 || code === 403) throw new Error('Gemini API Key 無效或沒有權限（' + code + '）' + (msg ? '：' + msg.slice(0, 160) : ''));
+    lastErr = 'Gemini 錯誤（' + code + '）' + (msg ? '：' + msg.slice(0, 160) : '');
+    Utilities.sleep(4000 * attempt);
+  }
+  throw new Error(lastErr || 'Gemini 呼叫失敗');
+}
+
+/** 從 AI 回覆裡挖出 JSON */
+function parseJsonLoose_(text) {
+  let t = String(text || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/g, '').trim();
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) t = fence[1].trim();
+  try { return JSON.parse(t); } catch (e) {}
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch (e) {} }
+  return null;
+}
+
+/* ---------- 主流程 ---------- */
+
+/** 持股健檢：依題材連動度分組、集中度提醒 */
+function buildExposure_(holdings) {
+  const total = holdings.reduce((t, h) => t + h.value, 0) || 1;
+  const buckets = { hi: 0, mid: 0, lo: 0, na: 0 };
+  const topics = {};
+  holdings.forEach(h => {
+    buckets[h.link || 'na'] += h.value;
+    const tp = h.topic || '未分類／ETF';
+    topics[tp] = (topics[tp] || 0) + h.value;
+  });
+  const pct = v => mktRound_(v / total * 100, 1);
+  const out = {
+    total: Math.round(total),
+    buckets: { hi: pct(buckets.hi), mid: pct(buckets.mid), lo: pct(buckets.lo), na: pct(buckets.na) },
+    topTopics: Object.keys(topics).map(k => ({ topic: k, pct: pct(topics[k]) })).sort((a, b) => b.pct - a.pct).slice(0, 6),
+    warnings: [],
+  };
+  if (out.buckets.hi >= 60) out.warnings.push(`AI 高連動佔 ${out.buckets.hi}%，AI 資本支出放緩時整體回檔會很明顯`);
+  const big = holdings.filter(h => h.value / total >= 0.3);
+  big.forEach(h => out.warnings.push(`${h.name}（${h.code}）單一持股佔 ${pct(h.value)}%`));
+  out.topTopics.filter(t => t.topic !== '未分類／ETF' && t.pct >= 40).forEach(t => out.warnings.push(`「${t.topic}」題材佔 ${t.pct}%`));
+  if (out.buckets.lo < 10 && holdings.length >= 3) out.warnings.push(`低連動（分散用）只佔 ${out.buckets.lo}%`);
+  return out;
+}
+
+function runMarketAnalysis_(userNotes) {
+  const C = getCfg_();
+  const tz = C.TZ || 'Asia/Taipei';
+  const token = C.FINMIND_TOKEN || '';
+  const today = Utilities.formatDate(new Date(), tz, 'yyyy/MM/dd');
+  const errors = [];
+
+  const hr = api_getHoldingsForAnalysis();
+  if (!hr.ok || !hr.data.length) throw new Error(hr.msg || '庫存紀錄沒有資料，無法分析');
+  const topicMap = loadTopicsMap_();
+  const holdings = hr.data.map(h => {
+    const t = topicMap[h.code] || {};
+    return { code: h.code, name: h.name, qty: h.qty, avgCost: h.avgCost, pct: h.pct, capPnl: h.capPnl,
+             value: h.curVal != null ? h.curVal : h.totalCost, link: t.link || '', topic: t.topic || '' };
+  });
+  const totalVal = holdings.reduce((t, h) => t + h.value, 0) || 1;
+  holdings.forEach(h => { h.weight = mktRound_(h.value / totalVal * 100, 1); });
+
+  // ① 數字
+  const market = fetchMarketMetrics_(token, tz);
+  const hm = fetchStockMetrics_(holdings.map(h => h.code), token, tz);
+  holdings.forEach(h => { h.metrics = hm[h.code] || {}; });
+  if (!market.close && !holdings.some(h => h.metrics.close)) errors.push('FinMind 數據抓取失敗（檢查 FINMIND_TOKEN 或稍後再試），以下判斷只根據新聞');
+
+  // ② 消息面（Google 搜尋）
+  const unlisted = holdings.filter(h => !h.link).map(h => h.code);
+  const p1 = [
+    `你是台股研究助理。今天是 ${today}（台北時間）。請先用 Google 搜尋查證最近 7～14 天的新聞與數據再回答；只能根據搜尋到的資訊，找不到就寫「查無近期消息」，不要憑記憶編造。`,
+    `【我的持股】`,
+    holdings.map(h => `- ${h.code} ${h.name}（佔持股市值 ${h.weight}%）`).join('\n'),
+    userNotes ? `【我補充的資訊】\n${userNotes}` : '',
+    `請整理：`,
+    `1. global：國際局勢 3～5 點（美股與科技股、Fed 與利率、美元/台幣匯率、地緣政治、原物料，挑最重要的）`,
+    `2. taiwan：台股大盤 2～3 點（指數走勢、外資動向、重要事件）`,
+    `3. holdingsNews：每檔持股最近 1～2 則重要消息（法說會、營收、訂單、評等、產業動態），沒有就給空陣列`,
+    `4. hotStocks：最近台股市場最熱門、但不在我的持股裡的個股 6～8 檔，不限產業，可以是新興題材；說明為什麼熱，並判斷它和 AI 資本支出的連動度`,
+    unlisted.length ? `5. classify：判斷這些代碼和 AI 資本支出的連動度：${unlisted.join('、')}` : '',
+    `每一點都要附消息來源（媒體名稱與日期）。impact 只能是 利多、利空、中性；link 只能是 hi、mid、lo。`,
+    '只輸出一個 JSON，放在 ```json 區塊：',
+    '{"marketSignal":"偏多|中性|偏空","marketSummary":"兩三句總結",' +
+    '"global":[{"point":"","impact":"","source":""}],"taiwan":[{"point":"","impact":"","source":""}],' +
+    '"holdingsNews":[{"code":"","items":[{"title":"","impact":"","source":""}]}],' +
+    '"hotStocks":[{"code":"4～6 位數代碼","name":"","theme":"","why":"","link":"","source":""}],' +
+    '"classify":[{"code":"","link":""}]}',
+  ].filter(Boolean).join('\n');
+  const g1 = geminiGenerate_(p1, { search: true, temperature: 0.3 });
+  const news = parseJsonLoose_(g1.text);
+  if (!news) throw new Error('Gemini 消息面回覆格式無法解析，請再試一次');
+
+  (news.classify || []).forEach(c => {
+    const h = holdings.find(x => x.code === String(c.code).trim());
+    if (h && !h.link && /^(hi|mid|lo)$/.test(c.link)) { h.link = c.link; h.linkByAI = true; }
+  });
+  const newsBy = {};
+  (news.holdingsNews || []).forEach(n => { newsBy[String(n.code).trim()] = (n.items || []).slice(0, 3); });
+  holdings.forEach(h => { h.news = newsBy[h.code] || []; });
+  const exposure = buildExposure_(holdings);
+
+  // 熱門候選：排除已持有、代碼要是數字，再用 FinMind 驗證
+  const held = new Set(holdings.map(h => h.code));
+  const hot = [];
+  (news.hotStocks || []).forEach(s => {
+    const code = String(s.code || '').trim();
+    if (/^\d{4,6}[A-Z]?$/.test(code) && !held.has(code) && !hot.some(x => x.code === code)) hot.push({
+      code, name: s.name || '', theme: s.theme || '', why: s.why || '', source: s.source || '',
+      link: (topicMap[code] || {}).link || (/^(hi|mid|lo)$/.test(s.link) ? s.link : ''), topic: (topicMap[code] || {}).topic || '',
+    });
+  });
+  const hotM = hot.length ? fetchStockMetrics_(hot.slice(0, 8).map(s => s.code), token, tz) : {};
+  const add = totalVal * MARKET_BUY_PCT_ / 100;
+  const hiVal = holdings.filter(h => h.link === 'hi').reduce((t, h) => t + h.value, 0);
+  hot.slice(0, 8).forEach(s => {
+    s.metrics = hotM[s.code] || {};
+    s.hiBefore = mktRound_(hiVal / totalVal * 100, 1);
+    s.hiAfter = mktRound_((hiVal + (s.link === 'hi' ? add : 0)) / (totalVal + add) * 100, 1);
+  });
+
+  // ③ 判斷（不開搜尋，只用上面的資料）
+  const brief = o => JSON.stringify(o);
+  const p2 = [
+    `你是嚴謹的台股研究助理，幫使用者整理「加碼／持有／減碼」的參考判斷（不是投資建議）。今天是 ${today}。規則：`,
+    `- 只能使用下面提供的數據與新聞，不要補充其他事實`,
+    `- 每個理由都要引用至少一個具體數字（例如「近 1 月 +12.3%」「營收年增 35%」「外資 5 日賣超 2,300 張」）或一則新聞`,
+    `- 資料不足時 confidence 給「低」並說明缺什麼`,
+    `- 考量整體配置：AI 高連動佔比過高時，對高連動個股加碼要更保守；分散不足時可以建議往低連動配置`,
+    `- 加碼＝可以考慮分批增加；持有＝維持部位；減碼＝可以考慮降低部位或停利`,
+    `欄位說明：chg1m 近 1 月漲跌%、aboveMa60 是否站上季線、volRatio 近 5 日量÷近 20 日量、revYoY 最新月營收年增%、per 本益比、perRank 本益比在近一年的百分位（越高越貴）、foreign5d/trust5d 外資/投信近 5 日買賣超（張）、weight 佔持股%、pct 帳面報酬%、hiAfter 買進 ${MARKET_BUY_PCT_}% 部位後 AI 高連動佔比`,
+    `【市場】${brief({ signal: news.marketSignal, summary: news.marketSummary, global: news.global, taiwan: news.taiwan, taiex: market })}`,
+    `【持股健檢】${brief(exposure)}`,
+    `【持股】${brief(holdings.map(h => ({ code: h.code, name: h.name, weight: h.weight, pct: h.pct, link: h.link, topic: h.topic, metrics: h.metrics, news: h.news })))}`,
+    `【熱門候選】${brief(hot.slice(0, 8).map(s => ({ code: s.code, name: s.name, theme: s.theme, why: s.why, link: s.link, metrics: s.metrics, hiAfter: s.hiAfter })))}`,
+    `holdings 必須涵蓋所有持股：${holdings.map(h => h.code).join('、')}`,
+    `只輸出 JSON：{"overall":"整體配置與現金水位的看法，3～4 句",` +
+    `"holdings":[{"code":"","action":"加碼|持有|減碼","confidence":"高|中|低","reasons":["",""],"watch":"接下來要觀察的指標或事件"}],` +
+    `"hotPicks":[{"code":"","verdict":"可留意|觀察|避開","heat":"有基本面支撐|題材炒作為主|資料不足","reasons":[""],"risk":""}]}`,
+  ].join('\n');
+  let judge = null;
+  try {
+    judge = parseJsonLoose_(geminiGenerate_(p2, { json: true, temperature: 0.2 }).text);
+    if (!judge) errors.push('加減碼判斷的回覆格式無法解析，只顯示消息面');
+  } catch (e) { errors.push('加減碼判斷失敗：' + e.message); }
+  judge = judge || {};
+
+  const jH = {}; (judge.holdings || []).forEach(x => { jH[String(x.code).trim()] = x; });
+  const jP = {}; (judge.hotPicks || []).forEach(x => { jP[String(x.code).trim()] = x; });
+  const result = {
+    v: 2, ts: Utilities.formatDate(new Date(), tz, 'yyyy/MM/dd HH:mm'), model: MARKET_MODEL_,
+    marketSignal: news.marketSignal || '中性', marketSummary: news.marketSummary || '',
+    global: news.global || [], taiwan: news.taiwan || [], market,
+    exposure, overall: judge.overall || '',
+    holdings: holdings.map(h => Object.assign({}, h, {
+      action: (jH[h.code] || {}).action || '', confidence: (jH[h.code] || {}).confidence || '',
+      reasons: (jH[h.code] || {}).reasons || [], watch: (jH[h.code] || {}).watch || '',
+    })).sort((a, b) => b.weight - a.weight),
+    hotPicks: hot.slice(0, 8).map(s => Object.assign({}, s, {
+      verdict: (jP[s.code] || {}).verdict || '', heat: (jP[s.code] || {}).heat || '',
+      reasons: (jP[s.code] || {}).reasons || [], risk: (jP[s.code] || {}).risk || '',
+    })),
+    sources: g1.sources.slice(0, 15), buyPct: MARKET_BUY_PCT_, errors,
+  };
+  saveMarketAnalysis_(result);
+  return result;
+}
+
+/** 存到《市場分析紀錄》（B 欄是 JSON；單格上限 5 萬字，太長就先砍來源與新聞） */
+function saveMarketAnalysis_(r) {
+  const ss = getSS_();
+  let sh = ss.getSheetByName(MARKET_SHEET_);
+  if (!sh) {
+    sh = ss.insertSheet(MARKET_SHEET_);
+    sh.appendRow(['時間', '分析內容']);
+    sh.getRange(1, 1, 1, 2).setFontWeight('bold').setBackground('#344e41').setFontColor('white');
+    sh.setFrozenRows(1);
+  }
+  let s = JSON.stringify(r);
+  if (s.length > 49000) { r.sources = r.sources.slice(0, 5); r.holdings.forEach(h => { h.news = h.news.slice(0, 1); }); s = JSON.stringify(r); }
+  if (s.length > 49000) s = s.slice(0, 49000);
+  sh.appendRow([r.ts, s]);
+}
+
+/* ---------- Email ---------- */
+
+function sendMarketReportMail_(r) {
+  const to = String(getCfg_().ALERT_TO || '').trim();
+  if (!to) throw new Error('《設定》的「通知 Email」（ALERT_TO）沒有填，無法寄市場分析');
+  const subject = `【你不理財】市場分析 ${r.ts.slice(0, 10)}（${r.marketSignal}）`;
+  MailApp.sendEmail({ to, subject, htmlBody: renderMarketReportHtml_(r) });
+  return { to, subject };
+}
+
+function renderMarketReportHtml_(r) {
+  const INK = '#344e41', MUTED = '#8a8a80', LINE = '#ece9e2', POS = '#bc6c25', NEG = '#588157';
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const pctTxt = p => p == null ? '—' : (p > 0 ? '+' : '') + p + '%';
+  const card = (title, inner) => `<tr><td style="padding:0 16px 14px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:14px;border:1px solid ${LINE}">
+    <tr><td style="padding:16px 18px 6px;font-size:15px;font-weight:700;color:#3a5a40">${title}</td></tr><tr><td style="padding:4px 18px 16px;font-size:14px;color:${INK};line-height:1.7">${inner}</td></tr></table></td></tr>`;
+  const ACT = { '加碼': POS, '減碼': NEG, '持有': '#6b7280' };
+  const IMP = { '利多': POS, '利空': NEG };
+  const pill = (t, c) => t ? `<span style="display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:700;color:#fff;background:${c || '#9aab95'}">${esc(t)}</span>` : '';
+  const pt = x => `<div style="padding:5px 0;border-top:1px solid ${LINE}">${x.impact ? pill(x.impact, IMP[x.impact]) + ' ' : ''}${esc(x.point || x.title)}${x.source ? `<div style="font-size:12px;color:${MUTED}">${esc(x.source)}</div>` : ''}</div>`;
+  const m = x => {
+    const a = [];
+    if (x.chg1m != null) a.push('近1月 ' + pctTxt(x.chg1m));
+    if (x.aboveMa60 != null) a.push(x.aboveMa60 ? '站上季線' : '跌破季線');
+    if (x.revYoY != null) a.push('營收年增 ' + pctTxt(x.revYoY));
+    if (x.per != null) a.push('本益比 ' + x.per);
+    if (x.foreign5d != null) a.push('外資5日 ' + (x.foreign5d > 0 ? '+' : '') + x.foreign5d + '張');
+    return a.length ? `<div style="font-size:12px;color:${MUTED}">${esc(a.join('・'))}</div>` : '';
+  };
+  const e = r.exposure || { buckets: {} };
+  const html = [
+    card(`大盤與國際局勢 ${pill(r.marketSignal, r.marketSignal === '偏多' ? POS : r.marketSignal === '偏空' ? NEG : '#9aab95')}`,
+      `<div style="margin-bottom:6px">${esc(r.marketSummary)}</div>${(r.global || []).map(pt).join('')}${(r.taiwan || []).map(pt).join('')}`),
+    card('持股健檢', `AI 高連動 <b>${e.buckets.hi}%</b>・中 ${e.buckets.mid}%・低 ${e.buckets.lo}%・未分類 ${e.buckets.na}%` +
+      (e.warnings || []).map(w => `<div style="color:${POS}">⚠ ${esc(w)}</div>`).join('') +
+      (r.overall ? `<div style="margin-top:8px;padding:8px 10px;background:#f7f9f4;border-radius:8px">${esc(r.overall)}</div>` : '')),
+    card('持股：加碼／持有／減碼', (r.holdings || []).map(h => `<div style="padding:8px 0;border-top:1px solid ${LINE}">
+      <b>${esc(h.name)}</b> <span style="color:${MUTED}">${esc(h.code)}・佔 ${h.weight}%</span> ${pill(h.action, ACT[h.action])} <span style="font-size:12px;color:${MUTED}">信心 ${esc(h.confidence || '—')}</span>
+      ${m(h.metrics || {})}${(h.reasons || []).map(x => `<div style="font-size:13px">・${esc(x)}</div>`).join('')}
+      ${h.watch ? `<div style="font-size:12px;color:${MUTED}">觀察：${esc(h.watch)}</div>` : ''}</div>`).join('') || '—'),
+    card('市場熱門、你還沒有的', (r.hotPicks || []).map(s => `<div style="padding:8px 0;border-top:1px solid ${LINE}">
+      <b>${esc(s.name)}</b> <span style="color:${MUTED}">${esc(s.code)}・${esc(s.theme)}</span> ${pill(s.verdict, s.verdict === '可留意' ? POS : s.verdict === '避開' ? NEG : '#9aab95')} <span style="font-size:12px;color:${MUTED}">${esc(s.heat)}</span>
+      ${m(s.metrics || {})}<div style="font-size:13px">${esc(s.why)}</div>${(s.reasons || []).map(x => `<div style="font-size:13px">・${esc(x)}</div>`).join('')}
+      ${s.risk ? `<div style="font-size:12px;color:${NEG}">風險：${esc(s.risk)}</div>` : ''}
+      ${s.link === 'hi' ? `<div style="font-size:12px;color:${MUTED}">買進 ${r.buyPct}% 部位後，AI 高連動佔比 ${s.hiBefore}% → ${s.hiAfter}%</div>` : ''}</div>`).join('') || '—'),
+  ].join('');
+  return `<div style="background:#f3f1ea;padding:20px 0;font-family:-apple-system,'Segoe UI','PingFang TC','Microsoft JhengHei',sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;margin:0 auto">
+    <tr><td style="padding:0 16px 14px"><div style="font-size:20px;font-weight:700;color:${INK}">市場分析 ${esc(r.ts)}</div>
+      <div style="font-size:12px;color:${MUTED};margin-top:4px">AI 整理的參考資訊，不是投資建議；數字來自 FinMind，新聞由 Gemini 搜尋。<a href="${APP_URL_}" style="color:${POS}">打開 App 看完整內容</a></div></td></tr>
+    ${(r.errors || []).length ? `<tr><td style="padding:0 16px 14px;font-size:13px;color:${POS}">${r.errors.map(esc).join('<br>')}</td></tr>` : ''}
+    ${html}
+  </table></div>`;
 }

@@ -1,11 +1,11 @@
 {
   "current": {
-    "version": 12,
-    "releasedAt": "2026-10-10T13:36:55+08:00",
-    "notes": "設定說明 Cloud Run/身分證改為選填；PDF 解鎖服務一鍵部署教學"
+    "version": 13,
+    "releasedAt": "2026-10-10T15:27:04+08:00",
+    "notes": "新版市場分析：持股健檢、消息面、加減碼參考、市場熱門個股、定時寄信"
   },
   "previous": {
-    "version": 11
+    "version": 12
   },
   "libVersion": 9
 }
