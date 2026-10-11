@@ -42,7 +42,7 @@ function makeToken_(pwd) {
  * 後端版本號：每次發布新的程式庫版本時 +1，並同步修改 index.html 的 LATEST_BACKEND_VERSION。
  * 前端會用它判斷朋友的後端是否過舊、需要更新程式庫版本。
  */
-var APP_VERSION = 13;
+var APP_VERSION = 15;
 
 /**
  * 帳號：每份後端（每個人用自己 Google 帳號部署的 GAS）只有一組帳號
@@ -178,7 +178,91 @@ function api_getDashboard() {
       totalProfit:      totalRealized + totalDiv + (totalMarketVal - totalCost),
     },
     charts: { pnlByYear, divByYear, totalByYear },
+    home: (() => { try { return buildHomeData_(C, holds, divs, pnlByYear, divByYear); } catch (e) { Logger.log('總覽資料失敗：' + e.message); return null; } })(),
   };
+}
+
+/**
+ * 新版總覽（v15）需要的摘要：今年已實現／股利、近 12 個月總資產、待確認、市場分析、下一筆股利、資產記錄、月報
+ * 每一塊各自 try，某一塊失敗只會讓那張卡片不顯示
+ */
+function buildHomeData_(C, holds, divs, pnlByYear, divByYear) {
+  const tz = C.TZ || 'Asia/Taipei';
+  const now = new Date();
+  const today = Utilities.formatDate(now, tz, 'yyyy/MM/dd');
+  const year = today.slice(0, 4);
+  const safe = (fn, dflt) => { try { return fn(); } catch (e) { Logger.log('總覽：' + e.message); return dflt; } };
+  const home = { today, year, thisYearReal: pnlByYear[year] || 0, thisYearDiv: divByYear[year] || 0 };
+
+  home.holdingsCount = new Set(holds.filter(r => Number(r['持有股數'] || 0) > 0).map(r => String(r['股票代碼'] || '').trim()).filter(Boolean)).size;
+  home.dcaCount = Array.from({ length: 10 }, (_, i) => String(C['DCA_' + (i + 1) + '_SYMBOL'] || '').trim()).filter(Boolean).length;
+
+  // 近 12 個月總資產：資產追蹤各份紀錄，取每月月底前最後一筆快照加總
+  safe(() => {
+    const cfg = getWealthConfig_();
+    const hist = readWealthV2History_();
+    const books = wealthOrder_(cfg);
+    const y0 = Number(year), m0 = Number(today.slice(5, 7));
+    const months = [];
+    for (let k = 11; k >= 0; k--) { const d = new Date(y0, m0 - 1 - k, 1); months.push(d.getFullYear() + '/' + ('0' + (d.getMonth() + 1)).slice(-2)); }
+    home.assets = months.map(ym => {
+      const end = ym.replace('/', '-') + '-99';
+      let total = 0, has = false;
+      books.forEach(b => { const list = (hist[b] || []).filter(x => String(x.date).replace(/\//g, '-') <= end); if (list.length) { total += list[list.length - 1].totalTWD; has = true; } });
+      return { ym, v: has ? Math.round(total) : null };
+    });
+    let lastDate = '', total = 0;
+    books.forEach(b => { const list = hist[b] || []; if (list.length) { const l = list[list.length - 1]; total += l.totalTWD; if (String(l.date) > lastDate) lastDate = String(l.date); } });
+    if (lastDate) {
+      const d = lastDate.slice(0, 10).replace(/-/g, '/');
+      home.wealth = { total: Math.round(total), last: d, days: Math.round((Date.parse(today) - Date.parse(d)) / 864e5) };
+    }
+  });
+
+  // 待確認交易
+  safe(() => {
+    const sh = getSS_().getSheetByName(C.SHEET_STAGING || '待確認交易');
+    if (!sh || sh.getLastRow() < 2) { home.pending = { count: 0, names: [] }; return; }
+    const rows = readSheetAsObjects_(sh).filter(r => !r['確認狀態'] || r['確認狀態'] === '待確認');
+    home.pending = { count: rows.length, names: rows.slice(0, 3).map(r => [r['股票代碼'], r['股票名稱']].filter(Boolean).join(' ')) };
+  });
+
+  // 最新一次市場分析
+  safe(() => {
+    const sh = getSS_().getSheetByName(MARKET_SHEET_);
+    if (!sh || sh.getLastRow() < 2) return;
+    const last = sh.getRange(sh.getLastRow(), 1, 1, 2).getValues()[0];
+    const txt = String(last[1] || '');
+    if (!txt.startsWith('{"v":2')) return;
+    const r = JSON.parse(txt);
+    home.market = { signal: r.marketSignal || '', ts: r.ts || '', add: (r.holdings || []).filter(h => h.action === '加碼').length,
+                    reduce: (r.holdings || []).filter(h => h.action === '減碼').length };
+  });
+
+  // 下一筆股利（發放日 >= 今天，最近的一筆）
+  safe(() => {
+    const next = divs.map(r => ({ code: String(r['股票代碼'] || '').trim(), name: String(r['股票名稱'] || '').trim(),
+        date: reportYMD_(r['現金股利發放日'], tz), amount: Number(r['實際領取金額 (扣除每筆手續費10元)'] || 0) }))
+      .filter(x => x.date && x.date >= today && x.amount > 0)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    if (next.length) {
+      const d0 = next[0].date;
+      const same = next.filter(x => x.date === d0);
+      home.nextDiv = { date: d0, code: same[0].code, name: same[0].name, amount: Math.round(same.reduce((t, x) => t + x.amount, 0)), more: same.length - 1 };
+    }
+  });
+
+  // 最近一次月報
+  safe(() => {
+    const sh = getSS_().getSheetByName(MONTHLY_SHEET_);
+    if (!sh || sh.getLastRow() < 2) return;
+    const rows = sh.getRange(2, 1, sh.getLastRow() - 1, MONTHLY_HEADERS_.length).getValues()
+      .filter(r => r[0]).sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+    const r = rows[rows.length - 1];
+    if (r) home.report = { ym: String(r[0]), realized: Number(r[5]) || 0, dividend: Number(r[6]) || 0 };
+  });
+
+  return home;
 }
 
 /* ============================================================
@@ -946,7 +1030,7 @@ function api_getWealth() {
     }
     const history = {};
     cfg.order.forEach(id => { history[id] = hist[id] || []; });
-    return { ok: true, order: cfg.order, books: cfg.books, history };
+    return { ok: true, order: cfg.order, books: cfg.books, history, reminder: getWealthReminderCfg_() };
   } catch (e) { return { ok: false, msg: e.message }; }
 }
 
@@ -1056,37 +1140,133 @@ function api_runAutoUpdate() {
   return { ok: true, status: 'updated', msg: `已套用最新版 v${latest}，重新整理頁面後生效`, at };
 }
 
-/* --- 每季/每半年 Email 提醒 --- */
-function wealthReminder() {
-  const props = getProps_();
-  const type  = props.getProperty('WEALTH_REMINDER_TYPE') || 'quarterly';
-  const month = new Date().getMonth() + 1;
-  const active = type === 'halfyear' ? [1,7] : [1,4,7,10];
-  if (!active.includes(month)) return;
+/* --- 資產記錄 Email 提醒（使用者自訂月份、日期、時間） --- */
 
-  const year   = new Date().getFullYear();
-  const qLabel = month<=3?'Q1':month<=6?'Q2':month<=9?'Q3':'Q4';
-  const label  = type === 'halfyear' ? (month<=6?'上半年':'下半年') : qLabel;
-  const url    = getScriptApp_().getService().getUrl();
-  const msg    = `【資產記帳提醒】${year} ${label} 到了！\n💰 記得記錄這期的總資產\n\n開啟 App：${url}`;
-  try { const C=getCfg_(); if(C['ALERT_TO']) MailApp.sendEmail(C['ALERT_TO'],'【資產記帳提醒】'+year+' '+label, msg); } catch(e){}
+/**
+ * 提醒設定存在指令碼屬性 WEALTH_REMINDER：{ months:[1..12], day:1~28, hour:0~23 }；沒有＝停用
+ * 舊版只有 WEALTH_REMINDER_TYPE（quarterly / halfyear，每月 1 號 9 點），讀的時候自動轉換
+ */
+function getWealthReminderCfg_() {
+  const props = getProps_();
+  const raw = props.getProperty('WEALTH_REMINDER');
+  if (raw) { try { return normWealthReminder_(JSON.parse(raw)); } catch (e) {} }
+  const type = props.getProperty('WEALTH_REMINDER_TYPE');
+  const hasTrigger = getScriptApp_().getProjectTriggers().some(t => t.getHandlerFunction() === 'wealthReminder');
+  if (!type || !hasTrigger) return { enabled: false, months: [1, 4, 7, 10], day: 1, hour: 9 };
+  return { enabled: true, months: type === 'halfyear' ? [1, 7] : [1, 4, 7, 10], day: 1, hour: 9 };
+}
+function normWealthReminder_(o) {
+  o = o || {};
+  const months = Array.from(new Set((o.months || []).map(Number).filter(m => m >= 1 && m <= 12))).sort((a, b) => a - b);
+  let day = parseInt(o.day, 10); if (!(day >= 1 && day <= 28)) day = 1;
+  let hour = parseInt(o.hour, 10); if (!(hour >= 0 && hour <= 23)) hour = 9;
+  return { enabled: o.enabled !== false && months.length > 0, months: months.length ? months : [1, 4, 7, 10], day, hour };
 }
 
-function api_setupWealthTrigger(type) {
-  // type: 'quarterly' | 'halfyear' | 'none'
+/** 排程入口：每月 day 號 hour 點觸發，只有在選定的月份才寄 */
+function wealthReminder() {
+  const r = getWealthReminderCfg_();
+  if (!r.enabled) return;
+  const tz = getCfg_().TZ || 'Asia/Taipei';
+  const month = Number(Utilities.formatDate(new Date(), tz, 'M'));
+  if (!r.months.includes(month)) return;
+  sendWealthReminderMail_(false);
+}
+
+/** 寄提醒信；test = true 時主旨加「測試」 */
+function sendWealthReminderMail_(test) {
+  const C = getCfg_();
+  const to = String(C.ALERT_TO || '').trim();
+  if (!to) throw new Error('《設定》的「通知 Email」沒有填，無法寄提醒');
+  const tz = C.TZ || 'Asia/Taipei';
+  const now = new Date();
+  const y = Utilities.formatDate(now, tz, 'yyyy'), m = Number(Utilities.formatDate(now, tz, 'M'));
+  const subject = `【你不理財】該記錄資產了（${y} 年 ${m} 月）` + (test ? '・測試' : '');
+  MailApp.sendEmail({ to, subject, htmlBody: renderWealthReminderHtml_(buildWealthReminderData_(tz), getWealthReminderCfg_(), test) });
+  return { to, subject };
+}
+
+/** 每份紀錄：上次記錄日期、距今幾天、當時總資產、要填的機構 */
+function buildWealthReminderData_(tz) {
+  const cfg = getWealthConfig_();
+  const hist = readWealthV2History_();
+  const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  return wealthOrder_(cfg).map(id => {
+    const book = cfg.books[id] || { name: id, institutions: [] };
+    const list = hist[id] || [];
+    const last = list.length ? list[list.length - 1] : null;
+    const prev = list.length > 1 ? list[list.length - 2] : null;
+    const days = last ? Math.round((Date.parse(today) - Date.parse(String(last.date).slice(0, 10))) / 864e5) : null;
+    return {
+      name: book.name, lastDate: last ? String(last.date).slice(0, 10).replace(/-/g, '/') : '', days,
+      total: last ? last.totalTWD : null, diff: last && prev ? last.totalTWD - prev.totalTWD : null,
+      institutions: (book.institutions || []).map(it => ({ name: it.name, kind: it.kind, n: (it.accounts || []).length })),
+    };
+  });
+}
+
+function renderWealthReminderHtml_(books, r, test) {
+  const INK = '#344e41', MUTED = '#8a8a80', LINE = '#ece9e2', POS = '#bc6c25', NEG = '#588157';
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const int = n => String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const ago = d => d == null ? '' : d < 1 ? '今天' : d < 45 ? `${d} 天前` : `約 ${Math.round(d / 30)} 個月前`;
+  const cards = books.map(b => `
+    <tr><td style="padding:0 16px 14px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:14px;border:1px solid ${LINE}">
+      <tr><td style="padding:16px 18px 4px;font-size:16px;font-weight:700;color:#3a5a40">${esc(b.name)}</td></tr>
+      <tr><td style="padding:4px 18px 16px;font-size:14px;color:${INK};line-height:1.8">
+        ${b.lastDate
+          ? `上次記錄：<b>${esc(b.lastDate)}</b> <span style="color:${MUTED}">（${ago(b.days)}）</span><br>
+             當時總資產：<b style="font-size:18px">${int(b.total)}</b> 元` +
+            (b.diff != null ? ` <span style="color:${b.diff >= 0 ? POS : NEG};font-size:13px">（比前一次 ${b.diff >= 0 ? '+' : '−'}${int(b.diff)}）</span>` : '')
+          : `<span style="color:${MUTED}">還沒有任何記錄</span>`}
+        ${b.institutions.length ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid ${LINE};font-size:13px;color:${MUTED}">這次要填：${b.institutions.map(i => `☐ ${esc(i.name)}（${i.n} 項）`).join('　')}</div>` : ''}
+      </td></tr></table></td></tr>`).join('');
+  const sched = `${r.months.length === 12 ? '每個月' : '每年 ' + r.months.join('、') + ' 月'}的 ${r.day} 號 ${String(r.hour).padStart(2, '0')}:00`;
+  return `<div style="background:#f3f1ea;padding:20px 0;font-family:-apple-system,'Segoe UI','PingFang TC','Microsoft JhengHei',sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto">
+    <tr><td style="padding:0 16px 16px">
+      <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+        <td style="padding-right:12px"><img src="${APP_URL_}icon-128.png" width="44" height="44" alt="" style="border-radius:12px;display:block"></td>
+        <td><div style="font-size:20px;font-weight:700;color:${INK}">該記錄資產了 💰</div>
+          <div style="font-size:13px;color:${MUTED}">花 5 分鐘把各帳戶金額填一下，就能看到資產的變化</div></td>
+      </tr></table>
+      ${test ? `<div style="margin-top:10px;padding:6px 10px;background:#fff8e6;border-radius:8px;font-size:12px;color:#7a5a12">這是測試信，用來確認格式；正式提醒會在設定的時間寄出。</div>` : ''}
+    </td></tr>
+    ${cards}
+    <tr><td style="padding:4px 16px 8px" align="center">
+      <a href="${APP_URL_}" style="display:inline-block;background:#3a5a40;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:12px 28px;border-radius:12px">打開 App 記錄資產</a>
+    </td></tr>
+    <tr><td style="padding:10px 16px 0;font-size:12px;color:${MUTED};text-align:center;line-height:1.7">
+      提醒時間：${esc(sched)}（台北時間）<br>要調整或停用：App「資產追蹤」頁最下面的「Email 定期提醒」
+    </td></tr>
+  </table></div>`;
+}
+
+/**
+ * 套用提醒設定
+ * cfg：{ enabled, months:[..], day, hour }（v14 起）；舊前端傳字串 'quarterly' | 'halfyear' | 'none'
+ */
+function api_setupWealthTrigger(cfg) {
   try {
-    getScriptApp_().getProjectTriggers()
-      .filter(t => t.getHandlerFunction() === 'wealthReminder')
-      .forEach(t => getScriptApp_().deleteTrigger(t));
-    if (type !== 'none') {
-      getScriptApp_().newTrigger('wealthReminder').timeBased().onMonthDay(1).atHour(9).create();
-      getProps_().setProperty('WEALTH_REMINDER_TYPE', type);
-    } else {
-      getProps_().deleteProperty('WEALTH_REMINDER_TYPE');
+    if (typeof cfg === 'string') cfg = cfg === 'none' ? { enabled: false } : { months: cfg === 'halfyear' ? [1, 7] : [1, 4, 7, 10], day: 1, hour: 9 };
+    const r = normWealthReminder_(cfg);
+    const app = getScriptApp_();
+    const props = getProps_();
+    app.getProjectTriggers().filter(t => t.getHandlerFunction() === 'wealthReminder').forEach(t => app.deleteTrigger(t));
+    props.deleteProperty('WEALTH_REMINDER_TYPE');
+    props.setProperty('WEALTH_REMINDER', JSON.stringify(r));
+    if (r.enabled) {
+      app.newTrigger('wealthReminder').timeBased().onMonthDay(r.day).atHour(r.hour).inTimezone(getCfg_().TZ || 'Asia/Taipei').create();
     }
-    const label = type==='quarterly'?'每季（1/4/7/10月）':type==='halfyear'?'每半年（1/7月）':'已關閉';
-    return { ok: true, msg: '提醒設定：' + label };
-  } catch(e) { return { ok: false, msg: e.message }; }
+    const msg = r.enabled ? `提醒設定：${r.months.length === 12 ? '每個月' : '每年 ' + r.months.join('、') + ' 月'}的 ${r.day} 號 ${String(r.hour).padStart(2, '0')}:00` : '已停用提醒';
+    return { ok: true, msg, reminder: r };
+  } catch (e) { return { ok: false, msg: e.message }; }
+}
+
+/** 立刻寄一封測試提醒信（看格式用） */
+function api_sendWealthReminderTest() {
+  try { const m = sendWealthReminderMail_(true); return { ok: true, msg: '測試信已寄到 ' + m.to }; }
+  catch (e) { return { ok: false, msg: e.message }; }
 }
 
 /* ============================================================
@@ -1356,7 +1536,7 @@ function doPost(e) {
       'api_saveSettings', 'api_getHoldingsForAnalysis', 'api_callGemini',
       'api_saveAnalysis', 'api_getAnalysisHistory', 'api_getGeminiKeyStatus',
       'api_saveGeminiKey',
-      'api_setupWealthTrigger', 'api_sendMonthlyReport','api_runMarketAnalysis', 'api_getUpdateStatus', 'api_runAutoUpdate',
+      'api_setupWealthTrigger','api_sendWealthReminderTest', 'api_sendMonthlyReport','api_runMarketAnalysis', 'api_getUpdateStatus', 'api_runAutoUpdate',
       'api_getWealth', 'api_saveWealthConfig', 'api_saveWealthSnapshotV2', 'api_deleteWealthBook',
       'ingestFromGmail_Plaintext_SAFE', 'rebuildAll_B_SAFE',
       'api_runDividendsUpdate', 'appendDCAFromHoldings_SAFE',

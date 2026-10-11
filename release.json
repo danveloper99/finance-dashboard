@@ -1,11 +1,11 @@
 {
   "current": {
-    "version": 13,
-    "releasedAt": "2026-10-10T15:27:04+08:00",
-    "notes": "新版市場分析：持股健檢、消息面、加減碼參考、市場熱門個股、定時寄信"
+    "version": 15,
+    "releasedAt": "2026-10-11T20:40:15+08:00",
+    "notes": "總覽改版（理財手帳）、側邊欄與帳號選單；資產紀錄可刪除、Email 提醒自訂月份日期時間"
   },
   "previous": {
-    "version": 12
+    "version": 13
   },
   "libVersion": 9
 }

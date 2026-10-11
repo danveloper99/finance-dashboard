@@ -86,6 +86,143 @@
     .mk-pill{display:inline-block;font-size:12px;font-weight:700;padding:2px 10px;border-radius:999px;white-space:nowrap;background:#f2f1ec;color:#777}
     .mk-pill.sm{font-size:11px;padding:1px 7px;height:fit-content}
     .mk-pill.up{background:#bc6c25;color:white}.mk-pill.down{background:#588157;color:white}.mk-pill.neu{background:#e9e7df;color:#666}
+    /* ===== 理財手帳（v15 版面） ===== */
+    :root{--paper:#f4f1e8;--paper-2:#ebe6d8;--ink:#25362b;--rule:#d9d3c2;--muted:#857f6f;--cream:#fffdf7;--clay:#bc6c25;--wheat:#dda15e;--moss:#a3b18a}
+    body{background-color:var(--paper)!important;background-image:radial-gradient(ellipse 70% 50% at 100% 0%,rgba(163,177,138,.28),transparent 60%),radial-gradient(ellipse 60% 40% at 0% 100%,rgba(221,161,94,.16),transparent 60%)!important;background-attachment:fixed}
+    body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.35;mix-blend-mode:multiply;z-index:-1;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .3 0 0 0 0 .2 0 0 0 .18 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+    .ld-top{position:fixed;top:0;left:0;right:0;height:64px;z-index:40;display:flex;align-items:center;gap:8px;padding:0 14px;background:rgba(244,241,232,.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--rule)}
+    .ld-brand{font-weight:900;font-size:17px;letter-spacing:.04em;color:var(--ink);white-space:nowrap}
+    .ld-brand small{font-family:'DM Mono',monospace;font-weight:400;font-size:10px;color:var(--muted);letter-spacing:.12em;margin-left:6px}
+    .ld-icon-btn{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;border:none;background:transparent;color:#3a5a40;cursor:pointer;font-size:22px;flex:none}
+    .ld-icon-btn:hover{background:rgba(58,90,64,.08)}
+    .ld-acct{display:flex;align-items:center;gap:8px;padding:4px 8px 4px 4px;border-radius:999px;border:1px solid var(--rule);background:var(--cream);cursor:pointer;flex:none}
+    .ld-av{width:28px;height:28px;border-radius:50%;background:#3a5a40;color:var(--paper);display:grid;place-items:center;font-size:13px;font-weight:700}
+    .ld-av.big{width:44px;height:44px;border-radius:14px;font-size:20px;font-weight:900}
+    .ld-acct .ld-nm{font-size:13px;font-weight:700;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .ld-acct>i{font-size:12px;color:var(--muted)}
+    @media(max-width:520px){.ld-brand small,.ld-acct .ld-nm,.ld-acct>i{display:none}.ld-acct{padding:3px;border:none;background:transparent}.ld-brand{font-size:16px}}
+    .ld-pop{position:fixed;top:62px;right:12px;z-index:60;width:286px;background:var(--cream);border:1px solid var(--rule);border-radius:20px;box-shadow:0 24px 50px -20px rgba(37,54,43,.45);padding:16px;opacity:0;transform:translateY(-8px) scale(.98);pointer-events:none;transition:all .2s}
+    .ld-pop.open{opacity:1;transform:none;pointer-events:auto}
+    .ld-who{display:flex;gap:12px;align-items:center;padding-bottom:14px;border-bottom:1px dashed var(--rule)}
+    .ld-who b{font-size:16px;color:var(--ink)}.ld-who small{display:block;font-size:12px;color:var(--muted)}
+    .ld-ver{margin:12px 0;padding:10px 12px;border-radius:12px;background:#f0f4ec;font-size:12.5px;color:#3a5a40;display:flex;gap:8px;align-items:center}
+    .ld-ver.warn{background:#fff8e6;color:#7a5a12}
+    .ld-ver b{font-family:'DM Mono',monospace;font-weight:500}
+    .ld-pop a{display:flex;align-items:center;gap:10px;padding:9px 6px;border-radius:10px;font-size:14px;color:var(--ink);cursor:pointer}
+    .ld-pop a:hover{background:var(--paper)}
+    .ld-pop a i{font-size:18px;color:#588157}
+    .ld-pop a.out{color:#a6533f;margin-top:4px;border-top:1px dashed var(--rule);border-radius:0 0 10px 10px;padding-top:12px}
+    .ld-pop a.out i{color:#a6533f}
+    .ld-modal{position:fixed;inset:0;z-index:70;background:rgba(37,54,43,.4);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding:70px 12px 20px;overflow-y:auto}
+    .ld-modal-card{width:100%;max-width:640px}
+    .ld-shade{position:fixed;inset:0;background:rgba(37,54,43,.35);backdrop-filter:blur(2px);z-index:50;opacity:0;pointer-events:none;transition:opacity .25s}
+    .ld-shade.open{opacity:1;pointer-events:auto}
+    .ld-side{position:fixed;top:0;bottom:0;left:0;z-index:51;width:268px;background:var(--ink);color:var(--paper);padding:20px 14px;display:flex;flex-direction:column;transform:translateX(-105%);transition:transform .3s cubic-bezier(.2,.8,.2,1);border-radius:0 26px 26px 0;overflow:hidden}
+    .ld-side.open{transform:none}
+    .ld-side::after{content:"";position:absolute;right:-80px;bottom:-80px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(221,161,94,.25),transparent 70%);pointer-events:none}
+    .ld-side-head{display:flex;align-items:center;gap:10px;padding:4px 8px 18px;border-bottom:1px solid rgba(244,241,232,.12)}
+    .ld-logo{width:38px;height:38px;border-radius:12px;background:var(--paper);display:grid;place-items:center;color:#3a5a40;font-size:22px}
+    .ld-side-head b{font-size:15px;letter-spacing:.04em}.ld-side-head small{display:block;font-family:'DM Mono',monospace;font-size:10px;opacity:.5;letter-spacing:.14em}
+    .ld-grp{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.18em;opacity:.45;padding:16px 10px 6px}
+    .ld-side a{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;color:rgba(244,241,232,.75);font-size:14.5px;font-weight:600;cursor:pointer}
+    .ld-side a i{font-size:20px}
+    .ld-side a:hover{background:rgba(244,241,232,.07);color:var(--paper)}
+    .ld-side a.on{background:var(--paper);color:var(--ink)}
+    .ld-bdg{margin-left:auto;font-family:'DM Mono',monospace;font-size:11px;padding:1px 8px;border-radius:999px;background:var(--wheat);color:var(--ink)}
+    .ld-side-foot{padding:12px 10px 0;border-top:1px solid rgba(244,241,232,.12);font-size:11px;opacity:.5;font-family:'DM Mono',monospace;letter-spacing:.06em}
+    .ld-dock{position:fixed;left:50%;bottom:calc(12px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:40;display:flex;gap:4px;padding:6px;border-radius:22px;background:rgba(37,54,43,.92);backdrop-filter:blur(12px);box-shadow:0 12px 30px -10px rgba(37,54,43,.6)}
+    .ld-dock a{white-space:nowrap;display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 12px;border-radius:16px;color:rgba(244,241,232,.6);font-size:10px;font-weight:700;cursor:pointer;position:relative}
+    .ld-dock a i{font-size:21px}
+    .ld-dock a.on{background:var(--paper);color:var(--ink)}
+    .ld-dot{position:absolute;top:5px;right:10px;width:7px;height:7px;border-radius:50%;background:var(--wheat)}
+    .page-wrap{padding-bottom:calc(100px + env(safe-area-inset-bottom,0px))!important}
+    @media(min-width:1180px){
+      .ld-side{transform:none;border-radius:0;width:236px}
+      .ld-shade,.ld-menu,.ld-dock{display:none!important}
+      .ld-top,.page-wrap{margin-left:236px}
+      .ld-top{left:0}
+      .page-wrap{padding-bottom:60px!important}
+    }
+    /* 總覽 */
+    .ld-home{display:grid;gap:24px;grid-template-columns:minmax(0,1fr)}
+    @media(min-width:960px){.ld-home{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px 32px}.ld-full{grid-column:1/-1}}
+    .ld-dateline{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.18em;color:var(--muted);display:flex;gap:10px;align-items:center}
+    .ld-dateline::after{content:"";flex:1;height:1px;background:var(--rule)}
+    .ld-hero{display:grid;gap:14px;margin-top:16px}
+    @media(min-width:960px){.ld-hero{grid-template-columns:auto 1fr;align-items:end;gap:44px}}
+    .ld-label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
+    .ld-bigval{font-family:'Noto Serif TC',serif!important;font-weight:700;font-size:clamp(36px,9vw,56px);line-height:1.05;margin-top:6px;color:var(--ink)}
+    .ld-bigval sup{font-family:'DM Mono',monospace;font-size:12px;font-weight:400;color:var(--muted);vertical-align:2.4em;margin-left:6px;letter-spacing:.1em}
+    .ld-deltas{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .ld-delta{font-family:'Noto Serif TC',serif!important;font-weight:700;font-size:14px;padding:5px 12px;border-radius:999px;background:var(--cream);border:1px solid var(--rule)}
+    .ld-delta.up{color:var(--clay)}.ld-delta.dn{color:#588157}
+    .ld-delta b{font-weight:600;font-size:12px;color:var(--muted);margin-right:6px}
+    .ld-spark{position:relative;height:140px;padding-top:22px;cursor:crosshair}
+    .ld-spark svg{width:100%;height:100%;overflow:visible;display:block}
+    .ld-spark-cap{position:absolute;left:0;top:0;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.1em}
+    .ld-spark-line{stroke-dasharray:2000;stroke-dashoffset:2000;animation:ldDraw 1.6s .2s cubic-bezier(.6,.1,.2,1) forwards}
+    @keyframes ldDraw{to{stroke-dashoffset:0}}
+    .ld-node{position:absolute;width:9px;height:9px;margin:calc(22px - 4.5px) 0 0 -4.5px;border-radius:50%;background:var(--cream);border:2px solid #3a5a40;transition:transform .15s;pointer-events:none}
+    .ld-node.last{background:var(--clay);border-color:var(--clay)}
+    .ld-node.hot{transform:scale(1.45)}
+    .ld-vline{position:absolute;top:22px!important;bottom:0;width:0;border-left:1px dashed var(--rule)}
+    .ld-tip{position:absolute;z-index:5;pointer-events:none;margin-top:12px;transform:translate(-50%,-100%);background:var(--ink);color:var(--paper);padding:7px 11px;border-radius:10px;font-size:11px;white-space:nowrap;box-shadow:0 8px 18px -8px rgba(0,0,0,.4)}
+    .ld-tip b{display:block;font-size:14px}.ld-tip small{font-family:'DM Mono',monospace;opacity:.65;font-size:10px}.ld-tip span{color:var(--wheat)}
+    .ld-spark-empty{height:100%;display:grid;place-items:center;font-size:13px;color:var(--muted);border:1px dashed var(--rule);border-radius:16px;cursor:pointer}
+    .ld-sec-h{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+    .ld-sec-h h2{font-size:18px;font-weight:900;letter-spacing:.06em;color:var(--ink)}
+    .ld-sec-h span{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.16em;color:var(--muted)}
+    .ld-rule{flex:1;height:1px;background:var(--rule);align-self:center}
+    .ld-now{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
+    .ld-tile{position:relative;border-radius:18px;padding:14px 15px;background:var(--cream);border:1px solid var(--rule);cursor:pointer;transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s;display:flex;flex-direction:column;min-height:112px;min-width:0}
+    .ld-tile:hover{transform:translateY(-3px) rotate(-.3deg);box-shadow:0 14px 30px -14px rgba(37,54,43,.35)}
+    .ld-tile .k{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+    .ld-tile .k i{font-size:15px}
+    .ld-tile .v{font-family:'Noto Serif TC',serif!important;font-size:26px;font-weight:700;line-height:1.1;margin-top:auto;padding-top:10px;color:var(--ink)}
+    .ld-tile .v small{font-size:13px;font-weight:600;margin-left:3px;color:var(--muted)}
+    .ld-tile .s{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+    .ld-go{position:absolute;right:13px;top:12px;font-size:15px;opacity:.45;transition:transform .25s,opacity .25s}
+    .ld-tile:hover .ld-go{transform:translate(3px,-3px);opacity:1}
+    .ld-badge{position:absolute;right:12px;top:11px;width:9px;height:9px;border-radius:50%;background:var(--clay);box-shadow:0 0 0 4px rgba(188,108,37,.15)}
+    .ld-tile.signal{background:linear-gradient(170deg,#fbf3e6,#f4e3c9);border-color:#ecd7b4}
+    .ld-tile.signal .v{color:var(--clay)}
+    .ld-gauge{position:absolute;right:12px;top:12px;width:46px}
+    .ld-ring{position:absolute;right:12px;top:12px;width:36px;height:36px}
+    .ld-report{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:14px;border:1px dashed var(--rule);font-size:12.5px;color:var(--muted);cursor:pointer}
+    .ld-report>i{font-size:17px;color:#588157;flex:none}.ld-report b{color:var(--ink);margin-right:4px}
+    .ld-report:hover{background:var(--cream)}
+    .ld-toc{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 18px;background:var(--cream);border:1px solid var(--rule);border-radius:20px;padding:4px 16px}
+    .ld-row{display:flex;align-items:baseline;padding:11px 0;border-bottom:1px solid rgba(217,211,194,.55);cursor:pointer;min-width:0}
+    .ld-row:nth-last-child(-n+2){border-bottom:none}
+    .ld-row .no{font-style:italic;font-size:12px;color:var(--moss);width:24px;flex:none}
+    .ld-row .nm{font-size:14.5px;font-weight:700;white-space:nowrap;color:var(--ink);transition:color .2s}
+    .ld-row .dots{flex:1;margin:0 8px;border-bottom:2px dotted var(--rule);transform:translateY(-4px);min-width:10px}
+    .ld-row .meta{font-family:'Noto Serif TC',serif!important;font-size:13px;font-weight:700;white-space:nowrap;color:var(--ink)}
+    .ld-row .meta.up{color:var(--clay)}.ld-row .meta.dn{color:#588157}
+    .ld-row .meta .tag{font-size:10.5px;padding:1px 7px;border-radius:999px;background:var(--clay);color:#fff;margin-left:4px;vertical-align:1px}
+    .ld-row:hover .nm{color:#588157}
+    @media(max-width:400px){.ld-toc{gap:0 10px;padding:4px 12px}.ld-row .nm{font-size:13.5px}.ld-row .no{width:20px}}
+    .ld-ret{background:var(--cream);border:1px solid var(--rule);border-radius:22px;padding:18px}
+    .ld-ret-top{display:grid;gap:16px}
+    @media(min-width:960px){.ld-ret-top{grid-template-columns:minmax(0,1fr) auto;align-items:start}}
+    .ld-ret-total{font-family:'Noto Serif TC',serif!important;font-weight:700;font-size:clamp(30px,7vw,40px);color:var(--clay);line-height:1.1}
+    .ld-ret-total.neg{color:#588157}
+    .ld-ret-formula{font-size:12px;color:var(--muted);margin-top:4px}
+    .ld-chips{display:flex;flex-wrap:wrap;gap:6px}
+    .ld-chips .lab{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;letter-spacing:.12em;width:100%;margin-bottom:-2px}
+    .ld-chip{font-family:'Noto Serif TC',serif!important;font-size:13px;font-weight:700;padding:6px 12px;border-radius:999px;border:1.5px solid var(--rule);background:transparent;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:6px}
+    .ld-chip .sw{width:9px;height:9px;border-radius:3px}.ld-chip .amt{font-weight:600;font-size:12px}
+    .ld-chip.on{background:var(--paper);border-color:#3a5a40;color:var(--ink)}
+    .ld-chip.yr{padding:5px 11px;font-size:12.5px}
+    .ld-chip.yr.on{background:#3a5a40;color:var(--paper);border-color:#3a5a40}
+    .ld-seg{display:inline-flex;gap:3px;padding:3px;border-radius:12px;background:var(--paper);margin:16px 0 8px}
+    .ld-seg button{font-family:'Noto Serif TC',serif;font-size:12.5px;font-weight:700;border:none;background:transparent;color:var(--muted);padding:6px 12px;border-radius:9px;cursor:pointer}
+    .ld-seg button.on{background:var(--cream);color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+    .ld-hint{font-size:11.5px;color:var(--muted);margin-top:8px}
+    .ld-rise{opacity:0;transform:translateY(14px);animation:ldRise .7s cubic-bezier(.2,.8,.2,1) forwards}
+    @keyframes ldRise{to{opacity:1;transform:none}}
+    @media (prefers-reduced-motion: reduce){.ld-rise,.ld-spark-line{animation:none;opacity:1;transform:none;stroke-dashoffset:0}}
     .no-scrollbar::-webkit-scrollbar{display:none}
     .no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
     .fade-enter-active,.fade-leave-active{transition:opacity .25s}
@@ -223,48 +360,7 @@
   })();
 </script>
 
-<div id="app">
-
-  <!-- ══ 登入 / 首次設定 ══ -->
-  <div v-if="authState!=='ok'" style="position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px 16px;overflow-y:auto">
-    <div style="max-width:420px;width:100%;margin:auto">
-      <div style="text-align:center;margin-bottom:24px">
-        <div style="width:64px;height:64px;margin:0 auto 12px;border-radius:16px;background:#3a5a40;display:flex;align-items:center;justify-content:center"><i class="ph-fill ph-piggy-bank" style="font-size:38px;color:white"></i></div>
-        <div style="font-size:22px;font-weight:700;color:#3a5a40">你不理財，才不理你</div>
-      </div>
-      <div v-if="authState==='checking'" style="text-align:center;padding:40px 0"><i class="ph ph-spinner spin" style="font-size:28px;color:#3a5a40"></i></div>
-      <div v-else class="card">
-        <div style="display:flex;gap:6px;margin-bottom:18px;background:var(--bg);padding:4px;border-radius:12px">
-          <button v-for="m in [{k:'login',l:'登入'},{k:'setup',l:'首次設定'}]" :key="m.k" @click="authState=m.k;authMsg=''" :style="authState===m.k?'background:white;color:#3a5a40;box-shadow:0 1px 4px rgba(0,0,0,.08)':'background:transparent;color:#999'" style="flex:1;padding:8px;border-radius:9px;font-weight:700;font-size:14px;border:none;cursor:pointer">{{ m.l }}</button>
-        </div>
-        <form v-if="authState==='login'" @submit.prevent="doLogin" style="display:flex;flex-direction:column;gap:12px">
-          <input v-model="authForm.user" class="input-custom" placeholder="帳號" autocomplete="username">
-          <input v-model="authForm.pwd" type="password" class="input-custom" placeholder="密碼" autocomplete="current-password">
-          <button type="submit" :disabled="authBusy" class="btn btn-primary" style="width:100%;font-size:15px;padding:12px">{{ authBusy?'登入中…':'登入' }}</button>
-          <div style="font-size:11px;color:#999;line-height:1.6;word-break:break-all">
-            連線的後端：{{ shortGasUrl }}
-            <a href="#" @click.prevent="authState='setup';authMsg=''" style="color:#588157;font-weight:700;margin-left:4px">改用我自己的後端</a>
-          </div>
-        </form>
-        <form v-else @submit.prevent="doSetup" style="display:flex;flex-direction:column;gap:12px">
-          <div style="font-size:12px;color:#666;line-height:1.8;background:#f7f9f4;border-radius:10px;padding:10px 12px">
-            第一次使用？先依下方「使用說明」部署好自己的後端，再把網址貼上、設定帳號密碼。
-          </div>
-          <input v-model="authForm.gasUrl" type="url" class="input-custom" placeholder="https://script.google.com/macros/s/.../exec">
-          <input v-model="authForm.user" class="input-custom" placeholder="帳號（3~40 個英數字）" autocomplete="username">
-          <input v-model="authForm.pwd" type="password" class="input-custom" placeholder="密碼（至少 6 個字元）" autocomplete="new-password">
-          <input v-model="authForm.pwd2" type="password" class="input-custom" placeholder="再輸入一次密碼" autocomplete="new-password">
-          <button type="submit" :disabled="authBusy" class="btn btn-primary" style="width:100%;font-size:15px;padding:12px">{{ authBusy?'設定中…':'完成設定並登入' }}</button>
-          <div style="font-size:11px;color:#999;line-height:1.6">已經設定過帳號？貼上網址後直接切到「登入」即可。
-            <a href="#" @click.prevent="useGasUrlOnly" style="color:#588157;font-weight:700">只儲存網址</a>
-          </div>
-        </form>
-        <div v-if="authMsg" style="margin-top:12px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;background:#fef2f2;color:#dc2626;line-height:1.6">{{ authMsg }}</div>
-      </div>
-      <!-- 使用說明 SOP：章節 → 步驟標題，細節點開才顯示 -->
-      <details v-if="authState!=='checking'" class="card sop" style="margin-top:14px;font-size:13px;color:#444;line-height:1.8">
-        <summary class="sop-top">📘 使用說明（首次設定 SOP）</summary>
-        <div style="margin-top:12px">
+<script type="text/x-template" id="sop-tpl"><div class="sop">
           <div style="background:#f7f9f4;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px">
             🔒 每個人的資料都存在<b>自己的</b> Google 試算表，由<b>自己的</b> Google 帳號執行後端，其他人（包含 App 作者）都看不到。點每個步驟可以看細節。
           </div>
@@ -354,38 +450,106 @@
               <li>到自己的 Apps Script →「專案設定 → 指令碼屬性」，刪除 <code>APP_USER</code> 和 <code>APP_PASSWORD</code></li>
               <li>再回本頁「首次設定」重設</li>
             </ul></div></details>
+</div></script>
+<div id="app">
+
+  <!-- ══ 登入 / 首次設定 ══ -->
+  <div v-if="authState!=='ok'" style="position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px 16px;overflow-y:auto">
+    <div style="max-width:420px;width:100%;margin:auto">
+      <div style="text-align:center;margin-bottom:24px">
+        <div style="width:64px;height:64px;margin:0 auto 12px;border-radius:16px;background:#3a5a40;display:flex;align-items:center;justify-content:center"><i class="ph-fill ph-piggy-bank" style="font-size:38px;color:white"></i></div>
+        <div style="font-size:22px;font-weight:700;color:#3a5a40">你不理財，才不理你</div>
+      </div>
+      <div v-if="authState==='checking'" style="text-align:center;padding:40px 0"><i class="ph ph-spinner spin" style="font-size:28px;color:#3a5a40"></i></div>
+      <div v-else class="card">
+        <div style="display:flex;gap:6px;margin-bottom:18px;background:var(--bg);padding:4px;border-radius:12px">
+          <button v-for="m in [{k:'login',l:'登入'},{k:'setup',l:'首次設定'}]" :key="m.k" @click="authState=m.k;authMsg=''" :style="authState===m.k?'background:white;color:#3a5a40;box-shadow:0 1px 4px rgba(0,0,0,.08)':'background:transparent;color:#999'" style="flex:1;padding:8px;border-radius:9px;font-weight:700;font-size:14px;border:none;cursor:pointer">{{ m.l }}</button>
         </div>
+        <form v-if="authState==='login'" @submit.prevent="doLogin" style="display:flex;flex-direction:column;gap:12px">
+          <input v-model="authForm.user" class="input-custom" placeholder="帳號" autocomplete="username">
+          <input v-model="authForm.pwd" type="password" class="input-custom" placeholder="密碼" autocomplete="current-password">
+          <button type="submit" :disabled="authBusy" class="btn btn-primary" style="width:100%;font-size:15px;padding:12px">{{ authBusy?'登入中…':'登入' }}</button>
+          <div style="font-size:11px;color:#999;line-height:1.6;word-break:break-all">
+            連線的後端：{{ shortGasUrl }}
+            <a href="#" @click.prevent="authState='setup';authMsg=''" style="color:#588157;font-weight:700;margin-left:4px">改用我自己的後端</a>
+          </div>
+        </form>
+        <form v-else @submit.prevent="doSetup" style="display:flex;flex-direction:column;gap:12px">
+          <div style="font-size:12px;color:#666;line-height:1.8;background:#f7f9f4;border-radius:10px;padding:10px 12px">
+            第一次使用？先依下方「使用說明」部署好自己的後端，再把網址貼上、設定帳號密碼。
+          </div>
+          <input v-model="authForm.gasUrl" type="url" class="input-custom" placeholder="https://script.google.com/macros/s/.../exec">
+          <input v-model="authForm.user" class="input-custom" placeholder="帳號（3~40 個英數字）" autocomplete="username">
+          <input v-model="authForm.pwd" type="password" class="input-custom" placeholder="密碼（至少 6 個字元）" autocomplete="new-password">
+          <input v-model="authForm.pwd2" type="password" class="input-custom" placeholder="再輸入一次密碼" autocomplete="new-password">
+          <button type="submit" :disabled="authBusy" class="btn btn-primary" style="width:100%;font-size:15px;padding:12px">{{ authBusy?'設定中…':'完成設定並登入' }}</button>
+          <div style="font-size:11px;color:#999;line-height:1.6">已經設定過帳號？貼上網址後直接切到「登入」即可。
+            <a href="#" @click.prevent="useGasUrlOnly" style="color:#588157;font-weight:700">只儲存網址</a>
+          </div>
+        </form>
+        <div v-if="authMsg" style="margin-top:12px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;background:#fef2f2;color:#dc2626;line-height:1.6">{{ authMsg }}</div>
+      </div>
+      <!-- 使用說明 SOP：章節 → 步驟標題，細節點開才顯示 -->
+      <details v-if="authState!=='checking'" class="card sop" style="margin-top:14px;font-size:13px;color:#444;line-height:1.8">
+        <summary class="sop-top">📘 使用說明（首次設定 SOP）</summary>
+        <div style="margin-top:12px"><sop-guide></sop-guide></div>
       </details>
     </div>
   </div>
 
-  <header style="position:fixed;top:0;left:0;right:0;height:64px;background:linear-gradient(135deg,#2d4a33 0%,#3a5a40 60%,#3e6145 100%);z-index:40;display:flex;align-items:center;justify-content:space-between;padding:0 16px;box-shadow:0 2px 16px rgba(0,0,0,.2);border-bottom:2px solid rgba(221,161,94,.35)">
-    <button @click="isMobileSidebarOpen=true" class="p-2 rounded-xl text-white" style="background:rgba(255,255,255,.1)">
-      <i class="ph ph-list" style="font-size:26px"></i>
-    </button>
-    <h1 class="font-bold text-white tracking-widest text-center" style="font-size:clamp(16px,4vw,22px);position:absolute;left:50%;transform:translateX(-50%);pointer-events:none;width:max-content">你不理財，才不理你</h1>
-    <div style="width:40px"></div>
+  <header class="ld-top">
+    <button @click="isMobileSidebarOpen=true" class="ld-icon-btn ld-menu" title="選單"><i class="ph ph-list"></i></button>
+    <div class="ld-brand">你不理財，才不理你<small>LEDGER</small></div>
+    <div style="flex:1"></div>
+    <button @click="loadData(currentTab)" class="ld-icon-btn" title="重新整理"><i class="ph ph-arrows-clockwise"></i></button>
+    <div class="ld-acct" @click.stop="acctOpen=!acctOpen"><div class="ld-av">{{ (authUser||'?').slice(0,1).toUpperCase() }}</div><span class="ld-nm">{{ authUser }}</span><i class="ph ph-caret-down"></i></div>
   </header>
+  <!-- 帳號選單 -->
+  <div class="ld-pop" :class="acctOpen?'open':''" @click.stop>
+    <div class="ld-who"><div class="ld-av big">{{ (authUser||'?').slice(0,1).toUpperCase() }}</div><div><b>{{ authUser }}</b><small>自己的 Google 試算表・只有你看得到</small></div></div>
+    <div class="ld-ver" :class="backendOutdated?'warn':''"><i :class="backendOutdated?'ph ph-arrow-circle-up':'ph ph-check-circle'"></i>後端 <b>v{{ backendVersion }}</b>・{{ backendOutdated ? '有新版 v'+LATEST_BACKEND_VERSION+'（會自動更新）' : '已是最新版' }}</div>
+    <a @click="acctOpen=false;selectTab('settings')"><i class="ph ph-gear"></i>設定</a>
+    <a @click="acctOpen=false;selectTab('settings')"><i class="ph ph-key"></i>修改密碼</a>
+    <a @click="acctOpen=false;deviceOpen=true"><i class="ph ph-device-mobile"></i>在其他裝置登入</a>
+    <a @click="acctOpen=false;helpOpen=true"><i class="ph ph-book"></i>使用說明</a>
+    <a class="out" @click="acctOpen=false;logout()"><i class="ph ph-sign-out"></i>登出</a>
+  </div>
+  <!-- 使用說明 -->
+  <div v-if="helpOpen" class="ld-modal" @click.self="helpOpen=false">
+    <div class="card ld-modal-card" style="font-size:13px;color:#444;line-height:1.8">
+      <div style="display:flex;align-items:center;margin-bottom:10px"><b style="font-size:16px;color:#344e41;flex:1">📘 使用說明</b><button @click="helpOpen=false" class="ld-icon-btn"><i class="ph ph-x"></i></button></div>
+      <sop-guide></sop-guide>
+    </div>
+  </div>
+  <!-- 在其他裝置登入 -->
+  <div v-if="deviceOpen" class="ld-modal" @click.self="deviceOpen=false">
+    <div class="card ld-modal-card" style="max-width:460px;font-size:13.5px;color:#444;line-height:1.8">
+      <div style="display:flex;align-items:center;margin-bottom:6px"><b style="font-size:16px;color:#344e41;flex:1">在其他裝置登入</b><button @click="deviceOpen=false" class="ld-icon-btn"><i class="ph ph-x"></i></button></div>
+      <ol style="list-style:decimal;padding-left:20px">
+        <li>在手機或電腦打開 App：<a :href="appUrl" target="_blank" rel="noopener" style="color:#bc6c25;font-weight:700;word-break:break-all">{{ appUrl }}</a></li>
+        <li>點「首次設定」，貼上下面的後端網址 →「只儲存網址」</li>
+        <li>切到「登入」，輸入同一組帳號密碼</li>
+      </ol>
+      <div style="margin-top:10px;padding:10px 12px;border-radius:12px;background:#f4f1e8;font-family:'DM Mono',monospace;font-size:11.5px;word-break:break-all;color:#344e41">{{ currentGasUrl }}</div>
+      <button @click="copyGasUrl" class="btn btn-primary" style="width:100%;margin-top:10px;font-size:14px"><i class="ph ph-copy"></i> {{ copiedGas ? '已複製' : '複製後端網址' }}</button>
+      <p style="font-size:11.5px;color:#999;margin-top:8px">這個網址是你自己的後端，只有知道帳號密碼才能看到資料。</p>
+    </div>
+  </div>
 
-  <transition name="fade">
-    <div v-if="isMobileSidebarOpen" @click="isMobileSidebarOpen=false" style="position:fixed;inset:0;background:rgba(52,78,65,.5);z-index:50;backdrop-filter:blur(4px)"></div>
-  </transition>
-  <transition name="slide">
-    <aside v-if="isMobileSidebarOpen" style="position:fixed;top:0;left:0;bottom:0;width:272px;background:#f0f2f5;z-index:51;display:flex;flex-direction:column;padding:24px 16px;border-radius:0 24px 24px 0;box-shadow:4px 0 24px rgba(0,0,0,.15)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;padding-top:8px">
-        <span class="font-bold" style="font-size:17px;color:#3a5a40">功能選單</span>
-        <button @click="isMobileSidebarOpen=false" style="width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.06);display:flex;align-items:center;justify-content:center;color:#3a5a40;border:none;cursor:pointer"><i class="ph ph-x" style="font-size:18px"></i></button>
-      </div>
-      <div style="flex:1;overflow-y:auto" class="space-y-2 no-scrollbar">
-        <a v-for="tab in tabs" :key="tab.id" @click="selectTab(tab.id)"
-           :style="currentTab===tab.id?'background:#3a5a40;color:white;box-shadow:0 3px 12px rgba(58,90,64,.3)':'color:#588157'"
-           style="display:flex;align-items:center;padding:13px 16px;border-radius:16px;cursor:pointer;transition:all .2s;font-weight:700;font-size:15px;gap:14px;margin-bottom:2px">
-          <i :class="['ph',tab.icon]" style="font-size:22px;flex-shrink:0"></i>
-          <span>{{ tab.name }}</span>
+  <div class="ld-shade" :class="isMobileSidebarOpen?'open':''" @click="isMobileSidebarOpen=false"></div>
+  <aside class="ld-side" :class="isMobileSidebarOpen?'open':''">
+    <div class="ld-side-head"><div class="ld-logo"><i class="ph-fill ph-piggy-bank"></i></div><div><b>你不理財，才不理你</b><small>LEDGER</small></div></div>
+    <div style="flex:1;overflow-y:auto" class="no-scrollbar">
+      <template v-for="g in sideGroups" :key="g.l">
+        <div class="ld-grp">{{ g.l }}</div>
+        <a v-for="t in g.items" :key="t.id" @click="selectTab(t.id)" :class="currentTab===t.id?'on':''">
+          <i :class="[currentTab===t.id?'ph-fill':'ph', t.icon]"></i>{{ t.name }}
+          <span v-if="t.id==='pending' && pendingCount" class="ld-bdg">{{ pendingCount }}</span>
         </a>
-      </div>
-    </aside>
-  </transition>
+      </template>
+    </div>
+    <div class="ld-side-foot">v{{ backendVersion }}・{{ backendAutoUpdate ? '自動更新中' : '手動更新' }}</div>
+  </aside>
 
   <main class="page-wrap">
     <div v-if="backendOutdated && !updateBannerClosed" style="margin-bottom:16px;padding:12px 16px;border-radius:14px;background:#fff8e6;border:1px solid #f0d9a0;color:#7a5a12;font-size:13px;display:flex;gap:10px;align-items:flex-start">
@@ -397,8 +561,121 @@
       <button @click="updateBannerClosed=true" style="background:none;border:none;cursor:pointer;color:#b08a3a;font-size:16px;line-height:1">✕</button>
     </div>
 
-    <!-- ══ 儀表板 ══ -->
-    <div v-if="currentTab==='dashboard'" class="space-y-6">
+    <!-- ══ 總覽（v15：理財手帳） ══ -->
+    <div v-if="currentTab==='dashboard' && home" class="ld-home">
+      <section class="ld-full ld-rise" style="animation-delay:.03s">
+        <div class="ld-dateline">{{ homeDateline }}</div>
+        <div class="ld-hero">
+          <div>
+            <div class="ld-label"><i class="ph ph-chart-pie-slice"></i>庫存總市值</div>
+            <div class="ld-bigval num-font">{{ fmtInt(dashboard.summary.marketValue) }}<sup>TWD</sup></div>
+            <div class="ld-deltas">
+              <span class="ld-delta num-font" :class="home.thisYearReal>=0?'up':'dn'"><b>{{ home.year }} 已實現</b>{{ home.thisYearReal>0?'+':'' }}{{ fmtInt(home.thisYearReal) }}</span>
+              <span class="ld-delta up num-font"><b>{{ home.year }} 股利</b>{{ fmtInt(home.thisYearDiv) }}</span>
+            </div>
+          </div>
+          <div class="ld-spark" @mousemove="sparkMove" @touchstart.passive="sparkMove" @mouseleave="sparkHover=-1">
+            <span class="ld-spark-cap">近 12 個月總資產・滑過節點看金額</span>
+            <template v-if="homeSpark.pts.length>=2">
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+                <defs><linearGradient id="ldg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#588157" stop-opacity=".25"/><stop offset="1" stop-color="#588157" stop-opacity="0"/></linearGradient></defs>
+                <path :d="homeSpark.area" fill="url(#ldg)"/>
+                <path :d="homeSpark.line" fill="none" stroke="#3a5a40" stroke-width="2.2" stroke-linecap="round" vector-effect="non-scaling-stroke" class="ld-spark-line"/>
+              </svg>
+              <span v-for="(p,i) in homeSpark.pts" :key="p.ym" class="ld-node" :class="[i===homeSpark.pts.length-1?'last':'', sparkHover===i?'hot':'']" :style="{left:p.x+'%',top:p.y+'%'}"></span>
+              <div v-if="sparkHover>=0" class="ld-vline" :style="{left:homeSpark.pts[sparkHover].x+'%'}"></div>
+              <div v-if="sparkHover>=0" class="ld-tip" :style="{left:Math.min(Math.max(homeSpark.pts[sparkHover].x,14),86)+'%',top:homeSpark.pts[sparkHover].y+'%'}">
+                <small>{{ homeSpark.pts[sparkHover].ym }}</small><b class="num-font">{{ fmtInt(homeSpark.pts[sparkHover].v) }}</b>
+                <span v-if="sparkHover>0" class="num-font">較上次 {{ homeSpark.pts[sparkHover].v>=homeSpark.pts[sparkHover-1].v?'+':'−' }}{{ fmtInt(Math.abs(homeSpark.pts[sparkHover].v-homeSpark.pts[sparkHover-1].v)) }}</span>
+              </div>
+            </template>
+            <div v-else class="ld-spark-empty" @click="selectTab('wealth')">到「資產追蹤」記錄兩次以上，這裡就會出現走勢 →</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="ld-rise" style="animation-delay:.15s">
+        <div class="ld-sec-h"><h2>今天該看的</h2><span>TODAY</span><div class="ld-rule"></div></div>
+        <div class="ld-now">
+          <div class="ld-tile" @click="selectTab('pending')">
+            <span v-if="pendingCount" class="ld-badge"></span><i v-else class="ph ph-arrow-up-right ld-go"></i>
+            <div class="k"><i class="ph ph-clock-countdown"></i>待確認交易</div>
+            <div class="v num-font">{{ pendingCount }}<small>筆</small></div>
+            <div class="s">{{ pendingCount ? (home.pending && home.pending.names.length ? home.pending.names.join('、') + (pendingCount>home.pending.names.length?'…':'') : '等你確認') : '都處理完了' }}</div>
+          </div>
+          <div class="ld-tile signal" @click="selectTab('analysis')">
+            <div class="k"><i class="ph ph-sparkle"></i>市場分析</div>
+            <template v-if="home.market">
+              <div class="v">{{ home.market.signal || '—' }}</div>
+              <div class="s">{{ home.market.add ? home.market.add+' 檔建議加碼' : (home.market.reduce ? home.market.reduce+' 檔建議減碼' : '持股維持') }}・{{ (home.market.ts||'').slice(5,10) }}</div>
+              <svg class="ld-gauge" viewBox="0 0 120 70"><path d="M10,62 A50,50 0 0 1 110,62" fill="none" stroke="#e8d3b0" stroke-width="12" stroke-linecap="round"/>
+                <path :d="gaugeArc(home.market.signal)" fill="none" stroke="#bc6c25" stroke-width="12" stroke-linecap="round"/></svg>
+            </template>
+            <template v-else><div class="v" style="font-size:18px">還沒分析</div><div class="s">按一下開始</div></template>
+          </div>
+          <div class="ld-tile" @click="selectTab('dividends')">
+            <i class="ph ph-arrow-up-right ld-go"></i>
+            <div class="k"><i class="ph ph-plant"></i>下一筆股利</div>
+            <template v-if="home.nextDiv">
+              <div class="v num-font">{{ fmtInt(home.nextDiv.amount) }}<small>元</small></div>
+              <div class="s">{{ home.nextDiv.code }}{{ home.nextDiv.more?' 等 '+(home.nextDiv.more+1)+' 檔':'' }}・{{ home.nextDiv.date.slice(5) }} 入帳</div>
+            </template>
+            <template v-else><div class="v" style="font-size:18px">暫時沒有</div><div class="s">已公布的股利都領完了</div></template>
+          </div>
+          <div class="ld-tile" @click="selectTab('wealth')">
+            <div class="k"><i class="ph ph-piggy-bank"></i>資產記錄</div>
+            <template v-if="home.wealth">
+              <div class="v num-font">{{ home.wealth.days }}<small>天沒記</small></div>
+              <div class="s">上次 {{ home.wealth.last.slice(5) }}</div>
+              <svg class="ld-ring" viewBox="0 0 46 46"><circle cx="23" cy="23" r="19" fill="none" stroke="#ebe6d8" stroke-width="5"/>
+                <circle cx="23" cy="23" r="19" fill="none" stroke="#dda15e" stroke-width="5" stroke-linecap="round" stroke-dasharray="119.4" :stroke-dashoffset="119.4*(1-Math.min(home.wealth.days,120)/120)" transform="rotate(-90 23 23)"/></svg>
+            </template>
+            <template v-else><div class="v" style="font-size:18px">還沒記錄</div><div class="s">點這裡開始</div></template>
+          </div>
+          <div v-if="home.report" class="ld-report" @click="selectTab('settings')"><i class="ph ph-envelope-simple-open"></i>
+            <span><b>{{ +home.report.ym.slice(5) }} 月月報</b>已寄出・已實現 {{ home.report.realized>0?'+':'' }}{{ fmtInt(home.report.realized) }}・股利 {{ fmtInt(home.report.dividend) }}・下次 {{ nextReportDate }}</span></div>
+        </div>
+      </section>
+
+      <section class="ld-rise" style="animation-delay:.27s">
+        <div class="ld-sec-h"><h2>目錄</h2><span>CONTENTS</span><div class="ld-rule"></div></div>
+        <nav class="ld-toc">
+          <a v-for="(r,i) in homeToc" :key="r.id" class="ld-row" @click="selectTab(r.id)">
+            <span class="no">{{ String(i+1).padStart(2,'0') }}</span><span class="nm">{{ r.name }}</span><span class="dots"></span>
+            <span class="meta num-font" :class="r.cls">{{ r.meta }}<span v-if="r.tag" class="tag">{{ r.tag }}</span></span>
+          </a>
+        </nav>
+      </section>
+
+      <section class="ld-full ld-rise" style="animation-delay:.39s">
+        <div class="ld-sec-h"><h2>總報酬</h2><span>TOTAL RETURN</span><div class="ld-rule"></div></div>
+        <div class="ld-ret">
+          <div class="ld-ret-top">
+            <div>
+              <div class="ld-ret-total num-font" :class="homeTotal>=0?'':'neg'">{{ homeTotal>0?'+':'' }}{{ fmtInt(homeTotal) }}</div>
+              <div class="ld-ret-formula">{{ homeFormula }}</div>
+            </div>
+            <div style="display:grid;gap:10px">
+              <div class="ld-chips"><span class="lab">COMPONENTS</span>
+                <button v-for="p in homeParts" :key="p.k" @click="p.on=!p.on" class="ld-chip num-font" :class="p.on?'on':''"><span class="sw" :style="{background:p.c}"></span>{{ p.l }}<span class="amt">{{ fmtInt(homePartVal(p.k)) }}</span></button>
+              </div>
+              <div class="ld-chips"><span class="lab">YEARS</span>
+                <button @click="homeToggleAllYears" class="ld-chip yr" :class="homeYears===null?'on':''">全部</button>
+                <button v-for="y in homeAllYears" :key="y" @click="homeToggleYear(y)" class="ld-chip yr num-font" :class="homeYearOn(y)?'on':''">{{ y }}</button>
+              </div>
+            </div>
+          </div>
+          <div class="ld-seg">
+            <button v-for="o in [['total','含息總報酬'],['div','股利'],['real','已實現損益']]" :key="o[0]" @click="homeSeries=o[0]" :class="homeSeries===o[0]?'on':''">{{ o[1] }}</button>
+          </div>
+          <div style="position:relative;height:260px"><canvas id="homeChart"></canvas></div>
+          <div class="ld-hint">帳面未實現是目前庫存的即時損益，不分年度，只算進上面的總數；圖表依年度顯示已實現與股利。</div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ══ 儀表板（舊版後端） ══ -->
+    <div v-else-if="currentTab==='dashboard'" class="space-y-6">
       <div class="summary-flat">
         <div class="summary-item"><div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;color:#3a5a40"><i class="ph ph-wallet" style="font-size:15px;opacity:.7"></i><span style="font-size:12px;font-weight:700;opacity:.7">庫存總成本</span></div><div class="num-font font-bold" style="font-size:clamp(20px,3.5vw,28px);color:#3a5a40">{{ fmtInt(dashboard.summary.investedCost) }}</div></div>
         <div class="summary-item"><div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;color:#588157"><i class="ph ph-chart-pie-slice" style="font-size:15px;opacity:.7"></i><span style="font-size:12px;font-weight:700;opacity:.7">庫存總市值</span></div><div class="num-font font-bold" style="font-size:clamp(20px,3.5vw,28px);color:#3a5a40">{{ fmtInt(dashboard.summary.marketValue) }}</div><div class="num-font font-bold" :class="dashboard.summary.unrealizedProfit>0?'val-pos':'val-neg'" style="font-size:12px;margin-top:3px">帳面: {{ fmtInt(dashboard.summary.unrealizedProfit) }}</div></div>
@@ -866,6 +1143,7 @@
             style="flex:1 0 auto;min-width:110px;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 12px;border-radius:10px;border:none;cursor:pointer;font-weight:700;font-size:14px;transition:all .15s">
             <span style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ wealthBooks[b] && wealthBooks[b].name }}</span>
             <i v-if="wealthBook===b" @click.stop="renameWealthBook(b)" class="ph ph-pencil-simple" title="改名" style="font-size:14px;opacity:.8;flex-shrink:0"></i>
+            <i v-if="wealthBook===b && wealthOrder.length>1" @click.stop="deleteWealthBook" class="ph ph-trash" title="刪除這份紀錄" style="font-size:14px;opacity:.8;flex-shrink:0;margin-left:2px"></i>
           </button>
           <button @click="addWealthBook" :disabled="wealthAddingBook" title="新增一份資產紀錄"
             style="flex:0 0 auto;display:flex;align-items:center;gap:4px;padding:9px 12px;border-radius:10px;border:1.5px dashed #c9c4b8;background:transparent;color:#588157;cursor:pointer;font-weight:700;font-size:13px;white-space:nowrap">
@@ -978,8 +1256,38 @@
           <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:380px"><thead><tr><th v-for="c in [{k:'dateStr',l:'日期'},{k:'total',l:'總資產（台幣）',r:1},{k:'diff',l:'環比增減',r:1}]" :key="c.k" @click="tblSortToggle('wealth',c.k)" class="table-th" :style="'cursor:pointer;user-select:none;'+(c.r?'text-align:right':'')">{{ c.l }}<span v-if="tblSortIcon('wealth',c.k)" style="margin-left:4px;color:#bc6c25"><i :class="tblSortIcon('wealth',c.k)"></i></span></th></tr></thead><tbody><tr v-for="(row,idx) in wealthHistoryRows" :key="row.date+'-'+idx"><td class="table-td">{{ row.dateStr }}</td><td class="table-td num-font font-bold" style="text-align:right">{{ fmtInt(row.totalTWD) }}</td><td class="table-td num-font font-bold" style="text-align:right"><span v-if="row.diff!==null" :class="row.diff>0?'val-pos':'val-neg'">{{ fmtInt(row.diff) }}</span><span v-else style="color:#aaa">—</span></td></tr></tbody></table></div>
         </div>
         </template>
-        <!-- Email 提醒 -->
-        <div class="card">
+        <!-- Email 提醒（v14 起：自訂月份、日期、時間） -->
+        <div v-if="backendVersion>=14" class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;color:#3a5a40">
+            <i class="ph ph-bell" style="font-size:20px"></i><span class="font-bold section-title" style="flex:1">Email 定期提醒</span>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;cursor:pointer" :style="wealthReminder.enabled?'color:#3a5a40':'color:#aaa'">
+              <input type="checkbox" v-model="wealthReminder.enabled" style="width:16px;height:16px;accent-color:#3a5a40">{{ wealthReminder.enabled ? '開啟' : '關閉' }}</label>
+          </div>
+          <p style="font-size:12px;color:#888;margin-bottom:14px">到了你選的時間，寄一封信提醒你記錄資產，信裡會附上每份紀錄上次的日期和總資產。</p>
+          <div :style="wealthReminder.enabled?'':'opacity:.45;pointer-events:none'">
+            <div style="font-size:12px;font-weight:700;color:#588157;margin-bottom:6px">寄送月份（可複選）</div>
+            <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:14px">
+              <button v-for="m in 12" :key="m" @click="toggleReminderMonth(m)" class="num-font"
+                :style="wealthReminder.months.includes(m)?'background:#3a5a40;color:white;border-color:#3a5a40':'background:white;color:#888;border-color:#dad7cd'"
+                style="padding:8px 0;border-radius:10px;border:1.5px solid;font-size:13px;font-weight:700;cursor:pointer">{{ m }} 月</button>
+            </div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+              <div style="flex:1;min-width:120px"><div style="font-size:12px;font-weight:700;color:#588157;margin-bottom:6px">寄送日期</div>
+                <select v-model.number="wealthReminder.day" class="input-custom"><option v-for="d in 28" :key="d" :value="d">每月 {{ d }} 號</option></select></div>
+              <div style="flex:1;min-width:120px"><div style="font-size:12px;font-weight:700;color:#588157;margin-bottom:6px">寄送時間</div>
+                <select v-model.number="wealthReminder.hour" class="input-custom"><option v-for="h in 24" :key="h" :value="h-1">{{ String(h-1).padStart(2,'0') }}:00</option></select></div>
+            </div>
+          </div>
+          <div style="padding:10px 14px;border-radius:12px;background:#f7f9f4;font-size:13px;color:#344e41;margin-bottom:12px">
+            <i class="ph ph-calendar-check" style="color:#588157"></i> {{ wealthReminderSummary }}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button @click="setupWealthTrigger" :disabled="wealthReminderBusy" class="btn btn-primary" style="flex:2;min-width:150px;font-size:14px;padding:12px;border-radius:1rem;display:flex;align-items:center;justify-content:center;gap:8px"><i class="ph ph-clock" style="font-size:18px"></i> 套用設定</button>
+            <button @click="sendWealthReminderTest" :disabled="wealthReminderBusy" class="btn btn-outline" style="flex:1;min-width:130px;font-size:14px;padding:12px;border-radius:1rem;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ph ph-paper-plane-tilt"></i> 寄測試信</button>
+          </div>
+          <div v-if="wealthReminderMsg" style="margin-top:10px;font-size:13px;font-weight:600;text-align:center" :style="wealthReminderErr?'color:#dc2626':'color:#16a34a'">{{ wealthReminderMsg }}</div>
+        </div>
+        <!-- Email 提醒（舊版後端） -->
+        <div v-else class="card">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;color:#3a5a40"><i class="ph ph-bell" style="font-size:20px"></i><span class="font-bold section-title">Email 定期提醒</span></div>
           <p style="font-size:12px;color:#888;margin-bottom:18px">在指定月份 1 日早上 9 點寄 Email 提醒記錄資產</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
@@ -1317,18 +1625,12 @@
 
   </main>
 
-  <!-- BOTTOM NAV -->
-  <nav class="bottom-nav">
-    <div v-for="tab in bottomTabs" :key="tab.id" @click="selectTab(tab.id)" class="bottom-nav-item" :class="currentTab===tab.id?'active':''">
-      <div style="position:relative;display:inline-flex">
-        <i :class="['ph',currentTab===tab.id?tab.iconFill:tab.icon]"></i>
-        <span v-if="tab.id==='pending' && pendingList.length"
-          style="position:absolute;top:-6px;right:-8px;background:#dc2626;color:white;border-radius:20px;font-size:9px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:14px">
-          {{ pendingList.length }}
-        </span>
-      </div>
-      <span>{{ tab.shortName }}</span>
-    </div>
+  <!-- BOTTOM NAV（膠囊） -->
+  <nav class="ld-dock">
+    <a v-for="tab in bottomTabs" :key="tab.id" @click="selectTab(tab.id)" :class="currentTab===tab.id?'on':''">
+      <i :class="currentTab===tab.id?tab.iconFill:'ph '+tab.icon"></i>
+      <span v-if="tab.id==='pending' && pendingCount" class="ld-dot"></span>{{ tab.shortName }}
+    </a>
   </nav>
 
   <!-- ADD TRADE MODAL -->
@@ -1532,7 +1834,7 @@ const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
 // ── fetch 包裝：呼叫 GAS doPost ──────────────────────────────
 const AUTH_TOKEN_KEY = 'auth_token';
 // 最新後端（程式庫）版本：要和 WebAPI.js 的 APP_VERSION 一起改
-const LATEST_BACKEND_VERSION = 13;
+const LATEST_BACKEND_VERSION = 15;
 let onAuthExpired_ = null; // Vue 掛載後設定：Token 失效時切回登入畫面
 async function callGAS(action, args = []) {
   const url = getGasUrl();
@@ -1668,12 +1970,17 @@ createApp({
       { id:'settings',  name:'設定',      icon:'ph-gear' },
     ];
     const bottomTabs = [
-      { id:'dashboard', shortName:'總覽',  icon:'ph-squares-four',     iconFill:'ph-fill ph-squares-four' },
+      { id:'dashboard', shortName:'總覽',  icon:'ph-book-open',        iconFill:'ph-fill ph-book-open' },
       { id:'holdings',  shortName:'庫存',  icon:'ph-chart-pie-slice',  iconFill:'ph-fill ph-chart-pie-slice' },
       { id:'realized',  shortName:'損益',  icon:'ph-coins',             iconFill:'ph-fill ph-coins' },
       { id:'pending',   shortName:'待確認', icon:'ph-clock-countdown',  iconFill:'ph-fill ph-clock-countdown' },
       { id:'wealth',    shortName:'資產',  icon:'ph-piggy-bank',        iconFill:'ph-fill ph-piggy-bank' },
-      { id:'settings',  shortName:'設定',  icon:'ph-gear',              iconFill:'ph-fill ph-gear' },
+    ];
+    const sideGroups = [
+      { l:'每天看', items:[{id:'dashboard',name:'總覽',icon:'ph-book-open'},{id:'pending',name:'待確認交易',icon:'ph-clock-countdown'},{id:'holdings',name:'庫存紀錄',icon:'ph-chart-pie-slice'}] },
+      { l:'帳本',   items:[{id:'realized',name:'已實現損益',icon:'ph-coins'},{id:'dividends',name:'股利狀況',icon:'ph-plant'},{id:'dca',name:'定期定額',icon:'ph-calendar-check'},{id:'wealth',name:'資產追蹤',icon:'ph-piggy-bank'}] },
+      { l:'研究',   items:[{id:'analysis',name:'市場分析',icon:'ph-sparkle'},{id:'topics',name:'題材清單',icon:'ph-lightbulb'}] },
+      { l:'系統',   items:[{id:'settings',name:'設定',icon:'ph-gear'}] },
     ];
     const actionFunctions = [
       { key:'ingestFromGmail_Plaintext_SAFE', label:'擷取信件', icon:'ph-envelope-open' },
@@ -1731,14 +2038,117 @@ createApp({
       topicStock.value = { name: st[0], lead: !!st[1], held: topicsHeldCodes.value.has(code), info: TOPICS_INFO[code] || '尚未補充簡介。', others: (topicsAppears[code] || []).filter(l => l !== topicLabel(t)) };
     };
 
-    const selectTab = id => { currentTab.value=id; isMobileSidebarOpen.value=false; };
+    // ── 理財手帳版面（v15） ──
+    const acctOpen = ref(false), helpOpen = ref(false), deviceOpen = ref(false), copiedGas = ref(false);
+    const appUrl = location.origin + location.pathname;
+    document.addEventListener('click', () => { acctOpen.value = false; });
+    const copyGasUrl = async () => {
+      try { await navigator.clipboard.writeText(currentGasUrl.value || ''); copiedGas.value = true; setTimeout(() => { copiedGas.value = false; }, 2000); }
+      catch (e) { prompt('複製這個網址', currentGasUrl.value || ''); }
+    };
+    const home = computed(() => (backendVersion.value >= 15 && dashboard.value && dashboard.value.home) || null);
+    const pendingCount = computed(() => pendingList.value.length || (home.value && home.value.pending ? home.value.pending.count : 0));
+    const homeDateline = computed(() => {
+      const d = new Date(), w = '日一二三四五六'[d.getDay()];
+      return `${d.getFullYear()}・${String(d.getMonth()+1).padStart(2,'0')}・${String(d.getDate()).padStart(2,'0')} 星期${w}`;
+    });
+    const nextReportDate = computed(() => { const d = new Date(); return `${d.getMonth()===11?1:d.getMonth()+2}/1`; });
+    const gaugeArc = sig => {
+      const p = sig==='偏多' ? .78 : sig==='偏空' ? .22 : .5, a = Math.PI * (1 - p);
+      return `M10,62 A50,50 0 0 1 ${(60 + 50*Math.cos(a)).toFixed(1)},${(62 - 50*Math.sin(a)).toFixed(1)}`;
+    };
+    const sparkHover = ref(-1);
+    const homeSpark = computed(() => {
+      const list = ((home.value && home.value.assets) || []).filter(a => a.v != null);
+      if (list.length < 2) return { pts: [], line: '', area: '' };
+      const vs = list.map(a => a.v), mn = Math.min(...vs), mx = Math.max(...vs), span = (mx - mn) || 1;
+      const pts = list.map((a, i) => ({ ym: a.ym, v: a.v, x: 1.5 + i * 97 / (list.length - 1), y: 6 + (1 - (a.v - mn) / span) * 86 }));
+      let d = `M${pts[0].x},${pts[0].y}`;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[i-1] || pts[i], p1 = pts[i], p2 = pts[i+1], p3 = pts[i+2] || p2;
+        d += ` C${p1.x+(p2.x-p0.x)/6},${p1.y+(p2.y-p0.y)/6} ${p2.x-(p3.x-p1.x)/6},${p2.y-(p3.y-p1.y)/6} ${p2.x},${p2.y}`;
+      }
+      // 節點用 HTML 疊在 SVG 上（SVG 會被拉伸，圓點畫在裡面會變橢圓）；高度 140 - 上方 22px 標題
+      const H = 118;
+      return { pts: pts.map(p => ({ ...p, y: p.y * H / 140 + 0 })), line: d, area: d + ` L${pts.at(-1).x},100 L${pts[0].x},100 Z`, H };
+    });
+    const sparkMove = e => {
+      const pts = homeSpark.value.pts; if (!pts.length) return;
+      const r = e.currentTarget.getBoundingClientRect(), cx = (e.touches ? e.touches[0].clientX : e.clientX);
+      const x = (cx - r.left) / r.width * 100;
+      let best = 0; pts.forEach((p, i) => { if (Math.abs(p.x - x) < Math.abs(pts[best].x - x)) best = i; });
+      sparkHover.value = best;
+    };
+    const homeToc = computed(() => {
+      const h = home.value || {}, topics = (window.TOPICS_DATA || []).filter(t => !t.group).length;
+      const r = h.thisYearReal || 0;
+      return [
+        { id:'holdings', name:'庫存', meta:(h.holdingsCount||0)+' 檔' },
+        { id:'realized', name:'已實現', meta:(r>0?'+':'')+fmtInt(r), cls:r>=0?'up':'dn' },
+        { id:'dividends', name:'股利', meta:fmtInt(h.thisYearDiv||0) },
+        { id:'dca', name:'定期定額', meta:(h.dcaCount||0)+' 檔' },
+        { id:'pending', name:'待確認', meta:String(pendingCount.value), tag:pendingCount.value?'待處理':'' },
+        { id:'analysis', name:'市場分析', meta:h.market ? h.market.signal : '—' },
+        { id:'topics', name:'題材清單', meta:topics+' 題' },
+        { id:'wealth', name:'資產', meta:h.wealth ? Math.round(h.wealth.total/1e4).toLocaleString()+' 萬' : '—' },
+      ];
+    });
+    const homeParts = ref([
+      { k:'real', l:'已實現', c:'#3a5a40', on:true },
+      { k:'div', l:'股利', c:'#dda15e', on:true },
+      { k:'unreal', l:'帳面未實現', c:'#a3b18a', on:true },
+    ]);
+    const homeYears = ref(null), homeSeries = ref('total');
+    const homeAllYears = computed(() => { const c = dashboard.value.charts || {}; return [...new Set([...Object.keys(c.pnlByYear||{}), ...Object.keys(c.divByYear||{})])].sort(); });
+    const homeYearOn = y => homeYears.value === null || homeYears.value.has(y);
+    const homeToggleYear = y => {
+      const all = homeAllYears.value, s = new Set(homeYears.value === null ? all : homeYears.value);
+      s.has(y) ? s.delete(y) : s.add(y); homeYears.value = s.size === all.length ? null : s;
+    };
+    const homeToggleAllYears = () => { homeYears.value = homeYears.value === null ? new Set() : null; };
+    const homePartVal = k => {
+      if (k === 'unreal') return dashboard.value.summary.unrealizedProfit || 0;
+      const src = (dashboard.value.charts || {})[k === 'real' ? 'pnlByYear' : 'divByYear'] || {};
+      return homeAllYears.value.filter(homeYearOn).reduce((t, y) => t + (src[y] || 0), 0);
+    };
+    const homeTotal = computed(() => homeParts.value.filter(p => p.on).reduce((t, p) => t + homePartVal(p.k), 0));
+    const homeFormula = computed(() => {
+      const on = homeParts.value.filter(p => p.on);
+      if (!on.length) return '請至少選一個項目';
+      const ys = homeYears.value === null ? '全部年度' : homeYears.value.size ? [...homeYears.value].sort().join('、') : '未選年度';
+      return on.map(p => p.l).join(' ＋ ') + '・' + ys;
+    });
+    let homeChartObj = null;
+    const renderHomeChart = () => {
+      const el = document.getElementById('homeChart'); if (!el) return;
+      if (homeChartObj) homeChartObj.destroy();
+      const c = dashboard.value.charts || {}, ys = homeAllYears.value.filter(homeYearOn);
+      const real = ys.map(y => (c.pnlByYear||{})[y] || 0), div = ys.map(y => (c.divByYear||{})[y] || 0);
+      const s = homeSeries.value;
+      const ds = s === 'total'
+        ? [ { type:'bar', label:'已實現', data:real, backgroundColor:'#3a5a40', stack:'s', borderRadius:6 },
+            { type:'bar', label:'股利', data:div, backgroundColor:'#dda15e', stack:'s', borderRadius:6 },
+            { type:'line', label:'含息總報酬', data:real.map((v,i)=>v+div[i]), borderColor:'#bc6c25', backgroundColor:'#bc6c25', tension:.35, pointRadius:4, pointBackgroundColor:'#fffdf7', pointBorderWidth:2 } ]
+        : s === 'div' ? [ { type:'bar', label:'股利', data:div, backgroundColor:'#dda15e', borderRadius:8 } ]
+        : [ { type:'bar', label:'已實現損益', data:real, backgroundColor:real.map(v=>v>=0?'#3a5a40':'#cfc7b2'), borderRadius:8 } ];
+      homeChartObj = new Chart(el, { data:{ labels:ys, datasets:ds }, options:{ maintainAspectRatio:false, animation:{ duration:500 },
+        interaction:{ mode:'index', intersect:false },
+        plugins:{ datalabels:{ display:false }, legend:{ position:'bottom', labels:{ usePointStyle:true, boxWidth:8, font:{ family:'Noto Serif TC', size:12 }, color:'#857f6f' } },
+          tooltip:{ backgroundColor:'#25362b', padding:10, cornerRadius:10, callbacks:{ label:x => ` ${x.dataset.label}  ${fmtInt(x.parsed.y)}` } } },
+        scales:{ x:{ stacked:true, grid:{ display:false }, ticks:{ font:{ family:'DM Mono' }, color:'#857f6f' } },
+          y:{ stacked:s==='total', grid:{ color:'rgba(217,211,194,.6)' }, border:{ display:false },
+            ticks:{ font:{ family:'DM Mono', size:10 }, color:'#857f6f', callback:v => Math.abs(v)>=1e4 ? (v/1e4)+'萬' : v } } } } });
+    };
+    watch([homeYears, homeSeries], () => nextTick(renderHomeChart));
+
+    const selectTab = id => { currentTab.value=id; isMobileSidebarOpen.value=false; acctOpen.value=false; };
     watch(currentTab, v => { localStorage.setItem('last_tab',v); searchText.value=''; loadData(v); });
 
     const loadData = async tab => {
       try {
         if (tab==='dashboard') {
           const res = await callGAS('api_getDashboard');
-          if (res.ok) { dashboard.value=res; setTimeout(()=>renderCharts(res.charts),100); }
+          if (res.ok) { dashboard.value=res; setTimeout(()=> (backendVersion.value>=15 && res.home) ? renderHomeChart() : renderCharts(res.charts),100); }
         } else if (tab==='settings') {
           settingsLoading.value=true;
           const [res, uRes] = await Promise.all([
@@ -1766,6 +2176,7 @@ createApp({
           wealthLoading.value=true;
           const res = await callGAS('api_getWealth');
           applyWealth_(res);
+          if (res && res.reminder) wealthReminder.value = { enabled:res.reminder.enabled, months:[...res.reminder.months], day:res.reminder.day, hour:res.reminder.hour };
           setTimeout(()=>renderWealthChart(),200);
           wealthLoading.value=false;
         } else {
@@ -2647,9 +3058,41 @@ createApp({
       finally { wealthSaving.value=false; }
     };
 
+    const wealthReminder = ref({ enabled:true, months:[1,4,7,10], day:1, hour:9 });
+    const wealthReminderBusy = ref(false), wealthReminderMsg = ref(''), wealthReminderErr = ref(false);
+    const toggleReminderMonth = m => {
+      const a = wealthReminder.value.months;
+      wealthReminder.value.months = a.includes(m) ? a.filter(x => x!==m) : [...a, m].sort((x,y) => x-y);
+    };
+    const wealthReminderSummary = computed(() => {
+      const r = wealthReminder.value;
+      if (!r.enabled) return '提醒已關閉';
+      if (!r.months.length) return '請至少選一個月份';
+      const ms = r.months.length===12 ? '每個月' : '每年 ' + r.months.join('、') + ' 月';
+      return `${ms}的 ${r.day} 號 ${String(r.hour).padStart(2,'0')}:00 寄到通知 Email`;
+    });
     const setupWealthTrigger = async () => {
-      const res=await callGAS('api_setupWealthTrigger',[wealthReminderType.value]);
-      alert(res.ok?'✅ '+(res.msg||'提醒設定完成'):'❌ '+(res.msg||'設定失敗'));
+      if (backendVersion.value < 14) {
+        const res=await callGAS('api_setupWealthTrigger',[wealthReminderType.value]);
+        alert(res.ok?'✅ '+(res.msg||'提醒設定完成'):'❌ '+(res.msg||'設定失敗'));
+        return;
+      }
+      const r = wealthReminder.value;
+      if (r.enabled && !r.months.length) { wealthReminderMsg.value='請至少選一個月份'; wealthReminderErr.value=true; return; }
+      wealthReminderBusy.value=true; wealthReminderMsg.value='';
+      try {
+        const res = await callGAS('api_setupWealthTrigger',[{ enabled:r.enabled, months:r.months, day:r.day, hour:r.hour }]);
+        wealthReminderErr.value = !res.ok;
+        wealthReminderMsg.value = res.ok ? '✅ ' + res.msg : '❌ ' + (res.msg||'設定失敗');
+      } finally { wealthReminderBusy.value=false; }
+    };
+    const sendWealthReminderTest = async () => {
+      wealthReminderBusy.value=true; wealthReminderMsg.value='寄送中…'; wealthReminderErr.value=false;
+      try {
+        const res = await callGAS('api_sendWealthReminderTest');
+        wealthReminderErr.value = !res.ok;
+        wealthReminderMsg.value = res.ok ? '✅ ' + res.msg : '❌ ' + (res.msg||'寄送失敗');
+      } finally { wealthReminderBusy.value=false; }
     };
 
     let _wealthRenderTimer = null;
@@ -3111,7 +3554,9 @@ createApp({
       currentTab,searchText,listLoading,isMobileSidebarOpen,
       dashboard,listData,holdingsConfig,settingsData,settingsSchema,settingsLoading,
       showDetailModal,currentDetailStock,currentDetailList,detailType,
-      tabs,bottomTabs,actionFunctions,selectTab,loadData,
+      tabs,bottomTabs,actionFunctions,selectTab,loadData,sideGroups,
+      acctOpen,helpOpen,deviceOpen,copiedGas,appUrl,copyGasUrl,home,pendingCount,homeDateline,nextReportDate,gaugeArc,sparkHover,homeSpark,sparkMove,homeToc,
+      homeParts,homeYears,homeSeries,homeAllYears,homeYearOn,homeToggleYear,homeToggleAllYears,homePartVal,homeTotal,homeFormula,
       mkResult,mkRunning,mkMsg,mkError,mkEmail,mkHistoryV2,mkSigCls,mkImpCls,mkActCls,mkChips,mkBuckets,runMarketAnalysis2,
       TOPICS_LINK,TOPICS_UPDATED,topicsFilter,topicsOpen,topicStock,topicsHeldCodes,topicsGroups,topicsSummary,topicsAllOpen,topicsToggleAll,openTopicStock,topicCode,
       authState,authUser,backendVersion,backendAutoUpdate,updateInfo,updateRunning,runAutoUpdateNow,backendOutdated,updateBannerClosed,LATEST_BACKEND_VERSION,authForm,authMsg,authBusy,shortGasUrl,doLogin,doSetup,useGasUrlOnly,logout,pwdForm,changeMyPassword,
@@ -3134,7 +3579,7 @@ createApp({
       saveGeminiKey,runAnalysis,
       WEALTH_KIND_,wealthRates,wealthLoading,wealthSaving,wealthMsg,wealthError,
       wealthReminderType,wealthTimeRange,wealthPointLimit,wealthChartMinWidth,filteredWealthHistory,
-      saveWealth,setupWealthTrigger,toggleWealthFilter,toggleAllWealthFilter,
+      saveWealth,setupWealthTrigger,wealthReminder,wealthReminderBusy,wealthReminderMsg,wealthReminderErr,toggleReminderMonth,wealthReminderSummary,sendWealthReminderTest,toggleWealthFilter,toggleAllWealthFilter,
       wealthBook,wealthSupported,wealthBooks,wealthForms,wealthFilters,wealthChips,wealthManageOpen,wealthEdit,wealthSavingCfg,
       curWealthBook,activeWealthHistory,wealthFilterAllOn,wealthCurTotal,wealthInstTotal,
       renameWealthBook,openWealthManage,addWealthInst,addWealthAcc,saveWealthManage,
@@ -3236,6 +3681,7 @@ createApp({
     </div>
   `
 })
+.component('sop-guide', { template: '#sop-tpl' })
 .mount('#app');
 </script>
 </body>
