@@ -42,7 +42,7 @@ function makeToken_(pwd) {
  * 後端版本號：每次發布新的程式庫版本時 +1，並同步修改 index.html 的 LATEST_BACKEND_VERSION。
  * 前端會用它判斷朋友的後端是否過舊、需要更新程式庫版本。
  */
-var APP_VERSION = 17;
+var APP_VERSION = 18;
 
 /**
  * 帳號：每份後端（每個人用自己 Google 帳號部署的 GAS）只有一組帳號
@@ -63,9 +63,15 @@ function api_getMarketValueHistory() {
     const tz = getCfg_().TZ || 'Asia/Taipei';
     const today = Utilities.formatDate(new Date(), tz, 'yyyy/MM/dd');
     let backfilled = 0;
-    if (!getProps_().getProperty('MV_BACKFILL_DONE')) backfilled = backfillMarketValue_(52);
-    let rows = readMvRows_(ensureMvSheet_());
-    if (!rows.has(today)) { recordDailyMarketValue_(); rows = readMvRows_(ensureMvSheet_()); }
+    let rows;
+    // 同時有兩個請求時排隊，避免重複建表、重複回推
+    const lock = getScriptLock_();
+    if (!lock.tryLock(60000)) return { ok: false, msg: '系統忙碌中，請稍後再試' };
+    try {
+      if (!getProps_().getProperty('MV_BACKFILL_DONE')) backfilled = backfillMarketValue_(52);
+      rows = readMvRows_(ensureMvSheet_());
+      if (!rows.has(today)) { recordDailyMarketValue_(); rows = readMvRows_(ensureMvSheet_()); }
+    } finally { lock.releaseLock(); }
     const data = Array.from(rows.entries()).map(([d, r]) => ({ d, v: r.v, c: r.c, est: r.src === '回推' }))
       .sort((a, b) => a.d.localeCompare(b.d));
     return { ok: true, data, backfilled };

@@ -2690,7 +2690,7 @@ function dailyDataMaintenance_() {
   try { ensureMonthlyReportTrigger_(); } catch (e) { Logger.log('月報排程檢查失敗：' + e.message); }
   try { fixSettingDescriptions_(); } catch (e) { Logger.log('設定說明更新失敗：' + e.message); }
   try { ensureMarketReportTrigger_(); } catch (e) { Logger.log('市場分析排程檢查失敗：' + e.message); }
-  try { recordDailyMarketValue_(); if (!getProps_().getProperty('MV_BACKFILL_DONE')) backfillMarketValue_(52); } catch (e) { Logger.log('市值紀錄失敗：' + e.message); }
+  try { const lk = getScriptLock_(); if (lk.tryLock(60000)) { try { recordDailyMarketValue_(); if (!getProps_().getProperty('MV_BACKFILL_DONE')) backfillMarketValue_(52); } finally { lk.releaseLock(); } } } catch (e) { Logger.log('市值紀錄失敗：' + e.message); }
 }
 
 /**
@@ -4060,7 +4060,8 @@ function ensureMvSheet_() {
   const ss = getSS_();
   let sh = ss.getSheetByName(MV_SHEET_);
   if (!sh) {
-    sh = ss.insertSheet(MV_SHEET_);
+    try { sh = ss.insertSheet(MV_SHEET_); }
+    catch (e) { SpreadsheetApp.flush(); sh = ss.getSheetByName(MV_SHEET_); if (!sh) throw e; return sh; } // 別的執行剛建好
     sh.getRange(1, 1, 1, MV_HEADERS_.length).setValues([MV_HEADERS_]).setFontWeight('bold').setBackground('#344e41').setFontColor('white');
     sh.setFrozenRows(1);
     sh.getRange('A:A').setNumberFormat('@');

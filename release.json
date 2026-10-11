@@ -1,11 +1,10 @@
 {
   "current": {
-    "version": 17,
-    "releasedAt": "2026-10-11T22:30:57+08:00",
-    "notes": "各頁改成手帳版；庫存頁總市值變化圖（每日紀錄＋回推一年）；資產趨勢篩選更多；首頁不再閃舊畫面"
+    "version": 18,
+    "releasedAt": "2026-10-11T22:35:42+08:00",
+    "notes": "修正：第一次讀取市值紀錄時同時建立工作表的錯誤",
+    "immediate": true
   },
-  "previous": {
-    "version": 16
-  },
+  "previous": null,
   "libVersion": 9
 }
