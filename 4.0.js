@@ -2690,6 +2690,7 @@ function dailyDataMaintenance_() {
   try { ensureMonthlyReportTrigger_(); } catch (e) { Logger.log('月報排程檢查失敗：' + e.message); }
   try { fixSettingDescriptions_(); } catch (e) { Logger.log('設定說明更新失敗：' + e.message); }
   try { ensureMarketReportTrigger_(); } catch (e) { Logger.log('市場分析排程檢查失敗：' + e.message); }
+  try { recordDailyMarketValue_(); if (!getProps_().getProperty('MV_BACKFILL_DONE')) backfillMarketValue_(52); } catch (e) { Logger.log('市值紀錄失敗：' + e.message); }
 }
 
 /**
@@ -4044,4 +4045,142 @@ function renderMarketReportHtml_(r) {
     ${(r.errors || []).length ? `<tr><td style="padding:0 16px 14px;font-size:13px;color:${POS}">${r.errors.map(esc).join('<br>')}</td></tr>` : ''}
     ${html}
   </table></div>`;
+}
+
+/***** =======================
+ * 總市值紀錄（v17）：庫存頁的「總市值變化」圖
+ * - 每天資料維護時記一筆（來源：每日）
+ * - 第一次使用時回推過去 52 週：交易紀錄＋期初庫存算出每週五持股，乘上 FinMind 收盤價（來源：回推）
+ * ======================== */
+
+var MV_SHEET_ = '市值紀錄';
+var MV_HEADERS_ = ['日期', '總市值', '投入成本', '來源'];
+
+function ensureMvSheet_() {
+  const ss = getSS_();
+  let sh = ss.getSheetByName(MV_SHEET_);
+  if (!sh) {
+    sh = ss.insertSheet(MV_SHEET_);
+    sh.getRange(1, 1, 1, MV_HEADERS_.length).setValues([MV_HEADERS_]).setFontWeight('bold').setBackground('#344e41').setFontColor('white');
+    sh.setFrozenRows(1);
+    sh.getRange('A:A').setNumberFormat('@');
+  }
+  return sh;
+}
+
+/** 讀《市值紀錄》→ Map(日期 → {v, c, src, row}) */
+function readMvRows_(sh) {
+  const map = new Map();
+  if (sh.getLastRow() < 2) return map;
+  sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues().forEach((r, i) => {
+    const d = r[0] instanceof Date ? Utilities.formatDate(r[0], getCfg_().TZ || 'Asia/Taipei', 'yyyy/MM/dd') : String(r[0] || '').trim();
+    if (d) map.set(d, { v: Number(r[1]) || 0, c: Number(r[2]) || 0, src: String(r[3] || ''), row: i + 2 });
+  });
+  return map;
+}
+
+/** 目前庫存的總市值與成本（跟總覽同一套算法） */
+function currentMarketValue_() {
+  const C = getCfg_();
+  let mv = 0, cost = 0;
+  readSheetAsObjects_(getSS_().getSheetByName(C.SHEET_HOLD)).forEach(r => {
+    const qty = Number(r['持有股數'] || 0), c = Number(r['買入成本 (單純買入價*股數)'] || 0);
+    let p = Number(r['現價']); if (isNaN(p)) p = 0;
+    cost += c; mv += p > 0 ? qty * p : c;
+  });
+  return { mv: Math.round(mv), cost: Math.round(cost) };
+}
+
+/** 記今天的總市值（同一天重跑就覆蓋） */
+function recordDailyMarketValue_() {
+  const tz = getCfg_().TZ || 'Asia/Taipei';
+  const today = Utilities.formatDate(new Date(), tz, 'yyyy/MM/dd');
+  const sh = ensureMvSheet_();
+  const rows = readMvRows_(sh);
+  const { mv, cost } = currentMarketValue_();
+  if (!mv && !cost) return;
+  const hit = rows.get(today);
+  const vals = [[today, mv, cost, '每日']];
+  if (hit) sh.getRange(hit.row, 1, 1, 4).setValues(vals);
+  else sh.getRange(sh.getLastRow() + 1, 1, 1, 4).setValues(vals);
+}
+
+/** 回推過去 weeks 週（每週五）的總市值；只補還沒有資料的日期 */
+function backfillMarketValue_(weeks) {
+  weeks = weeks || 52;
+  const C = getCfg_();
+  const tz = C.TZ || 'Asia/Taipei';
+  const ss = getSS_();
+  const fmt = d => Utilities.formatDate(d, tz, 'yyyy/MM/dd');
+
+  // 每週五
+  const now = new Date();
+  const fri = new Date(now.getTime());
+  fri.setDate(fri.getDate() - ((fri.getDay() + 2) % 7)); // 往前找最近的週五（含今天）
+  const dates = [];
+  for (let k = weeks - 1; k >= 0; k--) { const d = new Date(fri.getTime()); d.setDate(d.getDate() - k * 7); dates.push(fmt(d)); }
+
+  // 交易＋期初庫存 → 依日期排序的事件
+  const ev = [];
+  readTableAsObjects_(ss.getSheetByName(C.SHEET_OPENING)).forEach(o => {
+    const sym = String(o['股票代碼'] || '').trim(), qty = Number(o['持有股數'] || 0);
+    if (!sym || !(qty > 0)) return;
+    const d = toYMDslash_(String(o['買進日期'] || '')) || '1900/01/01';
+    ev.push({ d, sym, q: qty, amt: Number(o['買入成本 (單純買入價*股數)'] || 0) + Number(o['手續費'] || 0), side: '期初' });
+  });
+  readTableAsObjects_(ss.getSheetByName(C.SHEET_TRADES)).forEach(r => {
+    const sym = String(r['股票代碼'] || '').trim(), side = String(r['成交類別'] || ''), q = Number(r['股數'] || 0);
+    const d = toYMDslash_(String(r['成交日期'] || '').trim());
+    if (!sym || !d || !(q > 0) || isDayLoopSide_(side) || side.includes('沖')) return;
+    const bonus = isStockBonusSide_(side);
+    if (!bonus && !side.includes('買') && !side.includes('賣')) return;
+    ev.push({ d, sym, q, side: bonus ? '配股' : side.includes('賣') ? '賣' : '買',
+              amt: bonus ? 0 : Number(r['成交金額'] || 0) + Number(r['手續費'] || 0) });
+  });
+  ev.sort((a, b) => a.d.localeCompare(b.d));
+
+  // 每個週五的持股與成本
+  const pos = new Map(); // sym → {q, cost}
+  const snaps = [];
+  let ei = 0;
+  const symsUsed = new Set();
+  dates.forEach(D => {
+    while (ei < ev.length && ev[ei].d <= D) {
+      const e = ev[ei++], p = pos.get(e.sym) || { q: 0, cost: 0 };
+      if (e.side === '賣') { const r = p.q > 0 ? Math.min(1, e.q / p.q) : 1; p.cost -= p.cost * r; p.q = Math.max(0, p.q - e.q); }
+      else { p.q += e.q; p.cost += e.amt; }
+      pos.set(e.sym, p);
+    }
+    const hold = [];
+    pos.forEach((p, sym) => { if (p.q > 0.5) { hold.push({ sym, q: p.q, cost: p.cost }); symsUsed.add(sym); } });
+    snaps.push({ D, hold });
+  });
+
+  // 收盤價（FinMind）
+  const start = (() => { const d = new Date(fri.getTime()); d.setDate(d.getDate() - weeks * 7 - 10); return Utilities.formatDate(d, tz, 'yyyy-MM-dd'); })();
+  const codes = Array.from(symsUsed).filter(s => /^\d{4,6}[A-Z]?$/.test(s));
+  const raw = finmindFetchAll_(codes.map(c => ({ key: c, dataset: 'TaiwanStockPrice', id: c, start })), C.FINMIND_TOKEN || '');
+  const px = {};
+  codes.forEach(c => { px[c] = (raw[c] || []).filter(r => Number(r.close) > 0).map(r => [String(r.date).replace(/-/g, '/'), Number(r.close)]).sort((a, b) => a[0].localeCompare(b[0])); });
+  const closeOn = (sym, D) => {
+    const arr = px[sym]; if (!arr || !arr.length) return null;
+    let lo = 0, hi = arr.length - 1, ans = null;
+    while (lo <= hi) { const m = (lo + hi) >> 1; if (arr[m][0] <= D) { ans = arr[m][1]; lo = m + 1; } else hi = m - 1; }
+    return ans;
+  };
+
+  const sh = ensureMvSheet_();
+  const have = readMvRows_(sh);
+  const out = [];
+  snaps.forEach(({ D, hold }) => {
+    if (have.has(D) || !hold.length) return;
+    let mv = 0, cost = 0;
+    hold.forEach(h => { const c = closeOn(h.sym, D); cost += h.cost; mv += c ? h.q * c : h.cost; });
+    out.push([D, Math.round(mv), Math.round(cost), '回推']);
+  });
+  if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, 4).setValues(out);
+  // 依日期排序，方便直接看工作表
+  if (sh.getLastRow() > 2) sh.getRange(2, 1, sh.getLastRow() - 1, 4).sort({ column: 1, ascending: true });
+  getProps_().setProperty('MV_BACKFILL_DONE', '1');
+  return out.length;
 }

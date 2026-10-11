@@ -42,7 +42,7 @@ function makeToken_(pwd) {
  * 後端版本號：每次發布新的程式庫版本時 +1，並同步修改 index.html 的 LATEST_BACKEND_VERSION。
  * 前端會用它判斷朋友的後端是否過舊、需要更新程式庫版本。
  */
-var APP_VERSION = 16;
+var APP_VERSION = 17;
 
 /**
  * 帳號：每份後端（每個人用自己 Google 帳號部署的 GAS）只有一組帳號
@@ -52,6 +52,24 @@ var APP_VERSION = 16;
 function getAppUser_() {
   const u = getProps_().getProperty('APP_USER');
   return String(u || getCfg_()['ID_NUMBER'] || '').trim();
+}
+
+/**
+ * 庫存頁「總市值變化」：第一次呼叫時回推過去 52 週，今天還沒記就順便記
+ * 回傳 [{d:'yyyy/MM/dd', v:總市值, c:投入成本, est:是否回推}]
+ */
+function api_getMarketValueHistory() {
+  try {
+    const tz = getCfg_().TZ || 'Asia/Taipei';
+    const today = Utilities.formatDate(new Date(), tz, 'yyyy/MM/dd');
+    let backfilled = 0;
+    if (!getProps_().getProperty('MV_BACKFILL_DONE')) backfilled = backfillMarketValue_(52);
+    let rows = readMvRows_(ensureMvSheet_());
+    if (!rows.has(today)) { recordDailyMarketValue_(); rows = readMvRows_(ensureMvSheet_()); }
+    const data = Array.from(rows.entries()).map(([d, r]) => ({ d, v: r.v, c: r.c, est: r.src === '回推' }))
+      .sort((a, b) => a.d.localeCompare(b.d));
+    return { ok: true, data, backfilled };
+  } catch (e) { return { ok: false, msg: e.message }; }
 }
 
 /** 暱稱（顯示在右上角）；沒設定就用帳號 */
@@ -1553,7 +1571,7 @@ function doPost(e) {
       'api_saveAnalysis', 'api_getAnalysisHistory', 'api_getGeminiKeyStatus',
       'api_saveGeminiKey',
       'api_setupWealthTrigger','api_sendWealthReminderTest', 'api_sendMonthlyReport','api_runMarketAnalysis', 'api_getUpdateStatus', 'api_runAutoUpdate',
-      'api_getWealth', 'api_saveWealthConfig', 'api_saveWealthSnapshotV2', 'api_deleteWealthBook',
+      'api_getWealth','api_getMarketValueHistory', 'api_saveWealthConfig', 'api_saveWealthSnapshotV2', 'api_deleteWealthBook',
       'ingestFromGmail_Plaintext_SAFE', 'rebuildAll_B_SAFE',
       'api_runDividendsUpdate', 'appendDCAFromHoldings_SAFE',
       'rebuildRealizedPnL_FIFO_SAFE', 'rebuildDCADividends_SAFE',
