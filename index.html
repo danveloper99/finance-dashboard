@@ -146,7 +146,10 @@
     }
     /* 總覽 */
     .ld-home{display:grid;gap:24px;grid-template-columns:minmax(0,1fr)}
-    @media(min-width:960px){.ld-home{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px 32px}.ld-full{grid-column:1/-1}}
+    @media(min-width:960px){.ld-home{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px 32px}.ld-full{grid-column:1/-1}
+      .ld-home>section:not(.ld-full){display:flex;flex-direction:column}
+      .ld-home>section:not(.ld-full)>.ld-now,.ld-home>section:not(.ld-full)>.ld-toc{flex:1;align-content:stretch}
+      .ld-toc .ld-row{align-items:center}.ld-toc .ld-row .dots{transform:none;align-self:center}}
     .ld-dateline{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.18em;color:var(--muted);display:flex;gap:10px;align-items:center}
     .ld-dateline::after{content:"";flex:1;height:1px;background:var(--rule)}
     .ld-hero{display:grid;gap:14px;margin-top:16px}
@@ -396,7 +399,7 @@
             </ul></div></details>
           <details class="sop-step"><summary><span class="sop-n">6</span>在本頁設定帳號密碼</summary><div class="sop-body">
             <ul>
-              <li>點上方「首次設定」，貼上剛剛的網址，自訂帳號與密碼 → 完成設定並登入</li>
+              <li>點上方「首次設定」，貼上剛剛的網址，填暱稱（顯示在右上角）、自訂帳號與密碼 → 完成設定並登入</li>
               <li><b>部署完請立刻完成這一步</b>：還沒設定帳號的後端，第一個設定的人就會成為擁有者</li>
               <li>換手機或電腦時：到「首次設定」貼網址 →「只儲存網址」→ 再用「登入」</li>
             </ul></div></details>
@@ -479,7 +482,8 @@
             第一次使用？先依下方「使用說明」部署好自己的後端，再把網址貼上、設定帳號密碼。
           </div>
           <input v-model="authForm.gasUrl" type="url" class="input-custom" placeholder="https://script.google.com/macros/s/.../exec">
-          <input v-model="authForm.user" class="input-custom" placeholder="帳號（3~40 個英數字）" autocomplete="username">
+          <input v-model="authForm.nick" class="input-custom" placeholder="暱稱（顯示在右上角，例如：小明）" maxlength="20" autocomplete="nickname">
+          <input v-model="authForm.user" class="input-custom" placeholder="帳號（3~40 個英數字，登入用）" autocomplete="username">
           <input v-model="authForm.pwd" type="password" class="input-custom" placeholder="密碼（至少 6 個字元）" autocomplete="new-password">
           <input v-model="authForm.pwd2" type="password" class="input-custom" placeholder="再輸入一次密碼" autocomplete="new-password">
           <button type="submit" :disabled="authBusy" class="btn btn-primary" style="width:100%;font-size:15px;padding:12px">{{ authBusy?'設定中…':'完成設定並登入' }}</button>
@@ -499,14 +503,13 @@
 
   <header class="ld-top">
     <button @click="isMobileSidebarOpen=true" class="ld-icon-btn ld-menu" title="選單"><i class="ph ph-list"></i></button>
-    <div class="ld-brand">你不理財，才不理你<small>LEDGER</small></div>
     <div style="flex:1"></div>
     <button @click="loadData(currentTab)" class="ld-icon-btn" title="重新整理"><i class="ph ph-arrows-clockwise"></i></button>
-    <div class="ld-acct" @click.stop="acctOpen=!acctOpen"><div class="ld-av">{{ (authUser||'?').slice(0,1).toUpperCase() }}</div><span class="ld-nm">{{ authUser }}</span><i class="ph ph-caret-down"></i></div>
+    <div class="ld-acct" @click.stop="acctOpen=!acctOpen"><div class="ld-av">{{ (displayName||'?').slice(0,1).toUpperCase() }}</div><span class="ld-nm">{{ displayName }}</span><i class="ph ph-caret-down"></i></div>
   </header>
   <!-- 帳號選單 -->
   <div class="ld-pop" :class="acctOpen?'open':''" @click.stop>
-    <div class="ld-who"><div class="ld-av big">{{ (authUser||'?').slice(0,1).toUpperCase() }}</div><div><b>{{ authUser }}</b><small>自己的 Google 試算表・只有你看得到</small></div></div>
+    <div class="ld-who"><div class="ld-av big">{{ (displayName||'?').slice(0,1).toUpperCase() }}</div><div><b>{{ displayName }}</b><small v-if="authNick">帳號 {{ authUser }}</small><small>自己的 Google 試算表・只有你看得到</small></div></div>
     <div class="ld-ver" :class="backendOutdated?'warn':''"><i :class="backendOutdated?'ph ph-arrow-circle-up':'ph ph-check-circle'"></i>後端 <b>v{{ backendVersion }}</b>・{{ backendOutdated ? '有新版 v'+LATEST_BACKEND_VERSION+'（會自動更新）' : '已是最新版' }}</div>
     <a @click="acctOpen=false;selectTab('settings')"><i class="ph ph-gear"></i>設定</a>
     <a @click="acctOpen=false;selectTab('settings')"><i class="ph ph-key"></i>修改密碼</a>
@@ -618,7 +621,7 @@
             <div class="k"><i class="ph ph-plant"></i>下一筆股利</div>
             <template v-if="home.nextDiv">
               <div class="v num-font">{{ fmtInt(home.nextDiv.amount) }}<small>元</small></div>
-              <div class="s">{{ home.nextDiv.code }}{{ home.nextDiv.more?' 等 '+(home.nextDiv.more+1)+' 檔':'' }}・{{ home.nextDiv.date.slice(5) }} 入帳</div>
+              <div class="s">{{ home.nextDiv.name || home.nextDiv.code }}{{ home.nextDiv.more?' 等 '+(home.nextDiv.more+1)+' 檔':'' }}・{{ home.nextDiv.date.slice(5) }} 入帳</div>
             </template>
             <template v-else><div class="v" style="font-size:18px">暫時沒有</div><div class="s">已公布的股利都領完了</div></template>
           </div>
@@ -1506,8 +1509,12 @@
       <div class="settings-group">
         <h3 class="section-title" style="margin-bottom:14px;display:flex;align-items:center;gap:8px"><span style="width:4px;height:22px;background:#bc6c25;border-radius:2px;display:inline-block"></span>帳號</h3>
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-          <div style="font-size:14px;color:#344e41">{{ authUser }} <span style="font-size:11px;color:#888;margin-left:6px">後端 v{{ backendVersion }}</span></div>
+          <div style="font-size:14px;color:#344e41">{{ displayName }}<span v-if="authNick" style="font-size:12px;color:#888;margin-left:6px">（帳號 {{ authUser }}）</span> <span style="font-size:11px;color:#888;margin-left:6px">後端 v{{ backendVersion }}</span></div>
           <button @click="logout" class="btn btn-outline" style="font-size:13px;padding:8px 16px">登出</button>
+        </div>
+        <div v-if="backendVersion>=16" style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <input :value="nickEdit===null?authNick:nickEdit" @input="nickEdit=$event.target.value" class="input-custom" placeholder="暱稱（顯示在右上角）" maxlength="20" style="flex:1;min-width:160px">
+          <button @click="saveNickname" :disabled="nickSaving||nickEdit===null" class="btn btn-primary" style="font-size:13px;padding:8px 16px;white-space:nowrap">{{ nickSaving?'儲存中…':'儲存暱稱' }}</button>
         </div>
         <div v-if="backendOutdated && !backendAutoUpdate" style="margin-top:12px;padding:10px 14px;border-radius:10px;background:#fff8e6;color:#7a5a12;font-size:12px">
           <b>有新版本 v{{ LATEST_BACKEND_VERSION }} 可以更新：</b>
@@ -1834,7 +1841,7 @@ const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
 // ── fetch 包裝：呼叫 GAS doPost ──────────────────────────────
 const AUTH_TOKEN_KEY = 'auth_token';
 // 最新後端（程式庫）版本：要和 WebAPI.js 的 APP_VERSION 一起改
-const LATEST_BACKEND_VERSION = 15;
+const LATEST_BACKEND_VERSION = 16;
 let onAuthExpired_ = null; // Vue 掛載後設定：Token 失效時切回登入畫面
 async function callGAS(action, args = []) {
   const url = getGasUrl();
@@ -2131,9 +2138,15 @@ createApp({
             { type:'line', label:'含息總報酬', data:real.map((v,i)=>v+div[i]), borderColor:'#bc6c25', backgroundColor:'#bc6c25', tension:.35, pointRadius:4, pointBackgroundColor:'#fffdf7', pointBorderWidth:2 } ]
         : s === 'div' ? [ { type:'bar', label:'股利', data:div, backgroundColor:'#dda15e', borderRadius:8 } ]
         : [ { type:'bar', label:'已實現損益', data:real, backgroundColor:real.map(v=>v>=0?'#3a5a40':'#cfc7b2'), borderRadius:8 } ];
-      homeChartObj = new Chart(el, { data:{ labels:ys, datasets:ds }, options:{ maintainAspectRatio:false, animation:{ duration:500 },
-        interaction:{ mode:'index', intersect:false },
-        plugins:{ datalabels:{ display:false }, legend:{ position:'bottom', labels:{ usePointStyle:true, boxWidth:8, font:{ family:'Noto Serif TC', size:12 }, color:'#857f6f' } },
+      const short = v => Math.abs(v)>=1e4 ? (v/1e4).toFixed(Math.abs(v)>=1e6?0:1).replace(/\.0$/,'')+'萬' : fmtInt(v);
+      const lblTop = { anchor:'end', align:'end', offset:2, color:'#25362b', font:{ family:'Noto Serif TC', weight:'700', size:11 }, formatter:short };
+      const lblIn  = { anchor:'center', align:'center', color:'#fffdf7', font:{ family:'Noto Serif TC', weight:'700', size:10 }, formatter:short,
+                       display:c => { const m=c.chart.getDatasetMeta(c.datasetIndex).data[c.dataIndex]; return !!m && Math.abs((m.base||0)-(m.y||0))>=16 && c.dataset.data[c.dataIndex]!==0; } };
+      ds.forEach(d => { d.datalabels = s==='total' ? (d.type==='line' ? { ...lblTop, color:'#bc6c25', offset:6 } : lblIn)
+                                                  : { ...lblTop, align:c => c.dataset.data[c.dataIndex]<0?'start':'end', anchor:c => c.dataset.data[c.dataIndex]<0?'start':'end' }; });
+      homeChartObj = new Chart(el, { data:{ labels:ys, datasets:ds }, plugins:[ChartDataLabels], options:{ maintainAspectRatio:false, animation:{ duration:500 },
+        layout:{ padding:{ top:22 } }, interaction:{ mode:'index', intersect:false },
+        plugins:{ legend:{ position:'bottom', labels:{ usePointStyle:true, boxWidth:8, font:{ family:'Noto Serif TC', size:12 }, color:'#857f6f' } },
           tooltip:{ backgroundColor:'#25362b', padding:10, cornerRadius:10, callbacks:{ label:x => ` ${x.dataset.label}  ${fmtInt(x.parsed.y)}` } } },
         scales:{ x:{ stacked:true, grid:{ display:false }, ticks:{ font:{ family:'DM Mono' }, color:'#857f6f' } },
           y:{ stacked:s==='total', grid:{ color:'rgba(217,211,194,.6)' }, border:{ display:false },
@@ -2197,6 +2210,16 @@ createApp({
     // ── 登入 / 首次設定（每個人連到自己部署的後端） ──
     const authState = ref('checking'); // checking | login | setup | ok
     const authUser  = ref('');
+    const authNick  = ref('');
+    const displayName = computed(() => authNick.value || authUser.value);
+    const nickEdit = ref(null), nickSaving = ref(false);
+    const saveNickname = async () => {
+      nickSaving.value = true;
+      try {
+        const res = await callGAS('api_setNickname', [nickEdit.value || '']);
+        if (res.ok) { authNick.value = res.nickname || ''; nickEdit.value = null; } else alert('❌ ' + (res.msg || '儲存失敗'));
+      } finally { nickSaving.value = false; }
+    };
     const backendVersion = ref(0);
     const backendAutoUpdate = ref(false);
     const updateInfo = ref({ supported:false, enabled:false, status:null });
@@ -2213,7 +2236,7 @@ createApp({
     };
     const backendOutdated = computed(() => authState.value === 'ok' && backendVersion.value < LATEST_BACKEND_VERSION);
     const updateBannerClosed = ref(false);
-    const authForm  = ref({ user:'', pwd:'', pwd2:'', gasUrl:'' });
+    const authForm  = ref({ user:'', pwd:'', pwd2:'', gasUrl:'', nick:'' });
     const authMsg   = ref('');
     const authBusy  = ref(false);
     const shortGasUrl = computed(() => { const u = currentGasUrl.value || ''; return u.length > 48 ? u.slice(0, 38) + '…' + u.slice(-10) : (u || '（未設定）'); });
@@ -2228,9 +2251,10 @@ createApp({
     const enterApp_ = res => {
       if (res.token) localStorage.setItem(AUTH_TOKEN_KEY, res.token);
       authUser.value = res.user || '';
+      authNick.value = res.nickname || '';
       backendVersion.value = Number(res.version) || 1; // 舊版後端沒有回傳版本號
       backendAutoUpdate.value = !!res.autoUpdate;
-      authForm.value = { user:'', pwd:'', pwd2:'', gasUrl:'' };
+      authForm.value = { user:'', pwd:'', pwd2:'', gasUrl:'', nick:'' };
       authMsg.value = ''; authState.value = 'ok';
       loadData(currentTab.value);
       loadPending(); // 啟動時預先載入待確認數量
@@ -2254,7 +2278,7 @@ createApp({
       if (!setGasUrl_()) return;
       authBusy.value = true;
       try {
-        const res = await callGAS('api_setupAccount', [f.user, f.pwd]);
+        const res = await callGAS('api_setupAccount', [f.user, f.pwd, (f.nick||'').trim()]);
         if (res.ok) enterApp_(res); else authMsg.value = res.msg || '設定失敗';
       } catch (e) { authMsg.value = '連線失敗，請確認網址正確且已部署為「任何人」可存取：' + e.message; }
       finally { authBusy.value = false; }
@@ -3559,7 +3583,7 @@ createApp({
       homeParts,homeYears,homeSeries,homeAllYears,homeYearOn,homeToggleYear,homeToggleAllYears,homePartVal,homeTotal,homeFormula,
       mkResult,mkRunning,mkMsg,mkError,mkEmail,mkHistoryV2,mkSigCls,mkImpCls,mkActCls,mkChips,mkBuckets,runMarketAnalysis2,
       TOPICS_LINK,TOPICS_UPDATED,topicsFilter,topicsOpen,topicStock,topicsHeldCodes,topicsGroups,topicsSummary,topicsAllOpen,topicsToggleAll,openTopicStock,topicCode,
-      authState,authUser,backendVersion,backendAutoUpdate,updateInfo,updateRunning,runAutoUpdateNow,backendOutdated,updateBannerClosed,LATEST_BACKEND_VERSION,authForm,authMsg,authBusy,shortGasUrl,doLogin,doSetup,useGasUrlOnly,logout,pwdForm,changeMyPassword,
+      authState,authUser,authNick,displayName,nickEdit,nickSaving,saveNickname,backendVersion,backendAutoUpdate,updateInfo,updateRunning,runAutoUpdateNow,backendOutdated,updateBannerClosed,LATEST_BACKEND_VERSION,authForm,authMsg,authBusy,shortGasUrl,doLogin,doSetup,useGasUrlOnly,logout,pwdForm,changeMyPassword,
       realizedFilter,realizedHeaders,uniqueYears,uniqueMonths,filteredRealizedList,filteredRealizedTotal,sortBy,sortKey,sortOrder,realizedColAlign,
       realizedChartFilterOpen,realizedChartSymbolSet,realizedChartYearSet,realizedAllSymbols,realizedAllChartYears,realizedMonthlyChartData,
       rcToggleYear,rcToggleSym,rcYearActive,rcSymActive,realizedChartHasData,realizedChartTotal,realizedChartMonths,

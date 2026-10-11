@@ -42,7 +42,7 @@ function makeToken_(pwd) {
  * 後端版本號：每次發布新的程式庫版本時 +1，並同步修改 index.html 的 LATEST_BACKEND_VERSION。
  * 前端會用它判斷朋友的後端是否過舊、需要更新程式庫版本。
  */
-var APP_VERSION = 15;
+var APP_VERSION = 16;
 
 /**
  * 帳號：每份後端（每個人用自己 Google 帳號部署的 GAS）只有一組帳號
@@ -54,13 +54,28 @@ function getAppUser_() {
   return String(u || getCfg_()['ID_NUMBER'] || '').trim();
 }
 
+/** 暱稱（顯示在右上角）；沒設定就用帳號 */
+function getNickname_() {
+  return String(getProps_().getProperty('APP_NICKNAME') || '').trim();
+}
+function cleanNickname_(v) {
+  return String(v == null ? '' : v).replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 20);
+}
+
+/** 修改暱稱（需登入） */
+function api_setNickname(nick) {
+  const n = cleanNickname_(nick);
+  if (n) getProps_().setProperty('APP_NICKNAME', n); else getProps_().deleteProperty('APP_NICKNAME');
+  return { ok: true, nickname: n };
+}
+
 /** 這個後端是否已設定帳號（前端用來判斷要顯示「登入」還是「首次設定」） */
 function api_getSetupStatus() {
   return { ok: true, configured: !!getProps_().getProperty('APP_PASSWORD') };
 }
 
 /** 首次設定帳號密碼：只有尚未設定過時可以呼叫 */
-function api_setupAccount(userInput, pwdInput) {
+function api_setupAccount(userInput, pwdInput, nickInput) {
   const user = String(userInput || '').trim();
   const pwd  = String(pwdInput || '');
   if (!/^[A-Za-z0-9_.@-]{3,40}$/.test(user)) return { ok: false, msg: '帳號限 3~40 個英數字（可含 _ . @ -）' };
@@ -71,8 +86,9 @@ function api_setupAccount(userInput, pwdInput) {
   try {
     const props = getProps_();
     if (props.getProperty('APP_PASSWORD')) return { ok: false, msg: '這個後端已經設定過帳號，請直接登入' };
-    props.setProperties({ APP_USER: user, APP_PASSWORD: pwd });
-    return { ok: true, token: makeToken_(pwd), user, version: APP_VERSION, autoUpdate: isLoaderMode_() };
+    const nickname = cleanNickname_(nickInput);
+    props.setProperties(nickname ? { APP_USER: user, APP_PASSWORD: pwd, APP_NICKNAME: nickname } : { APP_USER: user, APP_PASSWORD: pwd });
+    return { ok: true, token: makeToken_(pwd), user, nickname, version: APP_VERSION, autoUpdate: isLoaderMode_() };
   } finally {
     lock.releaseLock();
   }
@@ -89,7 +105,7 @@ function api_login(idInput, pwdInput) {
 
   const storedUser = getAppUser_();
   if (storedUser && id.toUpperCase() === storedUser.toUpperCase() && pwd === storedPwd)
-    return { ok: true, token: makeToken_(storedPwd), user: storedUser, version: APP_VERSION, autoUpdate: isLoaderMode_() };
+    return { ok: true, token: makeToken_(storedPwd), user: storedUser, nickname: getNickname_(), version: APP_VERSION, autoUpdate: isLoaderMode_() };
   return { ok: false, msg: '帳號或密碼錯誤' };
 }
 
@@ -101,7 +117,7 @@ function resolveAuth_(token) {
 
 /** 自動登入 Token 驗證 */
 function api_auth_token(tokenInput) {
-  return resolveAuth_(tokenInput) ? { ok: true, user: getAppUser_(), version: APP_VERSION, autoUpdate: isLoaderMode_() } : { ok: false };
+  return resolveAuth_(tokenInput) ? { ok: true, user: getAppUser_(), nickname: getNickname_(), version: APP_VERSION, autoUpdate: isLoaderMode_() } : { ok: false };
 }
 
 /** 修改密碼（需登入），回傳新 Token */
@@ -1544,7 +1560,7 @@ function doPost(e) {
       'api_getPendingTrades', 'api_confirmTrades', 'api_deletePendingTrade', 'api_batchDeletePendingTrades',
       'api_updatePendingTrade',
       'api_addManualTrade', 'api_lookupStockName',
-      'api_login', 'api_auth_token', 'api_getSetupStatus', 'api_setupAccount', 'api_changePassword',
+      'api_login', 'api_auth_token', 'api_getSetupStatus', 'api_setupAccount', 'api_changePassword','api_setNickname',
     ]);
     // 不需登入即可呼叫
     const PUBLIC = new Set(['api_login', 'api_auth_token', 'api_getSetupStatus', 'api_setupAccount']);

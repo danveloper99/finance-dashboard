@@ -1,11 +1,11 @@
 {
   "current": {
-    "version": 15,
-    "releasedAt": "2026-10-11T20:40:15+08:00",
-    "notes": "總覽改版（理財手帳）、側邊欄與帳號選單；資產紀錄可刪除、Email 提醒自訂月份日期時間"
+    "version": 16,
+    "releasedAt": "2026-10-11T21:00:18+08:00",
+    "notes": "暱稱（註冊時填、右上角顯示）；總覽版面微調"
   },
   "previous": {
-    "version": 13
+    "version": 15
   },
   "libVersion": 9
 }
