@@ -1,10 +1,11 @@
 {
   "current": {
-    "version": 18,
-    "releasedAt": "2026-10-11T22:35:42+08:00",
-    "notes": "修正：第一次讀取市值紀錄時同時建立工作表的錯誤",
-    "immediate": true
+    "version": 19,
+    "releasedAt": "2026-10-16T21:46:37+08:00",
+    "notes": "修正上櫃股票抓不到現價（改用 Yahoo 奇摩股市）"
   },
-  "previous": null,
+  "previous": {
+    "version": 18
+  },
   "libVersion": 9
 }

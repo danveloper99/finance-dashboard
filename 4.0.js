@@ -1235,7 +1235,8 @@ function rebuildAll_B() {
       
       const formulas = [];
       for (let r = 2; r <= out.length + 1; r++) {
-         const f_price = `=IFERROR(GOOGLEFINANCE("TPE:" & A${r}), IFERROR(IMPORTXML("https://finance.yahoo.com/quote/" & A${r} & ".TWO", "//fin-streamer[@data-field='regularMarketPrice']"), 0))`;
+         // 上市：GOOGLEFINANCE；上櫃（GOOGLEFINANCE 不支援）：抓 Yahoo 奇摩股市 .TWO 頁面的成交價
+         const f_price = `=IFERROR(GOOGLEFINANCE("TPE:" & A${r}), IFERROR(VALUE(SUBSTITUTE(INDEX(IMPORTXML("https://tw.stock.yahoo.com/quote/" & A${r} & ".TWO", "//span[contains(@class,'Fz(32px)')]"), 1, 1), ",", "")), 0))`;
          const f_market = `=E${r} * I${r}`; 
          formulas.push([f_price, f_market]);
       }
@@ -3112,7 +3113,7 @@ function ingestFromGmail_ByDateRange() {
   const msg = `✅ 完成！${START_DATE} ～ ${END_DATE}，共 ${toWrite.length} 筆 → 已寫入〈${OUTPUT_SHEET}〉`;
   Logger.log(msg);
   SpreadsheetApp.getUi().alert(msg);
-}
+}
 
 /***** =======================
  * 月報：每月 1 號寄上個月的摘要 Email
