@@ -447,6 +447,7 @@ function onError_(entryName, err, extra) {
 }
 function runWithAlert_(fn, entryName, extra) {
   try { return fn(); } catch (err) { onError_(entryName, err, extra); throw err; }
+  finally { clearDashCache_(); } // 排程改了資料，總覽快取要重算
 }
 
 /* ===== SAFE 入口 ===== */
@@ -534,6 +535,17 @@ function consolidateByOrderNo_(rows) {
     ]);
   }
   return merged.concat(noOrderList);
+}
+
+/** 已處理過的 PDF 信件 { messageId: 處理時間 }，只留 60 天 */
+function loadPdfDone_() {
+  try { return JSON.parse(getProps_().getProperty('GMAIL_PDF_DONE') || '{}'); } catch (e) { return {}; }
+}
+function savePdfDone_(done) {
+  const cutoff = Date.now() - 60 * 864e5;
+  const keep = {};
+  Object.keys(done).filter(k => done[k] > cutoff).forEach(k => { keep[k] = done[k]; });
+  getProps_().setProperty('GMAIL_PDF_DONE', JSON.stringify(keep));
 }
 
 function callCloudRunToUnlock_(blob, password) {
@@ -799,13 +811,18 @@ function ingestFromGmail_Plaintext() {
   if (labelPdf) {
     const qPdf = `label:${labelPdf} after:${after} has:attachment`;
     const threadsPdf = GmailApp.search(qPdf, 0, 30);
+    // v20：已成功解出交易的 PDF 信件記在 Properties，下次不再送 Cloud Run（冷啟動一次要等十幾秒）
+    const pdfDone = loadPdfDone_();
     threadsPdf.forEach(t => t.getMessages().forEach(m => {
+      const msgId = m.getId();
+      if (pdfDone[msgId]) return;
       const atts = m.getAttachments();
       atts.forEach(att => {
         if (att.getContentType() === "application/pdf" || att.getName().toLowerCase().endsWith(".pdf")) {
           try {
             const rawTable = callCloudRunToUnlock_(att, C.ID_NUMBER);
             const rows = parseCloudRunData_(rawTable, tz);
+            if (rows.length) pdfDone[msgId] = Date.now();
             const keptRows = [];
             rows.forEach(r => {
               let sym = String(r[2]||'').trim();
@@ -854,6 +871,7 @@ function ingestFromGmail_Plaintext() {
         }
       });
     }));
+    savePdfDone_(pdfDone);
   }
 
   // 合併前先正規化代碼，確保同委託單號的「國巨*」與「2327」能在 consolidate 時被合併

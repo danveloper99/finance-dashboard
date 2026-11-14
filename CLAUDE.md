@@ -12,6 +12,7 @@
 | `Index.html` | 前端單頁應用（Vue 3 + Tailwind），含所有頁面與互動邏輯 |
 | `appsscript.json` | GAS 設定檔，通常不需要動 |
 | `.clasp.json` | clasp 設定，含 Script ID，**不要刪除、不要公開** |
+| `tailwind.css` | 預先產生的 Tailwind（取代 CDN）。`index.html` 有用到新的 Tailwind class 就要跑 `npm run build:css` 再 commit |
 | `topics.js` | 「題材清單」分頁的靜態資料（純前端，改內容只需改這個檔並 push） |
 | `cloudrun/` | PDF 解鎖服務（Cloud Run，Python）：給使用者用設定頁的「一鍵部署」架在自己的 Google Cloud。介面：POST `{file_content, password}` → `{status, data: [[...]]}`，對應 `callCloudRunToUnlock_` / `parseCloudRunData_` |
 
@@ -84,6 +85,11 @@ clasp deploy --deploymentId AKfycbzrFTtWxBH1aisKKkXWihYFittWQwUGldnjJTo3YE-jXonP
 - 原則：**數字由程式算，AI 只解讀**；題材連動度讀 GitHub Pages 的 `topics.js`；結果以 JSON（`{"v":2,...}`）存在《市場分析紀錄》
 - 排程 `marketReport_SAFE`：《設定》`MARKET_REPORT_SCHEDULE`（每週一／每天／關閉）、`MARKET_REPORT_HOUR`，沒有 Gemini Key 不建立
 - Gemini 免費版超量回 429（不收費），程式轉成友善訊息
+
+### 效能（v20）
+- 總覽：後端 `api_getDashboard` 存 CacheService 10 分鐘（key 帶試算表 ID）；`doPost` 跑完非唯讀 API、`runWithAlert_` 跑完排程都會 `clearDashCache_()`。新增寫入型 API 時，別加進 doPost 的 `READ_ONLY`
+- 前端開頁先顯示 localStorage 的上次總覽（`dash_cache_v1`），`api_auth_token(token, true)` 順便帶回新總覽；重新整理按鈕傳 `force`
+- Gmail PDF：成功解出交易的信件 ID 記在 Properties `GMAIL_PDF_DONE`（留 60 天），不再重送 Cloud Run
 
 ### 設定頁面
 - 前端設定頁由 `api_getSettingsSchema` 的 schema 動態渲染

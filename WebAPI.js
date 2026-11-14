@@ -42,7 +42,7 @@ function makeToken_(pwd) {
  * 後端版本號：每次發布新的程式庫版本時 +1，並同步修改 index.html 的 LATEST_BACKEND_VERSION。
  * 前端會用它判斷朋友的後端是否過舊、需要更新程式庫版本。
  */
-var APP_VERSION = 19;
+var APP_VERSION = 20;
 
 /**
  * 帳號：每份後端（每個人用自己 Google 帳號部署的 GAS）只有一組帳號
@@ -140,8 +140,12 @@ function resolveAuth_(token) {
 }
 
 /** 自動登入 Token 驗證 */
-function api_auth_token(tokenInput) {
-  return resolveAuth_(tokenInput) ? { ok: true, user: getAppUser_(), nickname: getNickname_(), version: APP_VERSION, autoUpdate: isLoaderMode_() } : { ok: false };
+function api_auth_token(tokenInput, withDashboard) {
+  if (!resolveAuth_(tokenInput)) return { ok: false };
+  const res = { ok: true, user: getAppUser_(), nickname: getNickname_(), version: APP_VERSION, autoUpdate: isLoaderMode_() };
+  // v20：前端開頁時順便帶回總覽，省一次來回
+  if (withDashboard) { try { res.dashboard = api_getDashboard(); } catch (e) { Logger.log('總覽失敗：' + e.message); } }
+  return res;
 }
 
 /** 修改密碼（需登入），回傳新 Token */
@@ -159,7 +163,27 @@ function api_changePassword(oldPwd, newPwd) {
    儀表板
    ============================================================ */
 
-function api_getDashboard() {
+/**
+ * 總覽快取（v20）：總覽要讀 6 張以上工作表，結果先存在 CacheService 10 分鐘
+ * - 任何會寫入資料的 API、排程（runWithAlert_）跑完都會清掉
+ * - key 帶試算表 ID：舊程式庫模式的 ScriptCache 是所有使用者共用的
+ * - force=true（前端按重新整理）略過快取
+ */
+var DASH_CACHE_TTL_ = 600;
+function dashCacheKey_() { return 'fin_dash_' + getSS_().getId(); }
+function clearDashCache_() { try { CacheService.getScriptCache().remove(dashCacheKey_()); } catch (e) {} }
+
+function api_getDashboard(force) {
+  const cache = CacheService.getScriptCache();
+  if (!force) {
+    try { const hit = cache.get(dashCacheKey_()); if (hit) return JSON.parse(hit); } catch (e) {}
+  }
+  const res = buildDashboard_();
+  try { const txt = JSON.stringify(res); if (txt.length < 90000) cache.put(dashCacheKey_(), txt, DASH_CACHE_TTL_); } catch (e) {}
+  return res;
+}
+
+function buildDashboard_() {
   const C  = getCfg_();
   const ss = getSS_();
 
@@ -1602,8 +1626,19 @@ function doPost(e) {
       output.setContent(JSON.stringify({ ok: false, msg: '找不到函數: ' + action }));
       return output;
     }
-    const result = fn.apply(this, args);
-    output.setContent(JSON.stringify(result ?? { ok: true }));
+    // 只讀的 API 以外，跑完都清總覽快取（寫入失敗也清，資料可能已經改了一半）
+    const READ_ONLY = new Set([
+      'api_getDashboard', 'api_getDataList', 'api_getSettingsSchema', 'api_getHoldingsForAnalysis',
+      'api_callGemini', 'api_getAnalysisHistory', 'api_getGeminiKeyStatus', 'api_getUpdateStatus',
+      'api_getWealth', 'api_getMarketValueHistory', 'api_getPendingTrades', 'api_lookupStockName',
+      'api_login', 'api_auth_token', 'api_getSetupStatus',
+    ]);
+    try {
+      const result = fn.apply(this, args);
+      output.setContent(JSON.stringify(result ?? { ok: true }));
+    } finally {
+      if (!READ_ONLY.has(action)) clearDashCache_();
+    }
   } catch(err) {
     output.setContent(JSON.stringify({ ok: false, msg: err.message || String(err) }));
   }

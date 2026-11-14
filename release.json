@@ -1,11 +1,11 @@
 {
   "current": {
-    "version": 19,
-    "releasedAt": "2026-10-16T21:46:37+08:00",
-    "notes": "修正上櫃股票抓不到現價（改用 Yahoo 奇摩股市）"
+    "version": 20,
+    "releasedAt": "2026-11-14T16:34:29+08:00",
+    "notes": "效能改善：首頁先顯示上次資料、總覽快取、登入與總覽合併請求、Gmail 跳過已處理的 PDF、Tailwind 改預先產生"
   },
   "previous": {
-    "version": 18
+    "version": 19
   },
   "libVersion": 9
 }

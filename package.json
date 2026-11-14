@@ -1,5 +1,11 @@
 {
   "dependencies": {
     "flatpickr": "^4.6.13"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  },
+  "scripts": {
+    "build:css": "tailwindcss -i tools/tailwind.in.css -o tailwind.css --content index.html,topics.js --minify"
   }
 }

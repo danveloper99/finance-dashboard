@@ -9,7 +9,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
@@ -458,6 +457,8 @@
     .analysis-card-body{padding:16px 20px 20px;font-size:13px;color:#444;line-height:1.9;white-space:pre-wrap;border-top:1px solid rgba(240,240,235,.9);background:#f9fcf7}
   </style>
   <script>window.onerror=function(msg){if(msg.includes('ResizeObserver'))return false;const l=document.getElementById('loading-screen');if(l)l.style.display='none';return false}</script>
+  <!-- Tailwind 預先產生（npm run build:css），放在自訂樣式後面＝跟以前 CDN 版的套用順序一樣 -->
+  <link rel="stylesheet" href="tailwind.css">
 </head>
 <body>
 
@@ -658,7 +659,7 @@
   <header class="ld-top">
     <button @click="isMobileSidebarOpen=true" class="ld-icon-btn ld-menu" title="選單"><i class="ph ph-list"></i></button>
     <div style="flex:1"></div>
-    <button @click="loadData(currentTab)" class="ld-icon-btn" title="重新整理"><i class="ph ph-arrows-clockwise"></i></button>
+    <button @click="loadData(currentTab,true)" class="ld-icon-btn" title="重新整理"><i class="ph ph-arrows-clockwise"></i></button>
     <div class="ld-acct" @click.stop="acctOpen=!acctOpen"><div class="ld-av">{{ (displayName||'?').slice(0,1).toUpperCase() }}</div><span class="ld-nm">{{ displayName }}</span><i class="ph ph-caret-down"></i></div>
   </header>
   <!-- 帳號選單 -->
@@ -911,7 +912,7 @@
         <div class="lg-tools">
           <div class="lg-search"><i class="ph ph-magnifying-glass"></i><input v-model="realizedFilter.name" placeholder="代碼或名稱"></div>
           <button @click="exportCSV" class="lg-btn out"><i class="ph ph-download-simple"></i>CSV</button>
-          <button @click="loadData(currentTab)" :disabled="listLoading" class="lg-btn out" title="重新整理"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'"></i></button>
+          <button @click="loadData(currentTab,true)" :disabled="listLoading" class="lg-btn out" title="重新整理"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'"></i></button>
         </div>
       </div>
       <div v-if="listLoading" class="lg-loading"><i class="ph ph-spinner spin"></i>讀取中…</div>
@@ -1007,7 +1008,7 @@
           <div class="lg-search"><i class="ph ph-magnifying-glass"></i><input v-model="searchText" placeholder="代碼或名稱"></div>
           <button @click="holdingsFilterOpen=!holdingsFilterOpen" class="lg-btn out" :class="holdingsFilterSelected!==null?'on':''"><i class="ph ph-funnel"></i>篩選<span v-if="holdingsFilterSelected!==null"> {{ holdingsFilterSelected.size }}/{{ holdingsAllStockOptions.length }}</span></button>
           <button @click="exportCSV" class="lg-btn out"><i class="ph ph-download-simple"></i>CSV</button>
-          <button @click="loadData(currentTab)" :disabled="listLoading" class="lg-btn out" title="重新整理"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'"></i></button>
+          <button @click="loadData(currentTab,true)" :disabled="listLoading" class="lg-btn out" title="重新整理"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'"></i></button>
         </div>
       </div>
       <div v-if="holdingsFilterOpen" class="lg-card" style="margin-bottom:14px">
@@ -1083,7 +1084,7 @@
         <div class="lg-tools">
           <div class="lg-search"><i class="ph ph-magnifying-glass"></i><input v-model="searchText" placeholder="代碼或名稱"></div>
           <button @click="exportCSV" class="lg-btn out"><i class="ph ph-download-simple"></i>CSV</button>
-          <button @click="loadData(currentTab)" :disabled="listLoading" class="lg-btn out" title="重新整理"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'"></i></button>
+          <button @click="loadData(currentTab,true)" :disabled="listLoading" class="lg-btn out" title="重新整理"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'"></i></button>
         </div>
       </div>
       <div v-if="listLoading" class="lg-loading"><i class="ph ph-spinner spin"></i>讀取中…</div>
@@ -1154,7 +1155,7 @@
         <div class="lg-tools">
           <div class="lg-search"><i class="ph ph-magnifying-glass"></i><input v-model="searchText" placeholder="代碼或名稱"></div>
           <button @click="exportCSV" class="lg-btn out"><i class="ph ph-download-simple"></i>CSV</button>
-          <button @click="loadData(currentTab)" :disabled="listLoading" class="lg-btn out" title="重新整理"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'"></i></button>
+          <button @click="loadData(currentTab,true)" :disabled="listLoading" class="lg-btn out" title="重新整理"><i :class="listLoading?'ph ph-spinner spin':'ph ph-arrows-clockwise'"></i></button>
         </div>
       </div>
       <div v-if="listLoading" class="lg-loading"><i class="ph ph-spinner spin"></i>讀取中…</div>
@@ -2004,8 +2005,16 @@ const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
 
 // ── fetch 包裝：呼叫 GAS doPost ──────────────────────────────
 const AUTH_TOKEN_KEY = 'auth_token';
+// 總覽快取（v20）：開頁先顯示上次的總覽，背景再向後端要新的；跟著 GAS 網址走，換後端就不會拿錯
+const DASH_CACHE_KEY = 'dash_cache_v1';
+function readDashCache_() {
+  try { const c = JSON.parse(localStorage.getItem(DASH_CACHE_KEY) || 'null'); return c && c.url === getGasUrl() ? c : null; } catch (e) { return null; }
+}
+function writeDashCache_(patch) {
+  try { localStorage.setItem(DASH_CACHE_KEY, JSON.stringify({ ...(readDashCache_() || {}), ...patch, url: getGasUrl() })); } catch (e) {}
+}
 // 最新後端（程式庫）版本：要和 WebAPI.js 的 APP_VERSION 一起改
-const LATEST_BACKEND_VERSION = 19;
+const LATEST_BACKEND_VERSION = 20;
 let onAuthExpired_ = null; // Vue 掛載後設定：Token 失效時切回登入畫面
 async function callGAS(action, args = []) {
   const url = getGasUrl();
@@ -2322,12 +2331,18 @@ createApp({
     const selectTab = id => { currentTab.value=id; isMobileSidebarOpen.value=false; acctOpen.value=false; };
     watch(currentTab, v => { localStorage.setItem('last_tab',v); searchText.value=''; loadData(v); });
 
-    const loadData = async tab => {
+    const applyDash_ = res => {
+      if (!res || !res.ok) return;
+      dashboard.value=res; dashReady.value=true;
+      writeDashCache_({ dash: res });
+      setTimeout(()=> (backendVersion.value>=15 && res.home) ? renderHomeChart() : renderCharts(res.charts),100);
+    };
+    const loadData = async (tab, force) => {
       try {
         if (tab==='dashboard') {
-          const res = await callGAS('api_getDashboard');
+          const res = await callGAS('api_getDashboard', force ? [true] : []);
           dashReady.value=true;
-          if (res.ok) { dashboard.value=res; setTimeout(()=> (backendVersion.value>=15 && res.home) ? renderHomeChart() : renderCharts(res.charts),100); }
+          applyDash_(res);
         } else if (tab==='settings') {
           settingsLoading.value=true;
           const [res, uRes] = await Promise.all([
@@ -2423,7 +2438,10 @@ createApp({
       backendAutoUpdate.value = !!res.autoUpdate;
       authForm.value = { user:'', pwd:'', pwd2:'', gasUrl:'', nick:'' };
       authMsg.value = ''; authState.value = 'ok';
-      loadData(currentTab.value);
+      writeDashCache_({ user: authUser.value, nick: authNick.value, version: backendVersion.value, autoUpdate: backendAutoUpdate.value });
+      // v20 後端會在登入驗證時順便帶回總覽，就不用再要一次
+      if (res.dashboard) applyDash_(res.dashboard);
+      if (!(res.dashboard && res.dashboard.ok && currentTab.value === 'dashboard')) loadData(currentTab.value);
       loadPending(); // 啟動時預先載入待確認數量
     };
     const doLogin = async () => {
@@ -2458,6 +2476,7 @@ createApp({
     const logout = () => {
       if (!confirm('確定要登出？')) return;
       localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(DASH_CACHE_KEY);
       location.reload(); // 清掉畫面上的資料
     };
     const pwdForm = ref({ old:'', new1:'', new2:'' });
@@ -2474,15 +2493,27 @@ createApp({
       if (!getGasUrl()) return;
       onAuthExpired_ = () => {
         localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem(DASH_CACHE_KEY);
         if (authState.value === 'ok') { authState.value = 'login'; authMsg.value = '登入已失效，請重新登入'; }
       };
       const t = localStorage.getItem(AUTH_TOKEN_KEY);
       if (!t) { authState.value = 'login'; return; }
+      // 有上次的總覽就先顯示，不用等後端（後端驗證失敗會再踢回登入頁）
+      const cached = readDashCache_();
+      if (cached && cached.dash && cached.version) {
+        authUser.value = cached.user || ''; authNick.value = cached.nick || '';
+        backendVersion.value = Number(cached.version) || 1; backendAutoUpdate.value = !!cached.autoUpdate;
+        authState.value = 'ok';
+        applyDash_(cached.dash);
+      }
       try {
-        const res = await callGAS('api_auth_token', [t]);
+        const res = await callGAS('api_auth_token', [t, true]);
         if (res.ok) enterApp_(res);
-        else { localStorage.removeItem(AUTH_TOKEN_KEY); authState.value = 'login'; }
-      } catch (e) { authState.value = 'login'; authMsg.value = '連線失敗：' + e.message; }
+        else { localStorage.removeItem(AUTH_TOKEN_KEY); localStorage.removeItem(DASH_CACHE_KEY); authState.value = 'login'; }
+      } catch (e) {
+        if (authState.value === 'ok') { console.error(e); return; } // 已經顯示上次的資料，連線失敗就先維持
+        authState.value = 'login'; authMsg.value = '連線失敗：' + e.message;
+      }
     });
 
     // ── Gemini Key ──
