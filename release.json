@@ -1,11 +1,11 @@
 {
   "current": {
-    "version": 20,
-    "releasedAt": "2026-11-14T16:34:29+08:00",
-    "notes": "效能改善：首頁先顯示上次資料、總覽快取、登入與總覽合併請求、Gmail 跳過已處理的 PDF、Tailwind 改預先產生"
+    "version": 21,
+    "releasedAt": "2026-11-14T16:55:10+08:00",
+    "notes": "市場分析：加減碼判斷限制思考預算、失敗自動重試、代碼寫法不同也能配對"
   },
   "previous": {
-    "version": 19
+    "version": 20
   },
   "libVersion": 9
 }

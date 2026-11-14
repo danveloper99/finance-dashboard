@@ -2014,7 +2014,7 @@ function writeDashCache_(patch) {
   try { localStorage.setItem(DASH_CACHE_KEY, JSON.stringify({ ...(readDashCache_() || {}), ...patch, url: getGasUrl() })); } catch (e) {}
 }
 // 最新後端（程式庫）版本：要和 WebAPI.js 的 APP_VERSION 一起改
-const LATEST_BACKEND_VERSION = 20;
+const LATEST_BACKEND_VERSION = 21;
 let onAuthExpired_ = null; // Vue 掛載後設定：Token 失效時切回登入畫面
 async function callGAS(action, args = []) {
   const url = getGasUrl();

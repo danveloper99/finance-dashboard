@@ -3804,8 +3804,10 @@ function geminiGenerate_(prompt, opts) {
   if (!key) throw new Error('尚未設定 Gemini API Key（到「市場分析」頁儲存）');
   const body = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: { temperature: opts.temperature == null ? 0.2 : opts.temperature, maxOutputTokens: 16384 },
+    generationConfig: { temperature: opts.temperature == null ? 0.2 : opts.temperature, maxOutputTokens: 32768 },
   };
+  // 2.5 系列的「思考」也算在 maxOutputTokens 裡，想太久 JSON 會被截斷 → 可以限制思考預算
+  if (opts.thinkingBudget != null) body.generationConfig.thinkingConfig = { thinkingBudget: opts.thinkingBudget };
   if (opts.search) body.tools = [{ google_search: {} }];
   if (opts.json) body.generationConfig.responseMimeType = 'application/json';
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + MARKET_MODEL_ + ':generateContent?key=' + key;
@@ -3822,7 +3824,7 @@ function geminiGenerate_(prompt, opts) {
       const seen = new Set();
       const sources = chunks.filter(w => w.uri && !seen.has(w.uri) && seen.add(w.uri)).map(w => ({ title: w.title || '', uri: w.uri }));
       if (!text) { lastErr = 'Gemini 回傳空白內容'; continue; }
-      return { text, sources };
+      return { text, sources, finishReason: cand.finishReason || '' };
     }
     const msg = (js.error && js.error.message) || '';
     if (code === 429) throw new Error('Gemini 免費額度暫時用完（429），請稍後或明天再試；免費版不會因此收費。' + (msg ? '（' + msg.slice(0, 120) + '）' : ''));
@@ -3967,27 +3969,38 @@ function runMarketAnalysis_(userNotes) {
     `"holdings":[{"code":"","action":"加碼|持有|減碼","confidence":"高|中|低","reasons":["",""],"watch":"接下來要觀察的指標或事件"}],` +
     `"hotPicks":[{"code":"","verdict":"可留意|觀察|避開","heat":"有基本面支撐|題材炒作為主|資料不足","reasons":[""],"risk":""}]}`,
   ].join('\n');
-  let judge = null;
-  try {
-    judge = parseJsonLoose_(geminiGenerate_(p2, { json: true, temperature: 0.2 }).text);
-    if (!judge) errors.push('加減碼判斷的回覆格式無法解析，只顯示消息面');
-  } catch (e) { errors.push('加減碼判斷失敗：' + e.message); }
+  // 先給有限的思考預算；解析失敗（多半是被截斷）再用不思考的模式重試一次
+  let judge = null, why = '';
+  for (const budget of [2048, 0]) {
+    try {
+      const g2 = geminiGenerate_(p2, { json: true, temperature: 0.2, thinkingBudget: budget });
+      judge = parseJsonLoose_(g2.text);
+      if (judge) break;
+      why = g2.finishReason === 'MAX_TOKENS' ? '回覆太長被截斷' : '回覆格式無法解析';
+    } catch (e) {
+      why = e.message;
+      if (/429|API Key/.test(e.message)) break; // 額度用完或 Key 有問題，重試也沒用
+    }
+  }
+  if (!judge) errors.push('加減碼判斷失敗（' + why + '），只顯示消息面');
   judge = judge || {};
 
-  const jH = {}; (judge.holdings || []).forEach(x => { jH[String(x.code).trim()] = x; });
-  const jP = {}; (judge.hotPicks || []).forEach(x => { jP[String(x.code).trim()] = x; });
+  // 代碼配對：AI 可能把 0056 寫成 56、或寫成「2330 台積電」
+  const codeKey = c => { const m = String(c || '').toUpperCase().match(/\d+[A-Z]?/); return m ? m[0].replace(/^0+/, '') : String(c || '').trim(); };
+  const jH = {}; (judge.holdings || []).forEach(x => { jH[codeKey(x.code)] = x; });
+  const jP = {}; (judge.hotPicks || []).forEach(x => { jP[codeKey(x.code)] = x; });
   const result = {
     v: 2, ts: Utilities.formatDate(new Date(), tz, 'yyyy/MM/dd HH:mm'), model: MARKET_MODEL_,
     marketSignal: news.marketSignal || '中性', marketSummary: news.marketSummary || '',
     global: news.global || [], taiwan: news.taiwan || [], market,
     exposure, overall: judge.overall || '',
     holdings: holdings.map(h => Object.assign({}, h, {
-      action: (jH[h.code] || {}).action || '', confidence: (jH[h.code] || {}).confidence || '',
-      reasons: (jH[h.code] || {}).reasons || [], watch: (jH[h.code] || {}).watch || '',
+      action: (jH[codeKey(h.code)] || {}).action || '', confidence: (jH[codeKey(h.code)] || {}).confidence || '',
+      reasons: (jH[codeKey(h.code)] || {}).reasons || [], watch: (jH[codeKey(h.code)] || {}).watch || '',
     })).sort((a, b) => b.weight - a.weight),
     hotPicks: hot.slice(0, 8).map(s => Object.assign({}, s, {
-      verdict: (jP[s.code] || {}).verdict || '', heat: (jP[s.code] || {}).heat || '',
-      reasons: (jP[s.code] || {}).reasons || [], risk: (jP[s.code] || {}).risk || '',
+      verdict: (jP[codeKey(s.code)] || {}).verdict || '', heat: (jP[codeKey(s.code)] || {}).heat || '',
+      reasons: (jP[codeKey(s.code)] || {}).reasons || [], risk: (jP[codeKey(s.code)] || {}).risk || '',
     })),
     sources: g1.sources.slice(0, 15), buyPct: MARKET_BUY_PCT_, errors,
   };
